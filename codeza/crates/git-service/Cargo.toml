@@ -1,0 +1,25 @@
+[package]
+name = "codeza-git-service"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+axum = { workspace = true }
+reqwest = { workspace = true }
+http = { workspace = true }
+async-trait = { workspace = true }
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+codeza-shared = { path = "../shared" }
