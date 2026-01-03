@@ -5,6 +5,8 @@ mod rate_limiter;
 mod routing;
 mod circuit_breaker;
 mod openapi;
+#[cfg(test)]
+mod tests;
 
 use axum::{
     extract::DefaultBodyLimit,
@@ -40,12 +42,12 @@ async fn main() {
     // Build application state
     let state = routing::AppState {
         pool,
-        config: config.clone(),
+        config: std::sync::Arc::new(config.clone()),
         metrics: codeza_shared::MetricsRegistry::new(),
     };
 
     // Build router with routes
-    let app = routing::build_routes()
+    let app = routing::build_routes(state.clone())
 
         .with_state(state)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))

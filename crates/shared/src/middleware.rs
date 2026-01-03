@@ -1,11 +1,12 @@
 //! Common middleware for Codeza Platform
 
 use axum::{
-    extract::Request,
+    extract::{Request, State},
     middleware::Next,
     response::Response,
 };
 use uuid::Uuid;
+pub use crate::auth_middleware::auth_middleware;
 
 /// Middleware to add request ID to all requests
 pub async fn request_id_middleware(

@@ -1,5 +1,7 @@
 //! Routing configuration for API Gateway
 
+use std::sync::Arc;
+
 pub mod auth;
 pub mod git;
 pub mod cicd;
@@ -7,6 +9,7 @@ pub mod webhook;
 pub mod mfe;
 
 use axum::{
+    extract::FromRef,
     routing::{get, post},
     Router,
 };
@@ -15,8 +18,14 @@ use sqlx::PgPool;
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
-    pub config: codeza_shared::Config,
+    pub config: Arc<codeza_shared::Config>,
     pub metrics: codeza_shared::MetricsRegistry,
+}
+
+impl FromRef<AppState> for codeza_shared::Config {
+    fn from_ref(state: &AppState) -> Self {
+        state.config.as_ref().clone()
+    }
 }
 
 /// Health check handler
@@ -38,34 +47,39 @@ async fn get_metrics(axum::extract::State(state): axum::extract::State<AppState>
 }
 
 /// Build API routes
-pub fn build_routes() -> Router<AppState> {
-    Router::new()
+pub fn build_routes(state: AppState) -> Router<AppState> {
+    let public_routes = Router::new()
         // Health check
         .route("/health", get(health_check))
         .route("/", get(root))
         .route("/metrics", get(get_metrics))
-        
-        // Authentication routes
+        // Public auth routes
         .route("/auth/register", post(auth::auth_register))
         .route("/auth/login", post(auth::auth_login))
+        // Git webhook route (usually public but protected by secret signature)
+        .route("/api/v1/git/webhook", post(webhook::git_webhook));
+
+    let protected_routes = Router::new()
         .route("/auth/user", get(auth::auth_user))
         
         // Git repository routes
         .route("/api/v1/repos", post(git::create_repository))
-        .route("/api/v1/repos/:owner", get(git::list_repositories))
+        .route("/api/v1/repos/{owner}", get(git::list_repositories))
         .route(
-            "/api/v1/repos/:owner/:repo",
+            "/api/v1/repos/{owner}/{repo}",
             get(git::get_repository).delete(git::delete_repository),
         )
         
         // Pipeline execution routes
         .route("/api/v1/pipelines", get(cicd::list_pipelines))
-        .route("/api/v1/pipelines/:id", get(cicd::get_pipeline_execution))
-        .route("/api/v1/pipelines/:id/jobs", get(cicd::list_pipeline_jobs))
+        .route("/api/v1/pipelines/{id}", get(cicd::get_pipeline_execution))
+        .route("/api/v1/pipelines/{id}/jobs", get(cicd::list_pipeline_jobs))
         
-        // Git webhook route
-        .route("/api/v1/git/webhook", post(webhook::git_webhook))
-
         // MFE routes
         .route("/api/v1/mfe", get(mfe::list_mfes).post(mfe::register_mfe))
+        .route_layer(axum::middleware::from_fn_with_state(state, codeza_shared::middleware::auth_middleware));
+
+    Router::new()
+        .merge(public_routes)
+        .merge(protected_routes)
 }

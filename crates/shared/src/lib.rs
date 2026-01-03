@@ -7,6 +7,8 @@ pub mod logging;
 pub mod middleware;
 pub mod models;
 pub mod auth;
+pub mod auth_middleware;
+mod auth_test;
 pub mod metrics;
 pub mod tracing_module;
 pub mod alerting;

@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use std::sync::Arc;
 use codeza_shared::{
     config::Config,
     error::Result,
@@ -28,7 +29,7 @@ pub async fn register(
 /// Login user
 pub async fn login(
     State(pool): State<PgPool>,
-    State(config): State<Config>,
+    State(config): State<Arc<Config>>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>> {
     let service = UserService::new(pool);
