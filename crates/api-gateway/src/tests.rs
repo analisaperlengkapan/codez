@@ -20,7 +20,7 @@ async fn test_auth_middleware_integration_401() {
 
     let state = AppState {
         pool,
-        config,
+        config: std::sync::Arc::new(config),
         metrics: codeza_shared::MetricsRegistry::new(),
     };
 

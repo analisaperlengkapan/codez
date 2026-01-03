@@ -42,7 +42,7 @@ async fn main() {
     // Build application state
     let state = routing::AppState {
         pool,
-        config: config.clone(),
+        config: std::sync::Arc::new(config.clone()),
         metrics: codeza_shared::MetricsRegistry::new(),
     };
 

@@ -1,5 +1,7 @@
 //! Routing configuration for API Gateway
 
+use std::sync::Arc;
+
 pub mod auth;
 pub mod git;
 pub mod cicd;
@@ -16,13 +18,13 @@ use sqlx::PgPool;
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
-    pub config: codeza_shared::Config,
+    pub config: Arc<codeza_shared::Config>,
     pub metrics: codeza_shared::MetricsRegistry,
 }
 
 impl FromRef<AppState> for codeza_shared::Config {
     fn from_ref(state: &AppState) -> Self {
-        state.config.clone()
+        state.config.as_ref().clone()
     }
 }
 
