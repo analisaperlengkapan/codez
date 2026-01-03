@@ -40,9 +40,14 @@ impl SemanticVersion {
     /// Parse semantic version from string
     pub fn parse(version: &str) -> Result<Self, String> {
         let version = version.trim_start_matches('v');
-        let parts: Vec<&str> = version.split('.').collect();
 
-        if parts.len() < 3 {
+        let (core, prerelease) = match version.find('-') {
+            Some(idx) => (&version[..idx], Some(version[idx + 1..].to_string())),
+            None => (version, None),
+        };
+
+        let parts: Vec<&str> = core.split('.').collect();
+        if parts.len() != 3 {
             return Err("Invalid semantic version format".to_string());
         }
 
@@ -52,16 +57,9 @@ impl SemanticVersion {
         let minor = parts[1]
             .parse::<u32>()
             .map_err(|_| "Invalid minor version".to_string())?;
-
-        let patch_and_prerelease = parts[2].split('-').collect::<Vec<&str>>();
-        let patch = patch_and_prerelease[0]
+        let patch = parts[2]
             .parse::<u32>()
             .map_err(|_| "Invalid patch version".to_string())?;
-        let prerelease = if patch_and_prerelease.len() > 1 {
-            Some(patch_and_prerelease[1..].join("-"))
-        } else {
-            None
-        };
 
         Ok(SemanticVersion {
             major,

@@ -1,5 +1,17 @@
 use super::AppState;
+use codeza_git_service::{CreateRepositoryRequest, Repository};
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/repos",
+    request_body = CreateRepositoryRequest,
+    responses(
+        (status = 201, description = "Repository created", body = Repository),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "git"
+)]
 pub async fn create_repository(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::Json(req): axum::Json<codeza_git_service::CreateRepositoryRequest>,
@@ -22,6 +34,20 @@ pub async fn create_repository(
     Ok((axum::http::StatusCode::CREATED, axum::Json(repo)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/repos/{owner}/{repo}",
+    params(
+        ("owner" = String, Path, description = "Repository owner"),
+        ("repo" = String, Path, description = "Repository name")
+    ),
+    responses(
+        (status = 200, description = "Repository details", body = Repository),
+        (status = 404, description = "Repository not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "git"
+)]
 pub async fn get_repository(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path((owner, repo)):
@@ -39,6 +65,18 @@ pub async fn get_repository(
     Ok(axum::Json(repo))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/repos/{owner}",
+    params(
+        ("owner" = String, Path, description = "Repository owner")
+    ),
+    responses(
+        (status = 200, description = "List of repositories", body = Vec<Repository>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "git"
+)]
 pub async fn list_repositories(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(owner): axum::extract::Path<String>,
@@ -55,6 +93,20 @@ pub async fn list_repositories(
     Ok(axum::Json(repos))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/repos/{owner}/{repo}",
+    params(
+        ("owner" = String, Path, description = "Repository owner"),
+        ("repo" = String, Path, description = "Repository name")
+    ),
+    responses(
+        (status = 204, description = "Repository deleted"),
+        (status = 404, description = "Repository not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "git"
+)]
 pub async fn delete_repository(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path((owner, repo)):

@@ -1,6 +1,18 @@
 use super::AppState;
+use codeza_shared::{RegisterRequest, UserResponse, LoginRequest, LoginResponse};
 
 /// Auth register handler
+#[utoipa::path(
+    post,
+    path = "/auth/register",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "User registered successfully", body = UserResponse),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "auth"
+)]
 pub async fn auth_register(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::Json(req): axum::Json<codeza_shared::RegisterRequest>,
@@ -16,6 +28,17 @@ pub async fn auth_register(
 }
 
 /// Auth login handler
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = LoginResponse),
+        (status = 401, description = "Invalid credentials"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "auth"
+)]
 pub async fn auth_login(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::Json(req): axum::Json<codeza_shared::LoginRequest>,
@@ -29,6 +52,19 @@ pub async fn auth_login(
 }
 
 /// Auth user handler
+#[utoipa::path(
+    get,
+    path = "/auth/user",
+    responses(
+        (status = 200, description = "Current user details", body = UserResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(
+        ("jwt" = [])
+    ),
+    tag = "auth"
+)]
 pub async fn auth_user(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Extension(user_id): axum::extract::Extension<uuid::Uuid>,

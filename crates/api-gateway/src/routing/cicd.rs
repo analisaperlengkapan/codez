@@ -1,136 +1,63 @@
 use super::AppState;
-use serde::Serialize;
-use sqlx::Row;
+use uuid::Uuid;
+use codeza_cicd_engine::{JobExecutionRecord, PipelineExecutionRecord, PipelineExecutionRepository};
 
-#[derive(Debug, Serialize)]
-struct PipelineExecutionRecord {
-    id: uuid::Uuid,
-    provider: String,
-    repo: String,
-    git_ref: String,
-    commit_sha: String,
-    pipeline_id: uuid::Uuid,
-    created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Serialize)]
-struct JobExecutionRecord {
-    id: uuid::Uuid,
-    pipeline_id: uuid::Uuid,
-    provider: String,
-    repo: String,
-    git_ref: String,
-    commit_sha: String,
-    job_id: uuid::Uuid,
-    job_name: String,
-    status: String,
-    started_at: Option<chrono::DateTime<chrono::Utc>>,
-    finished_at: Option<chrono::DateTime<chrono::Utc>>,
-    duration_seconds: Option<i64>,
-    log_url: Option<String>,
-    created_at: chrono::DateTime<chrono::Utc>,
-}
-
+#[utoipa::path(
+    get,
+    path = "/api/v1/pipelines",
+    responses(
+        (status = 200, description = "List of pipeline executions", body = Vec<PipelineExecutionRecord>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "cicd"
+)]
 pub async fn list_pipelines(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> Result<axum::Json<Vec<PipelineExecutionRecord>>, codeza_shared::CodezaError> {
-    let rows = sqlx::query(
-        "SELECT id, provider, repo, git_ref, commit_sha, pipeline_id, created_at \
-         FROM ci_pipeline_executions \
-         ORDER BY created_at DESC",
-    )
-    .fetch_all(&state.pool)
-    .await
-    .map_err(|e| codeza_shared::CodezaError::DatabaseError(e.to_string()))?;
-
-    let items = rows
-        .into_iter()
-        .map(|row| PipelineExecutionRecord {
-            id: row.get("id"),
-            provider: row.get("provider"),
-            repo: row.get("repo"),
-            git_ref: row.get("git_ref"),
-            commit_sha: row.get("commit_sha"),
-            pipeline_id: row.get("pipeline_id"),
-            created_at: row.get("created_at"),
-        })
-        .collect();
-
+    let repo = PipelineExecutionRepository::new(state.pool);
+    let items = repo.list_executions().await?;
     Ok(axum::Json(items))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/pipelines/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Pipeline execution ID")
+    ),
+    responses(
+        (status = 200, description = "Pipeline execution details", body = PipelineExecutionRecord),
+        (status = 404, description = "Execution not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "cicd"
+)]
 pub async fn get_pipeline_execution(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
 ) -> Result<axum::Json<PipelineExecutionRecord>, codeza_shared::CodezaError> {
-    let row = sqlx::query(
-        "SELECT id, provider, repo, git_ref, commit_sha, pipeline_id, created_at \
-         FROM ci_pipeline_executions \
-         WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_optional(&state.pool)
-    .await
-    .map_err(|e| codeza_shared::CodezaError::DatabaseError(e.to_string()))?;
-
-    let row = match row {
-        Some(row) => row,
-        None => {
-            return Err(codeza_shared::CodezaError::NotFound(format!(
-                "Pipeline execution {} not found",
-                id
-            )))
-        }
-    };
-
-    let record = PipelineExecutionRecord {
-        id: row.get("id"),
-        provider: row.get("provider"),
-        repo: row.get("repo"),
-        git_ref: row.get("git_ref"),
-        commit_sha: row.get("commit_sha"),
-        pipeline_id: row.get("pipeline_id"),
-        created_at: row.get("created_at"),
-    };
-
-    Ok(axum::Json(record))
+    let repo = PipelineExecutionRepository::new(state.pool);
+    let item = repo.get_execution(id).await?;
+    Ok(axum::Json(item))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/pipelines/{id}/jobs",
+    params(
+        ("id" = Uuid, Path, description = "Pipeline execution ID")
+    ),
+    responses(
+        (status = 200, description = "List of jobs for pipeline", body = Vec<JobExecutionRecord>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "cicd"
+)]
 pub async fn list_pipeline_jobs(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(pipeline_id): axum::extract::Path<uuid::Uuid>,
 ) -> Result<axum::Json<Vec<JobExecutionRecord>>, codeza_shared::CodezaError> {
-    let rows = sqlx::query(
-        "SELECT id, pipeline_id, provider, repo, git_ref, commit_sha, job_id, job_name, status, \
-                 started_at, finished_at, duration_seconds, log_url, created_at \
-         FROM ci_job_executions \
-         WHERE pipeline_id = $1 \
-         ORDER BY created_at DESC",
-    )
-    .bind(pipeline_id)
-    .fetch_all(&state.pool)
-    .await
-    .map_err(|e| codeza_shared::CodezaError::DatabaseError(e.to_string()))?;
-
-    let items = rows
-        .into_iter()
-        .map(|row| JobExecutionRecord {
-            id: row.get("id"),
-            pipeline_id: row.get("pipeline_id"),
-            provider: row.get("provider"),
-            repo: row.get("repo"),
-            git_ref: row.get("git_ref"),
-            commit_sha: row.get("commit_sha"),
-            job_id: row.get("job_id"),
-            job_name: row.get("job_name"),
-            status: row.get("status"),
-            started_at: row.get("started_at"),
-            finished_at: row.get("finished_at"),
-            duration_seconds: row.get("duration_seconds"),
-            log_url: row.get("log_url"),
-            created_at: row.get("created_at"),
-        })
-        .collect();
-
+    let repo = PipelineExecutionRepository::new(state.pool);
+    let items = repo.list_job_executions(pipeline_id).await?;
     Ok(axum::Json(items))
 }

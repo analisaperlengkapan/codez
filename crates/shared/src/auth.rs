@@ -72,7 +72,7 @@ pub fn verify_token(token: &str, secret: &str) -> Result<JwtClaims> {
 /// Generate random refresh token
 pub fn generate_refresh_token() -> String {
     let mut rng = rand::thread_rng();
-    let random_bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+    let random_bytes: Vec<u8> = (0..32).map(|_| rng.r#gen()).collect();
     hex::encode(random_bytes)
 }
 
