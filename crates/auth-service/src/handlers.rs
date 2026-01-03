@@ -6,6 +6,7 @@ use axum::{
     Json,
 };
 use codeza_shared::{
+    config::Config,
     error::Result,
     models::{LoginRequest, LoginResponse, RegisterRequest, UserResponse},
 };
@@ -27,6 +28,7 @@ pub async fn register(
 /// Login user
 pub async fn login(
     State(pool): State<PgPool>,
+    State(config): State<Config>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>> {
     let service = UserService::new(pool);
@@ -38,15 +40,15 @@ pub async fn login(
         user.username.clone(),
         user.email.clone(),
         roles,
-        "dev-secret-key", // TODO: Get from config
-        24,
+        &config.jwt.secret,
+        config.jwt.expiration_hours,
     )?;
 
     Ok(Json(LoginResponse {
         user: user.into(),
         token,
         refresh_token: None,
-        expires_in: 24 * 3600,
+        expires_in: config.jwt.expiration_hours * 3600,
     }))
 }
 

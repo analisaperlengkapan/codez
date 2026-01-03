@@ -22,6 +22,7 @@ pub async fn auth_login(
 ) -> Result<axum::Json<codeza_shared::LoginResponse>, codeza_shared::CodezaError> {
     codeza_auth_service::handlers::login(
         axum::extract::State(state.pool.clone()),
+        axum::extract::State(state.config.clone()),
         axum::Json(req),
     )
     .await
