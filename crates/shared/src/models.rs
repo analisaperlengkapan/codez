@@ -1,5 +1,6 @@
 //! Data models for Codeza Platform
 
+use utoipa::ToSchema;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -20,7 +21,7 @@ pub struct User {
 }
 
 /// User for API responses (without password_hash)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UserResponse {
     pub id: Uuid,
     pub username: String,
@@ -82,7 +83,7 @@ pub struct Permission {
 }
 
 /// JWT Claims
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct JwtClaims {
     pub sub: String,           // user_id
     pub username: String,
@@ -94,7 +95,7 @@ pub struct JwtClaims {
 }
 
 /// Registration request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RegisterRequest {
     pub username: String,
     pub email: String,
@@ -103,14 +104,14 @@ pub struct RegisterRequest {
 }
 
 /// Login request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
 }
 
 /// Login response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct LoginResponse {
     pub user: UserResponse,
     pub token: String,
@@ -119,13 +120,13 @@ pub struct LoginResponse {
 }
 
 /// Refresh token request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RefreshTokenRequest {
     pub refresh_token: String,
 }
 
 /// Token response
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TokenResponse {
     pub token: String,
     pub refresh_token: Option<String>,

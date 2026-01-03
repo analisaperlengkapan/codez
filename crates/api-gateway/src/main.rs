@@ -4,6 +4,7 @@
 mod rate_limiter;
 mod routing;
 mod circuit_breaker;
+mod openapi;
 
 use axum::{
     extract::DefaultBodyLimit,
@@ -13,6 +14,9 @@ use codeza_shared::{config::Config, logging::init_logging};
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
+use openapi::ApiDoc;
 
 #[tokio::main]
 async fn main() {
@@ -42,7 +46,9 @@ async fn main() {
 
     // Build router with routes
     let app = routing::build_routes()
+
         .with_state(state)
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(CorsLayer::permissive())
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024)) // 10MB limit
         .layer(middleware::from_fn(codeza_shared::middleware::request_id_middleware))

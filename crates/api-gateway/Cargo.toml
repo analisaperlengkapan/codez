@@ -6,6 +6,9 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+utoipa = { version = "5.3.1", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "9.0.0", features = ["axum"] }
+codeza-mfe-manager = { path = "../mfe-manager" }
 tokio = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }

@@ -1,11 +1,12 @@
 //! Micro Frontend (MFE) models and operations
+use utoipa::ToSchema;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Micro Frontend definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MicroFrontend {
     pub id: Uuid,
     pub name: String,
@@ -21,7 +22,7 @@ pub struct MicroFrontend {
 }
 
 /// MFE status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub enum MFEStatus {
     Active,
     Inactive,
@@ -30,7 +31,7 @@ pub enum MFEStatus {
 }
 
 /// Shared dependency
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SharedDependency {
     pub name: String,
     pub version: String,
@@ -39,7 +40,7 @@ pub struct SharedDependency {
 }
 
 /// MFE manifest
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MFEManifest {
     pub name: String,
     pub version: String,
@@ -49,7 +50,7 @@ pub struct MFEManifest {
 }
 
 /// Shared dependency configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SharedConfig {
     pub singleton: bool,
     pub strict_version: bool,
@@ -58,7 +59,7 @@ pub struct SharedConfig {
 }
 
 /// MFE registry entry
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MFERegistry {
     pub mfes: Vec<MicroFrontend>,
     pub updated_at: chrono::DateTime<chrono::Utc>,

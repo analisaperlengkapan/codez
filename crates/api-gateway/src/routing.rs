@@ -1,9 +1,10 @@
 //! Routing configuration for API Gateway
 
-mod auth;
-mod git;
-mod cicd;
-mod webhook;
+pub mod auth;
+pub mod git;
+pub mod cicd;
+pub mod webhook;
+pub mod mfe;
 
 use axum::{
     routing::{get, post},
@@ -31,13 +32,18 @@ async fn root() -> (axum::http::StatusCode, String) {
     )
 }
 
+/// Metrics handler
+async fn get_metrics(axum::extract::State(state): axum::extract::State<AppState>) -> axum::Json<Vec<codeza_shared::metrics::MetricValue>> {
+    axum::Json(state.metrics.collect())
+}
+
 /// Build API routes
 pub fn build_routes() -> Router<AppState> {
     Router::new()
         // Health check
         .route("/health", get(health_check))
         .route("/", get(root))
-        .route("/metrics", get(metrics))
+        .route("/metrics", get(get_metrics))
         
         // Authentication routes
         .route("/auth/register", post(auth::auth_register))
@@ -59,4 +65,7 @@ pub fn build_routes() -> Router<AppState> {
         
         // Git webhook route
         .route("/api/v1/git/webhook", post(webhook::git_webhook))
+
+        // MFE routes
+        .route("/api/v1/mfe", get(mfe::list_mfes).post(mfe::register_mfe))
 }

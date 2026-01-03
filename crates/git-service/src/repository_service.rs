@@ -1,4 +1,5 @@
 //! Repository service for managing Git repositories
+use utoipa::ToSchema;
 
 use crate::provider::GitProvider;
 use serde::{Deserialize, Serialize};
@@ -6,7 +7,7 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 /// Repository model (Codeza-internal)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Repository {
     pub id: Uuid,
     pub name: String,
@@ -20,7 +21,7 @@ pub struct Repository {
 }
 
 /// Create repository request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateRepositoryRequest {
     pub name: String,
     pub owner: String,
