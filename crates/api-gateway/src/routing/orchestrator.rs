@@ -1,5 +1,6 @@
 use axum::{extract::{State, Path}, Json};
 use codeza_orchestrator::SuperApp;
+use codeza_shared::error::{CodezaError, Result};
 use crate::routing::AppState;
 use uuid::Uuid;
 
@@ -14,9 +15,9 @@ use uuid::Uuid;
 )]
 pub async fn list_superapps(
     State(state): State<AppState>,
-) -> Json<Vec<SuperApp>> {
+) -> Result<Json<Vec<SuperApp>>> {
     let apps = state.orchestrator.read();
-    Json(apps.clone())
+    Ok(Json(apps.clone()))
 }
 
 /// Get SuperApp details
@@ -35,10 +36,10 @@ pub async fn list_superapps(
 pub async fn get_superapp(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<SuperApp>, axum::http::StatusCode> {
+) -> Result<Json<SuperApp>> {
     let apps = state.orchestrator.read();
     match apps.iter().find(|app| app.id == id) {
         Some(app) => Ok(Json(app.clone())),
-        None => Err(axum::http::StatusCode::NOT_FOUND),
+        None => Err(CodezaError::NotFound(format!("SuperApp {}", id))),
     }
 }
