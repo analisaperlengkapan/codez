@@ -107,6 +107,9 @@ impl MicroFrontend {
         if !self.remote_entry.starts_with("http://") && !self.remote_entry.starts_with("https://") {
             return Err("remote_entry must be a valid HTTP/HTTPS URL".to_string());
         }
+        if self.remote_entry.contains(char::is_whitespace) {
+            return Err("remote_entry must not contain whitespace".to_string());
+        }
 
         // Basic check for empty fields
         if self.name.is_empty() {
