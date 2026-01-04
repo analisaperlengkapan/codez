@@ -31,6 +31,45 @@ impl MFERepository {
         Ok(mfes)
     }
 
+    pub async fn get_mfe_by_name(&self, name: &str) -> Result<Option<MicroFrontend>, CodezaError> {
+        let row = sqlx::query(
+            "SELECT id, name, description, version, remote_entry, scope, status, created_at, updated_at \
+             FROM micro_frontends \
+             WHERE name = $1 AND (status = 'Active' OR status = 'active')",
+        )
+        .bind(name)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+
+        if let Some(row) = row {
+            let mfe = self.map_row_to_mfe(row).await?;
+            Ok(Some(mfe))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn get_active_mfes_by_names(&self, names: &[String]) -> Result<std::collections::HashMap<String, MicroFrontend>, CodezaError> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, version, remote_entry, scope, status, created_at, updated_at \
+             FROM micro_frontends \
+             WHERE name = ANY($1) AND (status = 'Active' OR status = 'active')",
+        )
+        .bind(names)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+
+        let mut mfes = std::collections::HashMap::new();
+        for row in rows {
+            let mfe = self.map_row_to_mfe(row).await?;
+            mfes.insert(mfe.name.clone(), mfe);
+        }
+
+        Ok(mfes)
+    }
+
     pub async fn register(&self, mut mfe: MicroFrontend) -> Result<MicroFrontend, CodezaError> {
         if mfe.id == Uuid::nil() {
             mfe.id = Uuid::new_v4();
