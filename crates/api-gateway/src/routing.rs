@@ -14,12 +14,14 @@ use axum::{
     Router,
 };
 use sqlx::PgPool;
+use codeza_git_service::RepositoryService;
 
 #[derive(Clone)]
 pub struct AppState {
     pub pool: PgPool,
     pub config: Arc<codeza_shared::Config>,
     pub metrics: codeza_shared::MetricsRegistry,
+    pub git_service: Arc<RepositoryService>,
 }
 
 impl FromRef<AppState> for codeza_shared::Config {

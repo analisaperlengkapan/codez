@@ -39,11 +39,18 @@ async fn main() {
 
     tracing::info!("Database connected");
 
+    // Initialize Git service
+    let provider_config = routing::git::build_git_provider_config(&config)
+        .expect("Failed to build git provider config");
+    let provider = codeza_git_service::create_git_provider(provider_config);
+    let git_service = std::sync::Arc::new(codeza_git_service::RepositoryService::new(provider));
+
     // Build application state
     let state = routing::AppState {
         pool,
         config: std::sync::Arc::new(config.clone()),
         metrics: codeza_shared::MetricsRegistry::new(),
+        git_service,
     };
 
     // Build router with routes
