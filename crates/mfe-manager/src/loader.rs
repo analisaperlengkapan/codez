@@ -109,6 +109,7 @@ impl ModuleLoader for InMemoryModuleLoader {
 
 /// Remote module loader (for HTTP-based loading)
 pub struct RemoteModuleLoader {
+    #[allow(dead_code)]
     client: reqwest::Client,
 }
 

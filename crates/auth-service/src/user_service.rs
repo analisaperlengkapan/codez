@@ -108,7 +108,7 @@ impl UserService {
             WHERE ur.user_id = $1
             "#,
         )
-        .bind(&user_id)
+        .bind(user_id)
         .fetch_all(&self.pool)
         .await
         .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;

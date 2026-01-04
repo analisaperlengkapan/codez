@@ -78,7 +78,7 @@ impl FederationConfig {
 
     /// Resolve dependency
     pub fn resolve_dependency(&self, name: &str, version: &str) -> Option<DependencyResolution> {
-        if let Some(shared) = self.shared.get(name) {
+        if let Some(_shared) = self.shared.get(name) {
             Some(DependencyResolution {
                 name: name.to_string(),
                 version: version.to_string(),

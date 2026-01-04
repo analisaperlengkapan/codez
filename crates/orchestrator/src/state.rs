@@ -1,7 +1,7 @@
 //! State management for SuperApp
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -90,7 +90,7 @@ mod tests {
     async fn test_state_store() {
         let store = StateStore::new();
 
-        store.set("user".to_string(), json!({"name": "John"})).await;
+        store.set("user".to_string(), serde_json::json!({"name": "John"})).await;
         let value = store.get("user").await;
 
         assert!(value.is_some());
@@ -101,10 +101,10 @@ mod tests {
     async fn test_state_update() {
         let store = StateStore::new();
 
-        store.set("counter".to_string(), json!(0)).await;
+        store.set("counter".to_string(), serde_json::json!(0)).await;
         store
             .update("counter", |v| {
-                json!(v.as_i64().unwrap_or(0) + 1)
+                serde_json::json!(v.as_i64().unwrap_or(0) + 1)
             })
             .await;
 

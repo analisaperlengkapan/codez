@@ -3,7 +3,6 @@
 use crate::image::{Image, ImageManifest, PushImageRequest, PullImageRequest, PullImageResponse};
 use async_trait::async_trait;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 /// Image storage trait
 #[async_trait]
