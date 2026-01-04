@@ -1,11 +1,12 @@
 use utoipa::OpenApi;
 use codeza_shared::{LoginRequest, LoginResponse, RegisterRequest, UserResponse};
 use codeza_mfe_manager::MicroFrontend;
+use codeza_mfe_manager::mfe::{MFEManifest, SharedConfig, SharedDependency};
 use codeza_git_service::{CreateRepositoryRequest, Repository};
 use codeza_cicd_engine::{PipelineExecutionRecord, JobExecutionRecord};
 use codeza_registry::image::Image;
 use codeza_msr::Microservice;
-use codeza_orchestrator::SuperApp;
+use codeza_orchestrator::{SuperApp, AppModule};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -27,15 +28,18 @@ use codeza_orchestrator::SuperApp;
         crate::routing::msr::list_services,
         crate::routing::msr::register_service,
         crate::routing::orchestrator::list_superapps,
+        crate::routing::orchestrator::create_superapp,
         crate::routing::orchestrator::get_superapp,
+        crate::routing::orchestrator::add_module,
+        crate::routing::orchestrator::get_manifest,
     ),
     components(
         schemas(
             LoginRequest, LoginResponse, RegisterRequest, UserResponse,
-            MicroFrontend,
+            MicroFrontend, SharedDependency, MFEManifest, SharedConfig,
             CreateRepositoryRequest, Repository,
             PipelineExecutionRecord, JobExecutionRecord,
-            Image, Microservice, SuperApp
+            Image, Microservice, SuperApp, AppModule
         )
     ),
     tags(
