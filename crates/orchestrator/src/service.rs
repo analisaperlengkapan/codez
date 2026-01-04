@@ -54,8 +54,8 @@ pub fn generate_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::superapp::{AppModule, AppConfig};
-    use uuid::Uuid;
+    use crate::superapp::AppModule;
+
     use codeza_mfe_manager::mfe::MFEStatus;
 
     #[test]
