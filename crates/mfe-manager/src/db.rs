@@ -70,6 +70,48 @@ impl MFERepository {
         .await
         .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
 
+        // Delete existing dependencies for this MFE (to handle updates)
+        sqlx::query("DELETE FROM mfe_dependencies WHERE mfe_id = $1")
+            .bind(mfe.id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+
+        sqlx::query("DELETE FROM mfe_shared_dependencies WHERE mfe_id = $1")
+            .bind(mfe.id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+
+        // Insert dependencies
+        for (name, version) in &mfe.dependencies {
+            sqlx::query(
+                "INSERT INTO mfe_dependencies (mfe_id, name, version) VALUES ($1, $2, $3)"
+            )
+            .bind(mfe.id)
+            .bind(name)
+            .bind(version)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        }
+
+        // Insert shared dependencies
+        for dep in &mfe.shared_dependencies {
+            sqlx::query(
+                "INSERT INTO mfe_shared_dependencies (mfe_id, name, version, singleton, strict_version) \
+                 VALUES ($1, $2, $3, $4, $5)"
+            )
+            .bind(mfe.id)
+            .bind(&dep.name)
+            .bind(&dep.version)
+            .bind(dep.singleton)
+            .bind(dep.strict_version)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        }
+
         tx.commit().await.map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
 
         Ok(mfe)
@@ -77,6 +119,7 @@ impl MFERepository {
 
     async fn map_row_to_mfe(&self, row: sqlx::postgres::PgRow) -> Result<MicroFrontend, CodezaError> {
         use sqlx::Row;
+        use crate::mfe::SharedDependency;
 
         let id: Uuid = row.try_get("id").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
         let name: String = row.try_get("name").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
@@ -90,6 +133,41 @@ impl MFERepository {
             _ => MFEStatus::Inactive,
         };
 
+        // Fetch dependencies
+        let dependencies_rows = sqlx::query(
+            "SELECT name, version FROM mfe_dependencies WHERE mfe_id = $1"
+        )
+        .bind(id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+
+        let mut dependencies = std::collections::HashMap::new();
+        for row in dependencies_rows {
+            let name: String = row.try_get("name").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+            let version: String = row.try_get("version").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+            dependencies.insert(name, version);
+        }
+
+        // Fetch shared dependencies
+        let shared_rows = sqlx::query(
+            "SELECT name, version, singleton, strict_version FROM mfe_shared_dependencies WHERE mfe_id = $1"
+        )
+        .bind(id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+
+        let mut shared_dependencies = Vec::new();
+        for row in shared_rows {
+            shared_dependencies.push(SharedDependency {
+                name: row.try_get("name").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+                version: row.try_get("version").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+                singleton: row.try_get("singleton").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+                strict_version: row.try_get("strict_version").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+            });
+        }
+
         Ok(MicroFrontend {
             id,
             name,
@@ -97,8 +175,8 @@ impl MFERepository {
             version: row.try_get("version").unwrap_or_default(),
             remote_entry: row.try_get("remote_entry").unwrap_or_default(),
             scope: row.try_get("scope").unwrap_or_default(),
-            dependencies: std::collections::HashMap::new(), // Todo: fetch from sub-table
-            shared_dependencies: Vec::new(), // Todo: fetch from sub-table
+            dependencies,
+            shared_dependencies,
             status,
             created_at: row.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now()),
             updated_at: row.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now()),

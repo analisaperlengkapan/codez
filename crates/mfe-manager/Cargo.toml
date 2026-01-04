@@ -20,3 +20,4 @@ async-trait = { workspace = true }
 reqwest = { workspace = true }
 
 codeza-shared = { path = "../shared" }
+regex = "1.12.2"
