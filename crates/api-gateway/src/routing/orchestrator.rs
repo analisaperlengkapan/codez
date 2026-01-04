@@ -1,11 +1,10 @@
 use axum::{extract::{State, Path}, Json};
 use codeza_orchestrator::{SuperApp, AppModule, SuperAppRepository};
-use codeza_mfe_manager::mfe::{MFEManifest, SharedConfig};
+use codeza_mfe_manager::mfe::MFEManifest;
 use codeza_mfe_manager::MFERepository;
 use codeza_shared::error::{CodezaError, Result};
 use crate::routing::AppState;
 use uuid::Uuid;
-use std::collections::HashMap;
 
 /// List SuperApps
 #[utoipa::path(
@@ -129,48 +128,8 @@ pub async fn get_manifest(
     let module_names: Vec<String> = app.modules.iter().map(|m| m.name.clone()).collect();
     let active_mfes = mfe_repo.get_active_mfes_by_names(&module_names).await?;
 
-    let mut remotes = HashMap::new();
-    for module in app.modules {
-        // Try to fetch latest details from registry
-        let remote_entry = if let Some(mfe) = active_mfes.get(&module.name) {
-            // Use registered URL
-            mfe.remote_entry.clone()
-        } else {
-            // Fallback to configured URL
-            module.remote_entry
-        };
-
-        // Format: "name@url" or just "name" -> "url" depending on MF implementation
-        // Here we map scope -> remote_entry
-        // usually: "scope": "url"
-        remotes.insert(module.scope, remote_entry);
-    }
-
-    // Use shared dependencies from SuperApp config if available, otherwise use defaults
-    let mut shared = app.config.shared_dependencies.clone();
-
-    if shared.is_empty() {
-        shared.insert("react".to_string(), SharedConfig {
-            singleton: true,
-            strict_version: true,
-            eager: true,
-            required_version: Some("^18.0.0".to_string()),
-        });
-        shared.insert("react-dom".to_string(), SharedConfig {
-            singleton: true,
-            strict_version: true,
-            eager: true,
-            required_version: Some("^18.0.0".to_string()),
-        });
-    }
-
-    let manifest = MFEManifest {
-        name: app.name,
-        version: app.version,
-        remotes,
-        exposes: HashMap::new(), // SuperApp usually doesn't expose, it consumes
-        shared,
-    };
+    // Use domain service to generate manifest
+    let manifest = codeza_orchestrator::generate_manifest(&app, &active_mfes);
 
     Ok(Json(manifest))
 }
