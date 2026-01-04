@@ -126,12 +126,15 @@ pub async fn get_manifest(
     // Resolve module URLs from MFE Registry to ensure freshness
     let mfe_repo = MFERepository::new(state.pool.clone());
 
+    let module_names: Vec<String> = app.modules.iter().map(|m| m.name.clone()).collect();
+    let active_mfes = mfe_repo.get_active_mfes_by_names(&module_names).await?;
+
     let mut remotes = HashMap::new();
     for module in app.modules {
         // Try to fetch latest details from registry
-        let remote_entry = if let Some(mfe) = mfe_repo.get_mfe_by_name(&module.name).await? {
+        let remote_entry = if let Some(mfe) = active_mfes.get(&module.name) {
             // Use registered URL
-            mfe.remote_entry
+            mfe.remote_entry.clone()
         } else {
             // Fallback to configured URL
             module.remote_entry
