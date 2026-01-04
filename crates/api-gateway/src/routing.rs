@@ -27,7 +27,6 @@ pub struct AppState {
     pub git_service: Arc<RepositoryService>,
     pub registry: Arc<dyn codeza_registry::push_pull::ImageStorage>,
     pub msr: Arc<parking_lot::RwLock<Vec<codeza_msr::Microservice>>>,
-    pub orchestrator: Arc<parking_lot::RwLock<Vec<codeza_orchestrator::SuperApp>>>,
 }
 
 impl FromRef<AppState> for codeza_shared::Config {
@@ -94,8 +93,10 @@ pub fn build_routes(state: AppState) -> Router<AppState> {
         .route("/api/v1/msr/services", get(msr::list_services).post(msr::register_service))
 
         // Orchestrator routes
-        .route("/api/v1/orchestrator/apps", get(orchestrator::list_superapps))
+        .route("/api/v1/orchestrator/apps", get(orchestrator::list_superapps).post(orchestrator::create_superapp))
         .route("/api/v1/orchestrator/apps/{id}", get(orchestrator::get_superapp))
+        .route("/api/v1/orchestrator/apps/{id}/modules", post(orchestrator::add_module))
+        .route("/api/v1/orchestrator/apps/{id}/manifest", get(orchestrator::get_manifest))
 
         .route_layer(axum::middleware::from_fn_with_state(state, codeza_shared::middleware::auth_middleware));
 

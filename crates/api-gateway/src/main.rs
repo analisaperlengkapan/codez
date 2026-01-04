@@ -53,7 +53,6 @@ async fn main() {
         git_service,
         registry: std::sync::Arc::new(codeza_registry::push_pull::LocalImageStorage::new()),
         msr: std::sync::Arc::new(parking_lot::RwLock::new(Vec::new())),
-        orchestrator: std::sync::Arc::new(parking_lot::RwLock::new(Vec::new())),
     };
 
     // Configure CORS

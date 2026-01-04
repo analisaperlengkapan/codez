@@ -36,6 +36,9 @@ pub struct AppConfig {
     pub locale: String,
     pub features: HashMap<String, bool>,
     pub settings: HashMap<String, serde_json::Value>,
+    /// Optional shared dependencies override for Module Federation
+    #[serde(default)]
+    pub shared_dependencies: HashMap<String, codeza_mfe_manager::mfe::SharedConfig>,
 }
 
 impl SuperApp {
@@ -52,6 +55,7 @@ impl SuperApp {
                 locale: "en-US".to_string(),
                 features: HashMap::new(),
                 settings: HashMap::new(),
+                shared_dependencies: HashMap::new(),
             },
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
