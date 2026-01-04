@@ -1,5 +1,5 @@
 use axum::{extract::State, Json};
-use codeza_msr::Microservice;
+use codeza_msr::{Microservice, MicroserviceRepository};
 use codeza_shared::error::Result;
 use crate::routing::AppState;
 
@@ -15,8 +15,9 @@ use crate::routing::AppState;
 pub async fn list_services(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<Microservice>>> {
-    let services = state.msr.read();
-    Ok(Json(services.clone()))
+    let repo = MicroserviceRepository::new(state.pool);
+    let services = repo.list().await?;
+    Ok(Json(services))
 }
 
 /// Register microservice
@@ -33,7 +34,7 @@ pub async fn register_service(
     State(state): State<AppState>,
     Json(service): Json<Microservice>,
 ) -> Result<Json<Microservice>> {
-    let mut services = state.msr.write();
-    services.push(service.clone());
-    Ok(Json(service))
+    let repo = MicroserviceRepository::new(state.pool);
+    let created = repo.create(service).await?;
+    Ok(Json(created))
 }

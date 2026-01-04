@@ -6,15 +6,16 @@ use uuid::Uuid;
 use utoipa::ToSchema;
 
 /// Microservice definition
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
 pub struct Microservice {
     pub id: Uuid,
     pub name: String,
     pub version: String,
     pub host: String,
-    pub port: u16,
+    pub port: i32,
     pub protocol: String, // http, grpc, etc
     pub status: ServiceStatus,
+    #[sqlx(json)]
     pub metadata: HashMap<String, String>,
     pub tags: Vec<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -22,7 +23,8 @@ pub struct Microservice {
 }
 
 /// Service status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
+#[sqlx(type_name = "VARCHAR", rename_all = "PascalCase")]
 pub enum ServiceStatus {
     Healthy,
     Unhealthy,
@@ -35,7 +37,7 @@ pub enum ServiceStatus {
 pub struct ServiceEndpoint {
     pub service_id: Uuid,
     pub host: String,
-    pub port: u16,
+    pub port: i32,
     pub protocol: String,
     pub weight: u32,
 }
@@ -46,7 +48,7 @@ pub struct ServiceInstance {
     pub id: Uuid,
     pub service_id: Uuid,
     pub host: String,
-    pub port: u16,
+    pub port: i32,
     pub status: ServiceStatus,
     pub metadata: HashMap<String, String>,
     pub registered_at: chrono::DateTime<chrono::Utc>,
@@ -54,7 +56,7 @@ pub struct ServiceInstance {
 
 impl Microservice {
     /// Create new microservice
-    pub fn new(name: String, version: String, host: String, port: u16) -> Self {
+    pub fn new(name: String, version: String, host: String, port: i32) -> Self {
         Self {
             id: Uuid::new_v4(),
             name,
@@ -98,7 +100,7 @@ impl Microservice {
 
 impl ServiceEndpoint {
     /// Create new service endpoint
-    pub fn new(service_id: Uuid, host: String, port: u16) -> Self {
+    pub fn new(service_id: Uuid, host: String, port: i32) -> Self {
         Self {
             service_id,
             host,
@@ -116,7 +118,7 @@ impl ServiceEndpoint {
 
 impl ServiceInstance {
     /// Create new service instance
-    pub fn new(service_id: Uuid, host: String, port: u16) -> Self {
+    pub fn new(service_id: Uuid, host: String, port: i32) -> Self {
         Self {
             id: Uuid::new_v4(),
             service_id,
