@@ -6,15 +6,16 @@ use uuid::Uuid;
 use utoipa::ToSchema;
 
 /// Microservice definition
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, sqlx::FromRow)]
 pub struct Microservice {
     pub id: Uuid,
     pub name: String,
     pub version: String,
     pub host: String,
-    pub port: u16,
+    pub port: i32,
     pub protocol: String, // http, grpc, etc
     pub status: ServiceStatus,
+    #[sqlx(json)]
     pub metadata: HashMap<String, String>,
     pub tags: Vec<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -22,7 +23,8 @@ pub struct Microservice {
 }
 
 /// Service status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, sqlx::Type)]
+#[sqlx(type_name = "VARCHAR", rename_all = "PascalCase")]
 pub enum ServiceStatus {
     Healthy,
     Unhealthy,
@@ -54,7 +56,7 @@ pub struct ServiceInstance {
 
 impl Microservice {
     /// Create new microservice
-    pub fn new(name: String, version: String, host: String, port: u16) -> Self {
+    pub fn new(name: String, version: String, host: String, port: i32) -> Self {
         Self {
             id: Uuid::new_v4(),
             name,

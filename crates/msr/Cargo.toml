@@ -20,3 +20,4 @@ futures = "0.3"
 
 codeza-shared = { path = "../shared" }
 utoipa = { version = "5.4.0", features = ["uuid", "chrono"] }
+sqlx = { workspace = true, features = ["runtime-tokio-native-tls", "postgres", "uuid", "chrono", "json"] }

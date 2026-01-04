@@ -26,7 +26,6 @@ pub struct AppState {
     pub metrics: codeza_shared::MetricsRegistry,
     pub git_service: Arc<RepositoryService>,
     pub registry: Arc<dyn codeza_registry::push_pull::ImageStorage>,
-    pub msr: Arc<parking_lot::RwLock<Vec<codeza_msr::Microservice>>>,
 }
 
 impl FromRef<AppState> for codeza_shared::Config {
