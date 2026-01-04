@@ -18,3 +18,4 @@ async-trait = { workspace = true }
 
 codeza-shared = { path = "../shared" }
 utoipa = { version = "5.4.0", features = ["uuid", "chrono"] }
+sqlx = { workspace = true }
