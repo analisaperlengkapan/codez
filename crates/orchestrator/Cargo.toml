@@ -17,5 +17,6 @@ chrono = { workspace = true }
 async-trait = { workspace = true }
 
 codeza-shared = { path = "../shared" }
+codeza-mfe-manager = { path = "../mfe-manager" }
 utoipa = { version = "5.4.0", features = ["uuid", "chrono"] }
 sqlx = { workspace = true }

@@ -130,21 +130,23 @@ pub async fn get_manifest(
         remotes.insert(module.scope, module.remote_entry);
     }
 
-    // TODO: Shared dependencies should be configurable in SuperApp or derived from a global registry.
-    // For now, we defaults to React 18 as it is the standard for this project.
-    let mut shared = HashMap::new();
-    shared.insert("react".to_string(), SharedConfig {
-        singleton: true,
-        strict_version: true,
-        eager: true,
-        required_version: Some("^18.0.0".to_string()),
-    });
-    shared.insert("react-dom".to_string(), SharedConfig {
-        singleton: true,
-        strict_version: true,
-        eager: true,
-        required_version: Some("^18.0.0".to_string()),
-    });
+    // Use shared dependencies from SuperApp config if available, otherwise use defaults
+    let mut shared = app.config.shared_dependencies.clone();
+
+    if shared.is_empty() {
+        shared.insert("react".to_string(), SharedConfig {
+            singleton: true,
+            strict_version: true,
+            eager: true,
+            required_version: Some("^18.0.0".to_string()),
+        });
+        shared.insert("react-dom".to_string(), SharedConfig {
+            singleton: true,
+            strict_version: true,
+            eager: true,
+            required_version: Some("^18.0.0".to_string()),
+        });
+    }
 
     let manifest = MFEManifest {
         name: app.name,
