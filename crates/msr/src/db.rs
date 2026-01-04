@@ -31,7 +31,7 @@ impl MicroserviceRepository {
         .bind(&service.name)
         .bind(&service.version)
         .bind(&service.host)
-        .bind(service.port as i32)
+        .bind(service.port)
         .bind(&service.protocol)
         .bind(service.status)
         .bind(sqlx::types::Json(&service.metadata))
