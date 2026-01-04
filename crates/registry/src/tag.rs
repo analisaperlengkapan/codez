@@ -69,13 +69,16 @@ impl SemanticVersion {
         })
     }
 
-    /// Convert to string
-    pub fn to_string(&self) -> String {
+    // Removed to_string in favor of Display implementation
+}
+
+impl std::fmt::Display for SemanticVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let base = format!("{}.{}.{}", self.major, self.minor, self.patch);
         if let Some(prerelease) = &self.prerelease {
-            format!("{}-{}", base, prerelease)
+            write!(f, "{}-{}", base, prerelease)
         } else {
-            base
+            write!(f, "{}", base)
         }
     }
 }

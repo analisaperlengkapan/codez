@@ -1,5 +1,4 @@
 use super::AppState;
-use uuid::Uuid;
 use codeza_cicd_engine::{JobExecutionRecord, PipelineExecutionRecord, PipelineExecutionRepository};
 
 #[utoipa::path(

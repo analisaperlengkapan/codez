@@ -62,6 +62,7 @@ impl JobExecutor for LocalJobExecutor {
 
 /// Docker job executor
 pub struct DockerJobExecutor {
+    #[allow(dead_code)]
     docker_host: String,
 }
 

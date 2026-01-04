@@ -19,8 +19,8 @@ pub async fn auth_middleware(
     let token = match request.headers().get(header::AUTHORIZATION) {
         Some(value) => match value.to_str() {
             Ok(s) => {
-                if s.starts_with("Bearer ") {
-                    &s[7..]
+                if let Some(token) = s.strip_prefix("Bearer ") {
+                    token
                 } else {
                     return CodezaError::AuthenticationError("Invalid authorization header format".to_string()).into_response();
                 }

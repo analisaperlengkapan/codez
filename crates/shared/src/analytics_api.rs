@@ -2,7 +2,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 /// Analytics query
 #[derive(Debug, Clone, Serialize, Deserialize)]

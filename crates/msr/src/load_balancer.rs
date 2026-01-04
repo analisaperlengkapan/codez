@@ -4,6 +4,7 @@ use crate::service::ServiceInstance;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+#[allow(unused_imports)]
 use uuid::Uuid;
 
 /// Load balancing strategy

@@ -26,7 +26,7 @@ async fn main() {
     init_logging();
 
     // Load configuration
-    let config = Config::default_dev();
+    let config = Config::from_env().expect("Failed to load configuration");
     tracing::info!("Starting API Gateway on {}:{}", config.server.host, config.server.port);
 
     // Setup database connection pool
@@ -53,12 +53,27 @@ async fn main() {
         git_service,
     };
 
+    // Configure CORS
+    let cors = if config.cors_origins.is_empty() || config.cors_origins.contains(&"*".to_string()) {
+        CorsLayer::permissive()
+    } else {
+        let origins: Vec<axum::http::HeaderValue> = config.cors_origins
+            .iter()
+            .filter_map(|origin| origin.parse().ok())
+            .collect();
+
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods(tower_http::cors::Any)
+            .allow_headers(tower_http::cors::Any)
+    };
+
     // Build router with routes
     let app = routing::build_routes(state.clone())
 
         .with_state(state)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .layer(CorsLayer::permissive())
+        .layer(cors)
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024)) // 10MB limit
         .layer(middleware::from_fn(codeza_shared::middleware::request_id_middleware))
         .layer(middleware::from_fn(codeza_shared::middleware::logging_middleware));

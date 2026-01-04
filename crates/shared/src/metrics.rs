@@ -28,7 +28,9 @@ pub struct MetricValue {
 #[derive(Clone)]
 pub struct Counter {
     value: Arc<AtomicU64>,
+    #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
     labels: HashMap<String, String>,
 }
 
@@ -36,14 +38,19 @@ pub struct Counter {
 #[derive(Clone)]
 pub struct Gauge {
     value: Arc<std::sync::RwLock<f64>>,
+    #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
     labels: HashMap<String, String>,
 }
 
 /// Histogram metric
+#[derive(Clone)]
 pub struct Histogram {
     buckets: Arc<std::sync::RwLock<Vec<u64>>>,
+    #[allow(dead_code)]
     name: String,
+    #[allow(dead_code)]
     labels: HashMap<String, String>,
 }
 

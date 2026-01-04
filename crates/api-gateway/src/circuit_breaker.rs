@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Circuit breaker state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum CircuitState {
     Closed,      // Normal operation
     Open,        // Failing, reject requests
@@ -14,6 +15,7 @@ pub enum CircuitState {
 
 /// Circuit breaker configuration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CircuitBreakerConfig {
     pub failure_threshold: u32,      // Failures before opening
     pub success_threshold: u32,      // Successes before closing from half-open
@@ -31,6 +33,7 @@ impl Default for CircuitBreakerConfig {
 }
 
 /// Circuit breaker
+#[allow(dead_code)]
 pub struct CircuitBreaker {
     state: Arc<std::sync::Mutex<CircuitState>>,
     failure_count: Arc<AtomicU32>,
@@ -40,6 +43,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
+    #[allow(dead_code)]
     pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
             state: Arc::new(std::sync::Mutex::new(CircuitState::Closed)),
@@ -50,6 +54,7 @@ impl CircuitBreaker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn call<F, T>(&self, f: F) -> Result<T, String>
     where
         F: FnOnce() -> Result<T, String>,
@@ -125,6 +130,7 @@ impl CircuitBreaker {
         }
     }
 
+    #[allow(dead_code)]
     pub fn state(&self) -> CircuitState {
         *self.state.lock().unwrap()
     }

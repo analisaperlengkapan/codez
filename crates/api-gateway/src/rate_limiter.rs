@@ -2,7 +2,6 @@
 
 use axum::{
     extract::ConnectInfo,
-    http::StatusCode,
     middleware::Next,
     response::Response,
 };
@@ -10,6 +9,7 @@ use std::net::SocketAddr;
 
 /// Rate limiter configuration
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct RateLimiterConfig {
     pub requests_per_minute: u32,
     pub requests_per_hour: u32,
@@ -25,6 +25,7 @@ impl Default for RateLimiterConfig {
 }
 
 /// Rate limiter middleware
+#[allow(dead_code)]
 pub async fn rate_limit_middleware(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     request: axum::extract::Request,
@@ -41,6 +42,7 @@ pub async fn rate_limit_middleware(
 }
 
 /// Token bucket rate limiter
+#[allow(dead_code)]
 pub struct TokenBucket {
     capacity: u32,
     tokens: u32,
@@ -49,6 +51,7 @@ pub struct TokenBucket {
 }
 
 impl TokenBucket {
+    #[allow(dead_code)]
     pub fn new(capacity: u32, refill_rate: u32) -> Self {
         Self {
             capacity,
@@ -58,6 +61,7 @@ impl TokenBucket {
         }
     }
 
+    #[allow(dead_code)]
     pub fn try_consume(&mut self, tokens: u32) -> bool {
         self.refill();
         
@@ -69,6 +73,7 @@ impl TokenBucket {
         }
     }
 
+    #[allow(dead_code)]
     fn refill(&mut self) {
         let now = std::time::Instant::now();
         let elapsed = now.duration_since(self.last_refill).as_secs_f32();

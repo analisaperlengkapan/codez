@@ -88,6 +88,7 @@ impl ArtifactStorage for LocalArtifactStorage {
 /// S3/MinIO artifact storage
 pub struct S3ArtifactStorage {
     bucket: String,
+    #[allow(dead_code)]
     endpoint: String,
 }
 
