@@ -7,6 +7,9 @@ pub mod git;
 pub mod cicd;
 pub mod webhook;
 pub mod mfe;
+pub mod registry;
+pub mod msr;
+pub mod orchestrator;
 
 use axum::{
     extract::FromRef,
@@ -22,6 +25,9 @@ pub struct AppState {
     pub config: Arc<codeza_shared::Config>,
     pub metrics: codeza_shared::MetricsRegistry,
     pub git_service: Arc<RepositoryService>,
+    pub registry: Arc<dyn codeza_registry::push_pull::ImageStorage>,
+    pub msr: Arc<parking_lot::RwLock<Vec<codeza_msr::Microservice>>>,
+    pub orchestrator: Arc<parking_lot::RwLock<Vec<codeza_orchestrator::SuperApp>>>,
 }
 
 impl FromRef<AppState> for codeza_shared::Config {
@@ -79,6 +85,18 @@ pub fn build_routes(state: AppState) -> Router<AppState> {
         
         // MFE routes
         .route("/api/v1/mfe", get(mfe::list_mfes).post(mfe::register_mfe))
+
+        // Registry routes
+        .route("/api/v1/registry/images", get(registry::list_images))
+        .route("/api/v1/registry/images/{name}/{tag}", get(registry::get_image))
+
+        // MSR routes
+        .route("/api/v1/msr/services", get(msr::list_services).post(msr::register_service))
+
+        // Orchestrator routes
+        .route("/api/v1/orchestrator/apps", get(orchestrator::list_superapps))
+        .route("/api/v1/orchestrator/apps/{id}", get(orchestrator::get_superapp))
+
         .route_layer(axum::middleware::from_fn_with_state(state, codeza_shared::middleware::auth_middleware));
 
     Router::new()

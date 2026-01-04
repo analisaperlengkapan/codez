@@ -3,6 +3,9 @@ use codeza_shared::{LoginRequest, LoginResponse, RegisterRequest, UserResponse};
 use codeza_mfe_manager::MicroFrontend;
 use codeza_git_service::{CreateRepositoryRequest, Repository};
 use codeza_cicd_engine::{PipelineExecutionRecord, JobExecutionRecord};
+use codeza_registry::image::Image;
+use codeza_msr::Microservice;
+use codeza_orchestrator::SuperApp;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -19,20 +22,30 @@ use codeza_cicd_engine::{PipelineExecutionRecord, JobExecutionRecord};
         crate::routing::cicd::list_pipeline_jobs,
         crate::routing::mfe::list_mfes,
         crate::routing::mfe::register_mfe,
+        crate::routing::registry::list_images,
+        crate::routing::registry::get_image,
+        crate::routing::msr::list_services,
+        crate::routing::msr::register_service,
+        crate::routing::orchestrator::list_superapps,
+        crate::routing::orchestrator::get_superapp,
     ),
     components(
         schemas(
             LoginRequest, LoginResponse, RegisterRequest, UserResponse,
             MicroFrontend,
             CreateRepositoryRequest, Repository,
-            PipelineExecutionRecord, JobExecutionRecord
+            PipelineExecutionRecord, JobExecutionRecord,
+            Image, Microservice, SuperApp
         )
     ),
     tags(
         (name = "auth", description = "Authentication endpoints"),
         (name = "git", description = "Git repository management"),
         (name = "cicd", description = "CI/CD pipeline operations"),
-        (name = "mfe", description = "Micro Frontend management")
+        (name = "mfe", description = "Micro Frontend management"),
+        (name = "registry", description = "Container Registry operations"),
+        (name = "msr", description = "MicroService Registry operations"),
+        (name = "orchestrator", description = "SuperApp Orchestrator operations")
     )
 )]
 pub struct ApiDoc;

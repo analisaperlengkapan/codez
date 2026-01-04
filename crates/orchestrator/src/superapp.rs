@@ -3,9 +3,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use utoipa::ToSchema;
 
 /// SuperApp definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SuperApp {
     pub id: Uuid,
     pub name: String,
@@ -18,7 +19,7 @@ pub struct SuperApp {
 }
 
 /// App module
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AppModule {
     pub id: Uuid,
     pub name: String,
@@ -29,7 +30,7 @@ pub struct AppModule {
 }
 
 /// App configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AppConfig {
     pub theme: String,
     pub locale: String,

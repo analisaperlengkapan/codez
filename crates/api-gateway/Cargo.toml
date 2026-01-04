@@ -28,3 +28,7 @@ codeza-shared = { path = "../shared" }
 codeza-auth-service = { path = "../auth-service" }
 codeza-git-service = { path = "../git-service" }
 codeza-cicd-engine = { path = "../cicd-engine" }
+codeza-registry = { version = "0.1.0", path = "../registry" }
+codeza-msr = { version = "0.1.0", path = "../msr" }
+codeza-orchestrator = { version = "0.1.0", path = "../orchestrator" }
+parking_lot = "0.12.5"

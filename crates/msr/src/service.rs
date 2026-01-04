@@ -3,9 +3,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use utoipa::ToSchema;
 
 /// Microservice definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Microservice {
     pub id: Uuid,
     pub name: String,
@@ -21,7 +22,7 @@ pub struct Microservice {
 }
 
 /// Service status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub enum ServiceStatus {
     Healthy,
     Unhealthy,
@@ -30,7 +31,7 @@ pub enum ServiceStatus {
 }
 
 /// Service endpoint
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ServiceEndpoint {
     pub service_id: Uuid,
     pub host: String,
@@ -40,7 +41,7 @@ pub struct ServiceEndpoint {
 }
 
 /// Service instance
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ServiceInstance {
     pub id: Uuid,
     pub service_id: Uuid,
