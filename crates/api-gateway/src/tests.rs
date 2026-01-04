@@ -128,3 +128,49 @@ async fn test_mfe_registration_validation() {
     // Ideally we would mock the auth middleware.
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
+
+#[tokio::test]
+async fn test_manifest_integration() {
+    // Setup config
+    let config = Config::default_dev();
+
+    // Setup lazy pool
+    let pool = PgPoolOptions::new()
+        .connect_lazy("postgres://user:pass@localhost:5432/db")
+        .expect("Failed to create lazy pool");
+
+    // Create mock git service
+    let provider_config = codeza_git_service::ProviderConfig::new(
+        codeza_git_service::ProviderType::Gitea,
+        "http://localhost:3000".to_string(),
+        "token".to_string(),
+    );
+    let provider = codeza_git_service::create_git_provider(provider_config);
+    let git_service = std::sync::Arc::new(codeza_git_service::RepositoryService::new(provider));
+
+    let state = AppState {
+        pool,
+        config: std::sync::Arc::new(config),
+        metrics: codeza_shared::MetricsRegistry::new(),
+        git_service,
+        registry: std::sync::Arc::new(codeza_registry::push_pull::LocalImageStorage::new()),
+        msr: std::sync::Arc::new(parking_lot::RwLock::new(Vec::new())),
+    };
+
+    let app = build_routes(state.clone()).with_state(state);
+
+    // Call get_manifest
+    let superapp_id = uuid::Uuid::new_v4();
+    let response = app
+        .oneshot(Request::builder()
+            .uri(&format!("/api/v1/orchestrator/apps/{}/manifest", superapp_id))
+            .body(Body::empty())
+            .unwrap())
+        .await
+        .unwrap();
+
+    // Since we don't have a valid auth token and no real DB, we expect 401 Unauthorized.
+    // This confirms the endpoint is protected and reachable.
+    // In a real environment with a DB, we would setup the MFE and SuperApp and verify the response content.
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}

@@ -1,6 +1,7 @@
 use axum::{extract::{State, Path}, Json};
 use codeza_orchestrator::{SuperApp, AppModule, SuperAppRepository};
 use codeza_mfe_manager::mfe::{MFEManifest, SharedConfig};
+use codeza_mfe_manager::MFERepository;
 use codeza_shared::error::{CodezaError, Result};
 use crate::routing::AppState;
 use uuid::Uuid;
@@ -113,7 +114,7 @@ pub async fn get_manifest(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<MFEManifest>> {
-    let repo = SuperAppRepository::new(state.pool);
+    let repo = SuperAppRepository::new(state.pool.clone());
     let app = repo.get(id).await?
         .ok_or_else(|| CodezaError::NotFound(format!("SuperApp {}", id)))?;
 
@@ -122,12 +123,24 @@ pub async fn get_manifest(
     // based on the SuperApp configuration which serves as the source of truth
     // for the "integrated" application.
 
+    // Resolve module URLs from MFE Registry to ensure freshness
+    let mfe_repo = MFERepository::new(state.pool.clone());
+
     let mut remotes = HashMap::new();
     for module in app.modules {
+        // Try to fetch latest details from registry
+        let remote_entry = if let Some(mfe) = mfe_repo.get_mfe_by_name(&module.name).await? {
+            // Use registered URL
+            mfe.remote_entry
+        } else {
+            // Fallback to configured URL
+            module.remote_entry
+        };
+
         // Format: "name@url" or just "name" -> "url" depending on MF implementation
         // Here we map scope -> remote_entry
         // usually: "scope": "url"
-        remotes.insert(module.scope, module.remote_entry);
+        remotes.insert(module.scope, remote_entry);
     }
 
     // Use shared dependencies from SuperApp config if available, otherwise use defaults
