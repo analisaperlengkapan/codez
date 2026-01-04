@@ -100,6 +100,27 @@ impl MicroFrontend {
         self.status = status;
         self.updated_at = chrono::Utc::now();
     }
+
+    /// Validate MFE configuration
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate remote_entry URL
+        if !self.remote_entry.starts_with("http://") && !self.remote_entry.starts_with("https://") {
+            return Err("remote_entry must be a valid HTTP/HTTPS URL".to_string());
+        }
+
+        // Basic check for empty fields
+        if self.name.is_empty() {
+            return Err("name cannot be empty".to_string());
+        }
+        if self.version.is_empty() {
+            return Err("version cannot be empty".to_string());
+        }
+        if self.scope.is_empty() {
+            return Err("scope cannot be empty".to_string());
+        }
+
+        Ok(())
+    }
 }
 
 impl MFERegistry {

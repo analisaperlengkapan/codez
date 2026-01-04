@@ -22,11 +22,7 @@ pub async fn create_repository(
     ),
     codeza_shared::CodezaError,
 > {
-    let provider_config = build_git_provider_config(&state.config)?;
-    let provider = codeza_git_service::create_git_provider(provider_config);
-    let service = codeza_git_service::RepositoryService::new(provider);
-
-    let repo = service
+    let repo = state.git_service
         .create_repository(req)
         .await
         .map_err(codeza_shared::CodezaError::GitError)?;
@@ -53,11 +49,7 @@ pub async fn get_repository(
     axum::extract::Path((owner, repo)):
         axum::extract::Path<(String, String)>,
 ) -> Result<axum::Json<codeza_git_service::Repository>, codeza_shared::CodezaError> {
-    let provider_config = build_git_provider_config(&state.config)?;
-    let provider = codeza_git_service::create_git_provider(provider_config);
-    let service = codeza_git_service::RepositoryService::new(provider);
-
-    let repo = service
+    let repo = state.git_service
         .get_repository(&owner, &repo)
         .await
         .map_err(codeza_shared::CodezaError::GitError)?;
@@ -81,11 +73,7 @@ pub async fn list_repositories(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::extract::Path(owner): axum::extract::Path<String>,
 ) -> Result<axum::Json<Vec<codeza_git_service::Repository>>, codeza_shared::CodezaError> {
-    let provider_config = build_git_provider_config(&state.config)?;
-    let provider = codeza_git_service::create_git_provider(provider_config);
-    let service = codeza_git_service::RepositoryService::new(provider);
-
-    let repos = service
+    let repos = state.git_service
         .list_repositories(&owner)
         .await
         .map_err(codeza_shared::CodezaError::GitError)?;
@@ -112,11 +100,7 @@ pub async fn delete_repository(
     axum::extract::Path((owner, repo)):
         axum::extract::Path<(String, String)>,
 ) -> Result<axum::http::StatusCode, codeza_shared::CodezaError> {
-    let provider_config = build_git_provider_config(&state.config)?;
-    let provider = codeza_git_service::create_git_provider(provider_config);
-    let service = codeza_git_service::RepositoryService::new(provider);
-
-    service
+    state.git_service
         .delete_repository(&owner, &repo)
         .await
         .map_err(codeza_shared::CodezaError::GitError)?;
@@ -124,7 +108,7 @@ pub async fn delete_repository(
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
-pub(crate) fn build_git_provider_config(
+pub fn build_git_provider_config(
     config: &codeza_shared::Config,
 ) -> Result<codeza_git_service::ProviderConfig, codeza_shared::CodezaError> {
     let provider_str = config.git.provider.to_lowercase();
