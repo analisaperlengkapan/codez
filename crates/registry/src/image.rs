@@ -2,9 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use utoipa::ToSchema;
 
 /// Container image
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Image {
     pub id: Uuid,
     pub name: String,
@@ -19,7 +20,7 @@ pub struct Image {
 }
 
 /// Image configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ImageConfig {
     pub architecture: String,
     pub os: String,
@@ -28,7 +29,7 @@ pub struct ImageConfig {
 }
 
 /// Image configuration details
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ImageConfigDetails {
     pub env: Option<Vec<String>>,
     pub cmd: Option<Vec<String>>,
@@ -38,7 +39,7 @@ pub struct ImageConfigDetails {
 }
 
 /// Image layer
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Layer {
     pub digest: String,
     pub size: u64,

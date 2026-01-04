@@ -32,6 +32,9 @@ async fn test_auth_middleware_integration_401() {
         config: std::sync::Arc::new(config),
         metrics: codeza_shared::MetricsRegistry::new(),
         git_service,
+        registry: std::sync::Arc::new(codeza_registry::push_pull::LocalImageStorage::new()),
+        msr: std::sync::Arc::new(parking_lot::RwLock::new(Vec::new())),
+        orchestrator: std::sync::Arc::new(parking_lot::RwLock::new(Vec::new())),
     };
 
     let app = build_routes(state.clone()).with_state(state);
@@ -81,6 +84,9 @@ async fn test_mfe_registration_validation() {
         config: std::sync::Arc::new(config),
         metrics: codeza_shared::MetricsRegistry::new(),
         git_service,
+        registry: std::sync::Arc::new(codeza_registry::push_pull::LocalImageStorage::new()),
+        msr: std::sync::Arc::new(parking_lot::RwLock::new(Vec::new())),
+        orchestrator: std::sync::Arc::new(parking_lot::RwLock::new(Vec::new())),
     };
 
     let app = build_routes(state.clone()).with_state(state);

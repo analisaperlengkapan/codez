@@ -19,3 +19,4 @@ reqwest = { workspace = true }
 futures = "0.3"
 
 codeza-shared = { path = "../shared" }
+utoipa = { version = "5.4.0", features = ["uuid", "chrono"] }
