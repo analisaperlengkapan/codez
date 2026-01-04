@@ -28,6 +28,7 @@ pub async fn list_mfes(
     request_body = MicroFrontend,
     responses(
         (status = 200, description = "Micro frontend registered", body = MicroFrontend),
+        (status = 400, description = "Validation error"),
         (status = 500, description = "Internal server error")
     ),
     tag = "mfe"

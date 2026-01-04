@@ -115,6 +115,11 @@ impl MicroFrontend {
         if self.version.is_empty() {
             return Err("version cannot be empty".to_string());
         }
+        // Basic semantic version check (x.y.z)
+        if !self.version.contains('.') {
+             return Err("version must follow semantic versioning (e.g. 1.0.0)".to_string());
+        }
+
         if self.scope.is_empty() {
             return Err("scope cannot be empty".to_string());
         }
