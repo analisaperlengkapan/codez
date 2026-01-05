@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{CreateRepoOption, Issue, PullRequest, Repository, User};
+use shared::{CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -23,6 +23,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
                     <Route path="/repos/:owner/:repo/issues" view=IssueList/>
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
+                    <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                 </Routes>
             </main>
         </Router>
@@ -130,12 +131,59 @@ fn RepoDetail() -> impl IntoView {
 
     let issues_href = move || format!("/repos/{}/{}/issues", owner(), repo_name());
     let pulls_href = move || format!("/repos/{}/{}/pulls", owner(), repo_name());
+    let code_href = move || format!("/repos/{}/{}/src/", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
             <p>"Clone URL: https://codeza.com/" {owner} "/" {repo_name} ".git"</p>
-            <p><a href=issues_href>"View Issues"</a> " | " <a href=pulls_href>"View Pull Requests"</a></p>
+            <p>
+                <a href=code_href>"Code"</a> " | "
+                <a href=issues_href>"Issues"</a> " | "
+                <a href=pulls_href>"Pull Requests"</a>
+            </p>
+        </div>
+    }
+}
+
+#[component]
+fn RepoCode() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let path = move || params.with(|params| params.get("path").cloned().unwrap_or_default());
+
+    let (files, set_files) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        // Mock contents
+        let mut mock = vec![];
+        if path() == "" || path() == "/" {
+            mock.push(FileEntry { name: "src".to_string(), path: "src".to_string(), kind: "dir".to_string(), size: 0 });
+            mock.push(FileEntry { name: "README.md".to_string(), path: "README.md".to_string(), kind: "file".to_string(), size: 1024 });
+        } else if path() == "src" {
+             mock.push(FileEntry { name: "main.rs".to_string(), path: "src/main.rs".to_string(), kind: "file".to_string(), size: 512 });
+        }
+        set_files.set(mock);
+    });
+
+    view! {
+        <div class="repo-code">
+            <h3>"Code: " {owner} " / " {repo_name} " / " {path}</h3>
+            <ul>
+                <For
+                    each=move || files.get()
+                    key=|f| f.path.clone()
+                    children=move |f| {
+                        let href = format!("/repos/{}/{}/src/{}", owner(), repo_name(), f.path);
+                        view! {
+                            <li>
+                                <a href=href>{f.name}</a> " (" {f.kind} ")"
+                            </li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -280,5 +328,16 @@ mod tests {
             merged: false,
         };
         assert_eq!(pr.title, "p");
+    }
+
+    #[test]
+    fn test_file_entry_logic() {
+        let f = FileEntry {
+            name: "n".to_string(),
+            path: "p".to_string(),
+            kind: "f".to_string(),
+            size: 1,
+        };
+        assert_eq!(f.name, "n");
     }
 }

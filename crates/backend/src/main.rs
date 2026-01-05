@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{CreateIssueOption, CreatePullRequestOption, CreateRepoOption, Issue, PullRequest, Repository, User};
+use shared::{CreateIssueOption, CreatePullRequestOption, CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -26,6 +26,8 @@ fn app() -> Router {
         .route("/api/v1/user/repos", post(create_repo))
         .route("/api/v1/repos/:owner/:repo/issues", get(list_issues).post(create_issue))
         .route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls).post(create_pull))
+        .route("/api/v1/repos/:owner/:repo/contents/*path", get(get_contents))
+        .route("/api/v1/repos/:owner/:repo/contents", get(get_root_contents))
         .layer(CorsLayer::permissive())
 }
 
@@ -123,6 +125,37 @@ async fn create_pull(
         merged: false,
     };
     (StatusCode::CREATED, Json(pr))
+}
+
+async fn get_contents(Path((_owner, _repo, path)): Path<(String, String, String)>) -> Json<Vec<FileEntry>> {
+    // Mock contents based on path
+    let mut files = vec![];
+    if path == "/" || path.is_empty() {
+        files.push(FileEntry {
+            name: "src".to_string(),
+            path: "src".to_string(),
+            kind: "dir".to_string(),
+            size: 0,
+        });
+        files.push(FileEntry {
+            name: "README.md".to_string(),
+            path: "README.md".to_string(),
+            kind: "file".to_string(),
+            size: 1024,
+        });
+    } else if path == "src" {
+        files.push(FileEntry {
+            name: "main.rs".to_string(),
+            path: "src/main.rs".to_string(),
+            kind: "file".to_string(),
+            size: 512,
+        });
+    }
+    Json(files)
+}
+
+async fn get_root_contents(Path((owner, repo)): Path<(String, String)>) -> Json<Vec<FileEntry>> {
+    get_contents(Path((owner, repo, "".to_string()))).await
 }
 
 #[cfg(test)]
@@ -302,5 +335,21 @@ mod tests {
         let pr: PullRequest = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(pr.title, "New Feature");
+    }
+
+    #[tokio::test]
+    async fn test_get_contents() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/contents").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let files: Vec<FileEntry> = serde_json::from_slice(&body).unwrap();
+
+        assert!(files.len() >= 2);
+        assert_eq!(files[0].name, "src");
     }
 }

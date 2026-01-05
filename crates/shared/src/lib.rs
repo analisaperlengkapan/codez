@@ -81,6 +81,14 @@ pub struct CreatePullRequestOption {
     pub base: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub kind: String, // "file" or "dir"
+    pub size: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,6 +98,18 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_file_entry() {
+        let file = FileEntry {
+            name: "README.md".to_string(),
+            path: "README.md".to_string(),
+            kind: "file".to_string(),
+            size: 1024,
+        };
+        assert_eq!(file.name, "README.md");
+        assert_eq!(file.kind, "file");
     }
 
     #[test]
