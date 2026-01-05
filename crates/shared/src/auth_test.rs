@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::models::JwtClaims;
     use crate::auth::generate_token;
     use uuid::Uuid;
 

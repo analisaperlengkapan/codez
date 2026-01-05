@@ -9,6 +9,7 @@ use sqlx::postgres::PgPoolOptions;
 use crate::routing::{AppState, build_routes};
 
 mod orchestrator_flow;
+pub mod end_to_end_flow;
 
 #[tokio::test]
 async fn test_auth_middleware_integration_401() {
