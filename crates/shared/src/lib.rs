@@ -246,6 +246,35 @@ pub struct UserSettingsOption {
     pub location: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PublicKey {
+    pub id: u64,
+    pub title: String,
+    pub key: String,
+    pub fingerprint: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateKeyOption {
+    pub title: String,
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Webhook {
+    pub id: u64,
+    pub url: String,
+    pub events: Vec<String>,
+    pub active: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateHookOption {
+    pub url: String,
+    pub events: Vec<String>,
+    pub active: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,6 +284,15 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_keys_hooks_structs() {
+        let key = PublicKey { id: 1, title: "Laptop".to_string(), key: "ssh-rsa...".to_string(), fingerprint: "sha256...".to_string() };
+        assert_eq!(key.title, "Laptop");
+
+        let hook = Webhook { id: 1, url: "http://example.com".to_string(), events: vec!["push".to_string()], active: true };
+        assert!(hook.active);
     }
 
     #[test]

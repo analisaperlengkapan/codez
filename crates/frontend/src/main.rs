@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Organization, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Topic, User, UserSettingsOption, WikiPage};
+use shared::{Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Topic, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -13,6 +13,7 @@ fn App() -> impl IntoView {
             <nav>
                 <a href="/">"Home"</a> " | "
                 <a href="/search">"Search"</a> " | "
+                <a href="/notifications">"Notifications"</a> " | "
                 <a href="/login">"Login"</a> " | "
                 <a href="/register">"Register"</a> " | "
                 <a href="/users/admin">"Admin Profile"</a> " | "
@@ -23,6 +24,7 @@ fn App() -> impl IntoView {
                 <Routes>
                     <Route path="/" view=Home/>
                     <Route path="/search" view=Search/>
+                    <Route path="/notifications" view=NotificationList/>
                     <Route path="/login" view=Login/>
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
@@ -72,6 +74,36 @@ fn Home() -> impl IntoView {
                         view! {
                             <li>
                                 <a href=href>{repo.owner} " / " {repo.name}</a>
+                            </li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn NotificationList() -> impl IntoView {
+    let (notifs, set_notifs) = create_signal(vec![]);
+    create_effect(move |_| {
+        let mock = vec![
+            Notification { id: 1, subject: "Welcome".to_string(), unread: true, updated_at: "now".to_string() }
+        ];
+        set_notifs.set(mock);
+    });
+
+    view! {
+        <div class="notifications">
+            <h2>"Notifications"</h2>
+            <ul>
+                <For
+                    each=move || notifs.get()
+                    key=|n| n.id
+                    children=move |n| {
+                        view! {
+                            <li>
+                                <strong>{n.subject}</strong> " (" {if n.unread { "Unread" } else { "Read" }} ")"
                             </li>
                         }
                     }
@@ -638,6 +670,35 @@ fn RepoSettings() -> impl IntoView {
             <input type="text" placeholder="Description" prop:value=desc
                 on:input=move |ev| set_desc.set(event_target_value(&ev)) />
             <button on:click=on_save>"Save"</button>
+            <Webhooks/>
+        </div>
+    }
+}
+
+#[component]
+fn Webhooks() -> impl IntoView {
+    let (hooks, set_hooks) = create_signal(vec![]);
+    create_effect(move |_| {
+        // Mock
+        set_hooks.set(vec![
+            Webhook { id: 1, url: "http://example.com".to_string(), events: vec!["push".to_string()], active: true }
+        ]);
+    });
+
+    view! {
+        <div class="webhooks">
+            <h4>"Webhooks"</h4>
+            <ul>
+                <For
+                    each=move || hooks.get()
+                    key=|h| h.id
+                    children=move |h| {
+                        view! {
+                            <li>{h.url} " (" {if h.active { "Active" } else { "Inactive" }} ")"</li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -662,6 +723,35 @@ fn UserSettings() -> impl IntoView {
             <input type="text" placeholder="Full Name" prop:value=name
                 on:input=move |ev| set_name.set(event_target_value(&ev)) />
             <button on:click=on_save>"Save"</button>
+            <SSHKeys/>
+        </div>
+    }
+}
+
+#[component]
+fn SSHKeys() -> impl IntoView {
+    let (keys, set_keys) = create_signal(vec![]);
+    create_effect(move |_| {
+        // Mock
+        set_keys.set(vec![
+            PublicKey { id: 1, title: "My Key".to_string(), key: "ssh-rsa...".to_string(), fingerprint: "SHA...".to_string() }
+        ]);
+    });
+
+    view! {
+        <div class="ssh-keys">
+            <h4>"SSH Keys"</h4>
+            <ul>
+                <For
+                    each=move || keys.get()
+                    key=|k| k.id
+                    children=move |k| {
+                        view! {
+                            <li>{k.title} " - " {k.fingerprint}</li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -914,5 +1004,11 @@ mod tests {
     fn test_wiki_logic() {
         let p = WikiPage { title: "t".to_string(), content: "c".to_string(), commit_message: None };
         assert_eq!(p.title, "t");
+    }
+
+    #[test]
+    fn test_key_logic() {
+        let k = PublicKey { id: 1, title: "t".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
+        assert_eq!(k.title, "t");
     }
 }

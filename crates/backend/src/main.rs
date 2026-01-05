@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Organization, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Topic, User, UserSettingsOption, WikiPage};
+use shared::{Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Topic, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -45,6 +45,9 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/wiki/pages", post(create_wiki_page))
         .route("/api/v1/repos/:owner/:repo/settings", get(get_repo_settings).patch(update_repo_settings))
         .route("/api/v1/user/settings", get(get_user_settings).patch(update_user_settings))
+        .route("/api/v1/notifications", get(list_notifications))
+        .route("/api/v1/user/keys", get(list_keys).post(create_key))
+        .route("/api/v1/repos/:owner/:repo/hooks", get(list_hooks).post(create_hook))
         .layer(CorsLayer::permissive())
 }
 
@@ -426,6 +429,65 @@ async fn get_user_settings() -> Json<UserSettingsOption> {
 
 async fn update_user_settings(Json(_payload): Json<UserSettingsOption>) -> StatusCode {
     StatusCode::OK
+}
+
+async fn list_notifications() -> Json<Vec<Notification>> {
+    let notifications = vec![
+        Notification {
+            id: 1,
+            subject: "Welcome to Codeza".to_string(),
+            unread: true,
+            updated_at: "2023-01-01".to_string(),
+        }
+    ];
+    Json(notifications)
+}
+
+async fn list_keys() -> Json<Vec<PublicKey>> {
+    let keys = vec![
+        PublicKey {
+            id: 1,
+            title: "Laptop".to_string(),
+            key: "ssh-rsa AAA...".to_string(),
+            fingerprint: "SHA256:...".to_string(),
+        }
+    ];
+    Json(keys)
+}
+
+async fn create_key(Json(payload): Json<CreateKeyOption>) -> (StatusCode, Json<PublicKey>) {
+    let key = PublicKey {
+        id: 2,
+        title: payload.title,
+        key: payload.key,
+        fingerprint: "SHA256:new".to_string(),
+    };
+    (StatusCode::CREATED, Json(key))
+}
+
+async fn list_hooks(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Webhook>> {
+    let hooks = vec![
+        Webhook {
+            id: 1,
+            url: "http://example.com/hook".to_string(),
+            events: vec!["push".to_string()],
+            active: true,
+        }
+    ];
+    Json(hooks)
+}
+
+async fn create_hook(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateHookOption>
+) -> (StatusCode, Json<Webhook>) {
+    let hook = Webhook {
+        id: 2,
+        url: payload.url,
+        events: payload.events,
+        active: payload.active,
+    };
+    (StatusCode::CREATED, Json(hook))
 }
 
 #[cfg(test)]
@@ -849,5 +911,61 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_list_notifications() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/notifications").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let notifs: Vec<Notification> = serde_json::from_slice(&body).unwrap();
+        assert!(!notifs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_key() {
+        let app = app();
+        let payload = CreateKeyOption {
+            title: "New Key".to_string(),
+            key: "ssh-rsa...".to_string(),
+        };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/user/keys")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_create_hook() {
+        let app = app();
+        let payload = CreateHookOption {
+            url: "http://test.com".to_string(),
+            events: vec!["push".to_string()],
+            active: true,
+        };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/hooks")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 }
