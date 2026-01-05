@@ -89,6 +89,14 @@ pub struct FileEntry {
     pub size: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Commit {
+    pub sha: String,
+    pub message: String,
+    pub author: User,
+    pub date: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,6 +106,18 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_commit() {
+        let user = User::new(1, "committer".to_string(), None);
+        let commit = Commit {
+            sha: "abc1234".to_string(),
+            message: "Initial commit".to_string(),
+            author: user,
+            date: "2023-01-01".to_string(),
+        };
+        assert_eq!(commit.sha, "abc1234");
     }
 
     #[test]

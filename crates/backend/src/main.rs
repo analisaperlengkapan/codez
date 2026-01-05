@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{CreateIssueOption, CreatePullRequestOption, CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
+use shared::{Commit, CreateIssueOption, CreatePullRequestOption, CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -28,6 +28,7 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls).post(create_pull))
         .route("/api/v1/repos/:owner/:repo/contents/*path", get(get_contents))
         .route("/api/v1/repos/:owner/:repo/contents", get(get_root_contents))
+        .route("/api/v1/repos/:owner/:repo/commits", get(list_commits))
         .layer(CorsLayer::permissive())
 }
 
@@ -156,6 +157,19 @@ async fn get_contents(Path((_owner, _repo, path)): Path<(String, String, String)
 
 async fn get_root_contents(Path((owner, repo)): Path<(String, String)>) -> Json<Vec<FileEntry>> {
     get_contents(Path((owner, repo, "".to_string()))).await
+}
+
+async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Commit>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let commits = vec![
+        Commit {
+            sha: "abc123456789".to_string(),
+            message: "Initial commit".to_string(),
+            author: user,
+            date: "2023-01-01T12:00:00Z".to_string(),
+        }
+    ];
+    Json(commits)
 }
 
 #[cfg(test)]
@@ -351,5 +365,21 @@ mod tests {
 
         assert!(files.len() >= 2);
         assert_eq!(files[0].name, "src");
+    }
+
+    #[tokio::test]
+    async fn test_list_commits() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/commits").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let commits: Vec<Commit> = serde_json::from_slice(&body).unwrap();
+
+        assert!(!commits.is_empty());
+        assert_eq!(commits[0].sha, "abc123456789");
     }
 }

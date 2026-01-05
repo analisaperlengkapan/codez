@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
+use shared::{Commit, CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -24,6 +24,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/issues" view=IssueList/>
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
+                    <Route path="/repos/:owner/:repo/commits" view=CommitList/>
                 </Routes>
             </main>
         </Router>
@@ -132,6 +133,7 @@ fn RepoDetail() -> impl IntoView {
     let issues_href = move || format!("/repos/{}/{}/issues", owner(), repo_name());
     let pulls_href = move || format!("/repos/{}/{}/pulls", owner(), repo_name());
     let code_href = move || format!("/repos/{}/{}/src/", owner(), repo_name());
+    let commits_href = move || format!("/repos/{}/{}/commits", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
@@ -139,9 +141,52 @@ fn RepoDetail() -> impl IntoView {
             <p>"Clone URL: https://codeza.com/" {owner} "/" {repo_name} ".git"</p>
             <p>
                 <a href=code_href>"Code"</a> " | "
+                <a href=commits_href>"Commits"</a> " | "
                 <a href=issues_href>"Issues"</a> " | "
                 <a href=pulls_href>"Pull Requests"</a>
             </p>
+        </div>
+    }
+}
+
+#[component]
+fn CommitList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (commits, set_commits) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        // Mock contents
+        let user = User::new(1, "admin".to_string(), None);
+        let mock = vec![
+            Commit {
+                sha: "1234567".to_string(),
+                message: "Init".to_string(),
+                author: user,
+                date: "2023-01-01".to_string(),
+            }
+        ];
+        set_commits.set(mock);
+    });
+
+    view! {
+        <div class="commit-list">
+            <h3>"Commits for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || commits.get()
+                    key=|c| c.sha.clone()
+                    children=move |c| {
+                        view! {
+                            <li>
+                                <code>{c.sha}</code> " - " {c.message} " (" {c.author.username} ")"
+                            </li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -339,5 +384,17 @@ mod tests {
             size: 1,
         };
         assert_eq!(f.name, "n");
+    }
+
+    #[test]
+    fn test_commit_logic() {
+        let user = User::new(1, "u".to_string(), None);
+        let c = Commit {
+            sha: "s".to_string(),
+            message: "m".to_string(),
+            author: user,
+            date: "d".to_string(),
+        };
+        assert_eq!(c.sha, "s");
     }
 }
