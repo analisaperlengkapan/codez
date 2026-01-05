@@ -22,6 +22,14 @@ impl Repository {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Notification {
+    pub id: u64,
+    pub subject: String,
+    pub unread: bool,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct User {
     pub id: u64,
     pub username: String,
