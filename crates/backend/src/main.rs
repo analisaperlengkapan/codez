@@ -1,9 +1,10 @@
 use axum::{
     extract::{Json, Path},
-    routing::get,
+    http::StatusCode,
+    routing::{get, post},
     Router,
 };
-use shared::{Repository, User};
+use shared::{CreateRepoOption, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -22,6 +23,7 @@ fn app() -> Router {
         .route("/api/v1/repos", get(list_repos))
         .route("/api/v1/users/:username", get(get_user))
         .route("/api/v1/repos/:owner/:repo", get(get_repo))
+        .route("/api/v1/user/repos", post(create_repo))
         .layer(CorsLayer::permissive())
 }
 
@@ -49,6 +51,12 @@ async fn get_repo(Path((owner, repo)): Path<(String, String)>) -> Json<Option<Re
     } else {
         Json(None)
     }
+}
+
+async fn create_repo(Json(payload): Json<CreateRepoOption>) -> (StatusCode, Json<Repository>) {
+    // Mock creation
+    let repo = Repository::new(3, payload.name, "admin".to_string());
+    (StatusCode::CREATED, Json(repo))
 }
 
 #[cfg(test)]
@@ -108,5 +116,35 @@ mod tests {
 
         assert!(repo.is_some());
         assert_eq!(repo.unwrap().name, "codeza");
+    }
+
+    #[tokio::test]
+    async fn test_create_repo() {
+        let app = app();
+        let payload = CreateRepoOption {
+            name: "new-project".to_string(),
+            description: None,
+            private: false,
+            auto_init: true,
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/user/repos")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let repo: Repository = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(repo.name, "new-project");
     }
 }

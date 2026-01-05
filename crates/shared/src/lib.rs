@@ -38,6 +38,14 @@ impl User {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateRepoOption {
+    pub name: String,
+    pub description: Option<String>,
+    pub private: bool,
+    pub auto_init: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -47,6 +55,18 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_create_repo_option() {
+        let opts = CreateRepoOption {
+            name: "new-repo".to_string(),
+            description: Some("desc".to_string()),
+            private: true,
+            auto_init: false,
+        };
+        assert_eq!(opts.name, "new-repo");
+        assert!(opts.private);
     }
 
     #[test]

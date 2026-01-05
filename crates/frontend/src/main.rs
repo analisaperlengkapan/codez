@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Repository, User};
+use shared::{CreateRepoOption, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -12,11 +12,13 @@ fn App() -> impl IntoView {
         <Router>
             <nav>
                 <a href="/">"Home"</a> " | "
-                <a href="/users/admin">"Admin Profile"</a>
+                <a href="/users/admin">"Admin Profile"</a> " | "
+                <a href="/repo/create">"New Repo"</a>
             </nav>
             <main>
                 <Routes>
                     <Route path="/" view=Home/>
+                    <Route path="/repo/create" view=CreateRepo/>
                     <Route path="/users/:username" view=UserProfile/>
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
                 </Routes>
@@ -87,6 +89,38 @@ fn UserProfile() -> impl IntoView {
 }
 
 #[component]
+fn CreateRepo() -> impl IntoView {
+    let (name, set_name) = create_signal("".to_string());
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateRepoOption {
+            name: name.get(),
+            description: None,
+            private: false,
+            auto_init: true,
+        };
+        // In a real app, we would POST this payload
+        logging::log!("Creating repo: {:?}", payload);
+    };
+
+    view! {
+        <div class="create-repo">
+            <h3>"Create New Repository"</h3>
+            <form on:submit=on_submit>
+                <input
+                    type="text"
+                    placeholder="Repository Name"
+                    prop:value=name
+                    on:input=move |ev| set_name.set(event_target_value(&ev))
+                />
+                <button type="submit">"Create"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
 fn RepoDetail() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
@@ -109,5 +143,16 @@ mod tests {
         // Simple verification that types align
         let repo = Repository::new(1, "test".to_string(), "me".to_string());
         assert_eq!(repo.name, "test");
+    }
+
+    #[test]
+    fn test_create_repo_logic() {
+        let opts = CreateRepoOption {
+            name: "test".to_string(),
+            description: None,
+            private: false,
+            auto_init: true,
+        };
+        assert_eq!(opts.name, "test");
     }
 }
