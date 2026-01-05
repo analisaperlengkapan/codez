@@ -139,6 +139,27 @@ pub struct Organization {
     pub avatar_url: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Comment {
+    pub id: u64,
+    pub body: String,
+    pub user: User,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateCommentOption {
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MergePullRequestOption {
+    #[serde(rename = "do")]
+    pub merge_action: String, // "merge", "rebase", etc.
+    pub merge_message_field: Option<String>,
+    pub merge_title_field: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,6 +169,25 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_comment_structs() {
+        let user = User::new(1, "u".to_string(), None);
+        let comment = Comment {
+            id: 1,
+            body: "text".to_string(),
+            user,
+            created_at: "date".to_string(),
+        };
+        assert_eq!(comment.body, "text");
+
+        let merge = MergePullRequestOption {
+            merge_action: "merge".to_string(),
+            merge_message_field: None,
+            merge_title_field: None,
+        };
+        assert_eq!(merge.merge_action, "merge");
     }
 
     #[test]

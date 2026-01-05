@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Commit, CreateRepoOption, FileEntry, Issue, LoginOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
+use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, LoginOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -28,7 +28,9 @@ fn App() -> impl IntoView {
                     <Route path="/orgs/:org" view=OrgProfile/>
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
                     <Route path="/repos/:owner/:repo/issues" view=IssueList/>
+                    <Route path="/repos/:owner/:repo/issues/:index" view=IssueDetail/>
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
+                    <Route path="/repos/:owner/:repo/pulls/:index" view=PullRequestDetail/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
@@ -380,6 +382,68 @@ fn RepoCode() -> impl IntoView {
 }
 
 #[component]
+fn IssueDetail() -> impl IntoView {
+    let params = use_params_map();
+    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default());
+
+    let (comments, set_comments) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        // Mock comments
+        let user = User::new(1, "admin".to_string(), None);
+        let mock = vec![
+            Comment {
+                id: 1,
+                body: "Comment body".to_string(),
+                user,
+                created_at: "date".to_string(),
+            }
+        ];
+        set_comments.set(mock);
+    });
+
+    view! {
+        <div class="issue-detail">
+             <h3>"Issue #" {index}</h3>
+             <div class="comments">
+                <For
+                    each=move || comments.get()
+                    key=|c| c.id
+                    children=move |c| {
+                        view! {
+                            <div class="comment">
+                                <strong>{c.user.username}</strong> ": " {c.body}
+                            </div>
+                        }
+                    }
+                />
+             </div>
+             <form>
+                <textarea placeholder="Add a comment"></textarea>
+                <button>"Comment"</button>
+             </form>
+        </div>
+    }
+}
+
+#[component]
+fn PullRequestDetail() -> impl IntoView {
+    let params = use_params_map();
+    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default());
+
+    let on_merge = move |_| {
+        logging::log!("Merging PR #{}", index());
+    };
+
+    view! {
+        <div class="pr-detail">
+            <h3>"Pull Request #" {index}</h3>
+            <button on:click=on_merge>"Merge Pull Request"</button>
+        </div>
+    }
+}
+
+#[component]
 fn PullRequestList() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
@@ -412,9 +476,10 @@ fn PullRequestList() -> impl IntoView {
                     each=move || pulls.get()
                     key=|pr| pr.id
                     children=move |pr| {
+                        let href = format!("/repos/{}/{}/pulls/{}", owner(), repo_name(), pr.number);
                         view! {
                             <li>
-                                <strong>"#" {pr.number} " " {pr.title}</strong>
+                                <a href=href><strong>"#" {pr.number} " " {pr.title}</strong></a>
                                 " (" {pr.state} ") by " {pr.user.username}
                             </li>
                         }
@@ -457,9 +522,10 @@ fn IssueList() -> impl IntoView {
                     each=move || issues.get()
                     key=|issue| issue.id
                     children=move |issue| {
+                        let href = format!("/repos/{}/{}/issues/{}", owner(), repo_name(), issue.number);
                         view! {
                             <li>
-                                <strong>"#" {issue.number} " " {issue.title}</strong>
+                                <a href=href><strong>"#" {issue.number} " " {issue.title}</strong></a>
                                 " (" {issue.state} ") by " {issue.user.username}
                             </li>
                         }
@@ -578,5 +644,17 @@ mod tests {
             avatar_url: None,
         };
         assert_eq!(o.username, "o");
+    }
+
+    #[test]
+    fn test_comment_logic() {
+        let user = User::new(1, "u".to_string(), None);
+        let c = Comment {
+            id: 1,
+            body: "b".to_string(),
+            user,
+            created_at: "d".to_string(),
+        };
+        assert_eq!(c.body, "b");
     }
 }

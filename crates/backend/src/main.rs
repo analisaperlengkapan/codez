@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, CreateIssueOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, LoginOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
+use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, LoginOption, MergePullRequestOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -34,6 +34,9 @@ fn app() -> Router {
         .route("/api/v1/users/register", post(register_user))
         .route("/api/v1/orgs/:org", get(get_org))
         .route("/api/v1/orgs/:org/repos", get(list_org_repos))
+        .route("/api/v1/repos/:owner/:repo/issues/:index", get(get_issue))
+        .route("/api/v1/repos/:owner/:repo/issues/:index/comments", get(list_comments).post(create_comment))
+        .route("/api/v1/repos/:owner/:repo/pulls/:index/merge", post(merge_pull))
         .layer(CorsLayer::permissive())
 }
 
@@ -244,6 +247,52 @@ async fn list_org_repos(Path(_org): Path<String>) -> Json<Vec<Repository>> {
         Repository::new(1, "org-repo".to_string(), "codeza-org".to_string())
     ];
     Json(repos)
+}
+
+async fn get_issue(Path((_owner, _repo, index)): Path<(String, String, u64)>) -> Json<Option<Issue>> {
+    let user = User::new(1, "admin".to_string(), None);
+    Json(Some(Issue {
+        id: index,
+        number: index,
+        title: "Mock Issue".to_string(),
+        body: Some("Body".to_string()),
+        state: "open".to_string(),
+        user,
+    }))
+}
+
+async fn list_comments(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let comments = vec![
+        Comment {
+            id: 1,
+            body: "Great idea!".to_string(),
+            user,
+            created_at: "2023-01-01".to_string(),
+        }
+    ];
+    Json(comments)
+}
+
+async fn create_comment(
+    Path((_owner, _repo, _index)): Path<(String, String, u64)>,
+    Json(payload): Json<CreateCommentOption>
+) -> (StatusCode, Json<Comment>) {
+    let user = User::new(1, "admin".to_string(), None);
+    let comment = Comment {
+        id: 2,
+        body: payload.body,
+        user,
+        created_at: "2023-01-02".to_string(),
+    };
+    (StatusCode::CREATED, Json(comment))
+}
+
+async fn merge_pull(
+    Path((_owner, _repo, _index)): Path<(String, String, u64)>,
+    Json(_payload): Json<MergePullRequestOption>
+) -> StatusCode {
+    StatusCode::OK
 }
 
 #[cfg(test)]
@@ -536,5 +585,33 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let org: Option<Organization> = serde_json::from_slice(&body).unwrap();
         assert!(org.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_issue_detail() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/issues/1").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_create_comment() {
+        let app = app();
+        let payload = CreateCommentOption { body: "Test comment".to_string() };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues/1/comments")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 }
