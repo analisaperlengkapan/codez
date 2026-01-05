@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, LoginOption, MergePullRequestOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
+use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Organization, PullRequest, RegisterOption, Release, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -37,6 +37,8 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/issues/:index", get(get_issue))
         .route("/api/v1/repos/:owner/:repo/issues/:index/comments", get(list_comments).post(create_comment))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/merge", post(merge_pull))
+        .route("/api/v1/repos/:owner/:repo/labels", get(list_labels).post(create_label))
+        .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))
         .layer(CorsLayer::permissive())
 }
 
@@ -293,6 +295,58 @@ async fn merge_pull(
     Json(_payload): Json<MergePullRequestOption>
 ) -> StatusCode {
     StatusCode::OK
+}
+
+async fn list_labels(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Label>> {
+    let labels = vec![
+        Label {
+            id: 1,
+            name: "bug".to_string(),
+            color: "#ff0000".to_string(),
+            description: None,
+        }
+    ];
+    Json(labels)
+}
+
+async fn create_label(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateLabelOption>
+) -> (StatusCode, Json<Label>) {
+    let label = Label {
+        id: 2,
+        name: payload.name,
+        color: payload.color,
+        description: payload.description,
+    };
+    (StatusCode::CREATED, Json(label))
+}
+
+async fn list_milestones(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Milestone>> {
+    let milestones = vec![
+        Milestone {
+            id: 1,
+            title: "v1.0".to_string(),
+            description: None,
+            due_on: None,
+            state: "open".to_string(),
+        }
+    ];
+    Json(milestones)
+}
+
+async fn create_milestone(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateMilestoneOption>
+) -> (StatusCode, Json<Milestone>) {
+    let milestone = Milestone {
+        id: 2,
+        title: payload.title,
+        description: payload.description,
+        due_on: payload.due_on,
+        state: "open".to_string(),
+    };
+    (StatusCode::CREATED, Json(milestone))
 }
 
 #[cfg(test)]
@@ -606,6 +660,41 @@ mod tests {
                 Request::builder()
                     .method("POST")
                     .uri("/api/v1/repos/admin/codeza/issues/1/comments")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_list_labels() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/labels").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let labels: Vec<Label> = serde_json::from_slice(&body).unwrap();
+        assert!(!labels.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_milestone() {
+        let app = app();
+        let payload = CreateMilestoneOption {
+            title: "v1.0".to_string(),
+            description: None,
+            due_on: None,
+        };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/milestones")
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&payload).unwrap()))
                     .unwrap(),

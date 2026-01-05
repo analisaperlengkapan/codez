@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, LoginOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
+use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Organization, PullRequest, RegisterOption, Release, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -34,6 +34,8 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
+                    <Route path="/repos/:owner/:repo/labels" view=LabelList/>
+                    <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>
                 </Routes>
             </main>
         </Router>
@@ -85,7 +87,7 @@ fn Login() -> impl IntoView {
             username: username.get(),
             password: password.get(),
         };
-        logging::log!("Logging in: {:?}", payload);
+        leptos::logging::log!("Logging in: {:?}", payload);
     };
 
     view! {
@@ -115,7 +117,7 @@ fn Register() -> impl IntoView {
             email: email.get(),
             password: password.get(),
         };
-        logging::log!("Registering: {:?}", payload);
+        leptos::logging::log!("Registering: {:?}", payload);
     };
 
     view! {
@@ -205,7 +207,7 @@ fn CreateRepo() -> impl IntoView {
             auto_init: true,
         };
         // In a real app, we would POST this payload
-        logging::log!("Creating repo: {:?}", payload);
+        leptos::logging::log!("Creating repo: {:?}", payload);
     };
 
     view! {
@@ -235,6 +237,8 @@ fn RepoDetail() -> impl IntoView {
     let code_href = move || format!("/repos/{}/{}/src/", owner(), repo_name());
     let commits_href = move || format!("/repos/{}/{}/commits", owner(), repo_name());
     let releases_href = move || format!("/repos/{}/{}/releases", owner(), repo_name());
+    let labels_href = move || format!("/repos/{}/{}/labels", owner(), repo_name());
+    let milestones_href = move || format!("/repos/{}/{}/milestones", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
@@ -245,7 +249,9 @@ fn RepoDetail() -> impl IntoView {
                 <a href=commits_href>"Commits"</a> " | "
                 <a href=issues_href>"Issues"</a> " | "
                 <a href=pulls_href>"Pull Requests"</a> " | "
-                <a href=releases_href>"Releases"</a>
+                <a href=releases_href>"Releases"</a> " | "
+                <a href=labels_href>"Labels"</a> " | "
+                <a href=milestones_href>"Milestones"</a>
             </p>
         </div>
     }
@@ -427,12 +433,82 @@ fn IssueDetail() -> impl IntoView {
 }
 
 #[component]
+fn LabelList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (labels, set_labels) = create_signal(vec![]);
+    create_effect(move |_| {
+         // Mock
+         let mock = vec![
+             Label { id: 1, name: "bug".to_string(), color: "#f00".to_string(), description: None }
+         ];
+         set_labels.set(mock);
+    });
+
+    view! {
+        <div class="label-list">
+            <h3>"Labels for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || labels.get()
+                    key=|l| l.id
+                    children=move |l| {
+                        view! {
+                            <li>
+                                <span style=format!("background-color: {}", l.color)>{l.name}</span>
+                            </li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn MilestoneList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (milestones, set_milestones) = create_signal(vec![]);
+    create_effect(move |_| {
+         // Mock
+         let mock = vec![
+             Milestone { id: 1, title: "v1.0".to_string(), description: None, due_on: None, state: "open".to_string() }
+         ];
+         set_milestones.set(mock);
+    });
+
+    view! {
+        <div class="milestone-list">
+            <h3>"Milestones for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || milestones.get()
+                    key=|m| m.id
+                    children=move |m| {
+                        view! {
+                            <li>
+                                <strong>{m.title}</strong> " (" {m.state} ")"
+                            </li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
 fn PullRequestDetail() -> impl IntoView {
     let params = use_params_map();
     let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default());
 
     let on_merge = move |_| {
-        logging::log!("Merging PR #{}", index());
+        leptos::logging::log!("Merging PR #{}", index());
     };
 
     view! {
@@ -656,5 +732,11 @@ mod tests {
             created_at: "d".to_string(),
         };
         assert_eq!(c.body, "b");
+    }
+
+    #[test]
+    fn test_label_logic() {
+        let l = Label { id: 1, name: "l".to_string(), color: "c".to_string(), description: None };
+        assert_eq!(l.name, "l");
     }
 }

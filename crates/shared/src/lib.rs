@@ -160,6 +160,37 @@ pub struct MergePullRequestOption {
     pub merge_title_field: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Label {
+    pub id: u64,
+    pub name: String,
+    pub color: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateLabelOption {
+    pub name: String,
+    pub color: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Milestone {
+    pub id: u64,
+    pub title: String,
+    pub description: Option<String>,
+    pub due_on: Option<String>,
+    pub state: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateMilestoneOption {
+    pub title: String,
+    pub description: Option<String>,
+    pub due_on: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,6 +200,43 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_label_structs() {
+        let label = Label {
+            id: 1,
+            name: "bug".to_string(),
+            color: "#ff0000".to_string(),
+            description: None,
+        };
+        assert_eq!(label.name, "bug");
+
+        let opts = CreateLabelOption {
+            name: "feature".to_string(),
+            color: "#00ff00".to_string(),
+            description: None,
+        };
+        assert_eq!(opts.color, "#00ff00");
+    }
+
+    #[test]
+    fn test_milestone_structs() {
+        let milestone = Milestone {
+            id: 1,
+            title: "v1.0".to_string(),
+            description: None,
+            due_on: None,
+            state: "open".to_string(),
+        };
+        assert_eq!(milestone.title, "v1.0");
+
+        let opts = CreateMilestoneOption {
+            title: "v2.0".to_string(),
+            description: None,
+            due_on: None,
+        };
+        assert_eq!(opts.title, "v2.0");
     }
 
     #[test]
