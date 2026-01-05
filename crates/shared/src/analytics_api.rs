@@ -203,11 +203,7 @@ impl QueryExecutor {
         let offset = query.pagination.offset as usize;
         let limit = query.pagination.limit as usize;
 
-        let paginated_data: Vec<T> = data
-            .into_iter()
-            .skip(offset)
-            .take(limit)
-            .collect();
+        let paginated_data: Vec<T> = data.into_iter().skip(offset).take(limit).collect();
 
         let query_time_ms = start.elapsed().as_millis() as u64;
 
@@ -232,7 +228,11 @@ mod tests {
     #[test]
     fn test_query_builder() {
         let query = QueryBuilder::new(EntityType::Repository)
-            .filter("status".to_string(), FilterOperator::Equals, "active".to_string())
+            .filter(
+                "status".to_string(),
+                FilterOperator::Equals,
+                "active".to_string(),
+            )
             .sort("created_at".to_string(), SortOrder::Descending)
             .paginate(50, 0)
             .build();

@@ -13,7 +13,7 @@ pub struct RepositoryAnalytics {
     pub total_branches: u32,
     pub total_tags: u32,
     pub lines_of_code: u64,
-    pub commit_frequency: f64, // commits per day
+    pub commit_frequency: f64,   // commits per day
     pub contributor_growth: f64, // growth rate
     pub last_commit: chrono::DateTime<chrono::Utc>,
     pub created_at: chrono::DateTime<chrono::Utc>,

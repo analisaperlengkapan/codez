@@ -17,7 +17,10 @@ pub async fn load_yaml_pipeline_config(
     };
 
     for path in paths {
-        match provider.get_file_contents(owner, repo_name, path, git_ref).await {
+        match provider
+            .get_file_contents(owner, repo_name, path, git_ref)
+            .await
+        {
             Ok(content) => return Some(content),
             Err(_) => continue,
         }

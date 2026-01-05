@@ -3,21 +3,21 @@
 use std::sync::Arc;
 
 pub mod auth;
-pub mod git;
 pub mod cicd;
-pub mod webhook;
+pub mod git;
 pub mod mfe;
-pub mod registry;
 pub mod msr;
 pub mod orchestrator;
+pub mod registry;
+pub mod webhook;
 
 use axum::{
+    Router,
     extract::FromRef,
     routing::{get, post},
-    Router,
 };
-use sqlx::PgPool;
 use codeza_git_service::RepositoryService;
+use sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -48,7 +48,9 @@ async fn root() -> (axum::http::StatusCode, String) {
 }
 
 /// Metrics handler
-async fn get_metrics(axum::extract::State(state): axum::extract::State<AppState>) -> axum::Json<Vec<codeza_shared::metrics::MetricValue>> {
+async fn get_metrics(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> axum::Json<Vec<codeza_shared::metrics::MetricValue>> {
     axum::Json(state.metrics.collect())
 }
 
@@ -67,7 +69,6 @@ pub fn build_routes(state: AppState) -> Router<AppState> {
 
     let protected_routes = Router::new()
         .route("/auth/user", get(auth::auth_user))
-        
         // Git repository routes
         .route("/api/v1/repos", post(git::create_repository))
         .route("/api/v1/repos/{owner}", get(git::list_repositories))
@@ -75,31 +76,44 @@ pub fn build_routes(state: AppState) -> Router<AppState> {
             "/api/v1/repos/{owner}/{repo}",
             get(git::get_repository).delete(git::delete_repository),
         )
-        
         // Pipeline execution routes
         .route("/api/v1/pipelines", get(cicd::list_pipelines))
         .route("/api/v1/pipelines/{id}", get(cicd::get_pipeline_execution))
         .route("/api/v1/pipelines/{id}/jobs", get(cicd::list_pipeline_jobs))
-        
         // MFE routes
         .route("/api/v1/mfe", get(mfe::list_mfes).post(mfe::register_mfe))
-
         // Registry routes
         .route("/api/v1/registry/images", get(registry::list_images))
-        .route("/api/v1/registry/images/{name}/{tag}", get(registry::get_image))
-
+        .route(
+            "/api/v1/registry/images/{name}/{tag}",
+            get(registry::get_image),
+        )
         // MSR routes
-        .route("/api/v1/msr/services", get(msr::list_services).post(msr::register_service))
-
+        .route(
+            "/api/v1/msr/services",
+            get(msr::list_services).post(msr::register_service),
+        )
         // Orchestrator routes
-        .route("/api/v1/orchestrator/apps", get(orchestrator::list_superapps).post(orchestrator::create_superapp))
-        .route("/api/v1/orchestrator/apps/{id}", get(orchestrator::get_superapp))
-        .route("/api/v1/orchestrator/apps/{id}/modules", post(orchestrator::add_module))
-        .route("/api/v1/orchestrator/apps/{id}/manifest", get(orchestrator::get_manifest))
+        .route(
+            "/api/v1/orchestrator/apps",
+            get(orchestrator::list_superapps).post(orchestrator::create_superapp),
+        )
+        .route(
+            "/api/v1/orchestrator/apps/{id}",
+            get(orchestrator::get_superapp),
+        )
+        .route(
+            "/api/v1/orchestrator/apps/{id}/modules",
+            post(orchestrator::add_module),
+        )
+        .route(
+            "/api/v1/orchestrator/apps/{id}/manifest",
+            get(orchestrator::get_manifest),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            state,
+            codeza_shared::middleware::auth_middleware,
+        ));
 
-        .route_layer(axum::middleware::from_fn_with_state(state, codeza_shared::middleware::auth_middleware));
-
-    Router::new()
-        .merge(public_routes)
-        .merge(protected_routes)
+    Router::new().merge(public_routes).merge(protected_routes)
 }

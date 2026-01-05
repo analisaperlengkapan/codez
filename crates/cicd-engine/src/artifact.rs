@@ -55,7 +55,10 @@ impl LocalArtifactStorage {
 #[async_trait]
 impl ArtifactStorage for LocalArtifactStorage {
     async fn upload(&self, artifact: &Artifact, _data: &[u8]) -> Result<String, String> {
-        let path = format!("{}/{}/{}", self.base_path, artifact.pipeline_id, artifact.name);
+        let path = format!(
+            "{}/{}/{}",
+            self.base_path, artifact.pipeline_id, artifact.name
+        );
         tracing::info!("Uploading artifact to {}", path);
         Ok(path)
     }
@@ -102,7 +105,10 @@ impl S3ArtifactStorage {
 #[async_trait]
 impl ArtifactStorage for S3ArtifactStorage {
     async fn upload(&self, artifact: &Artifact, _data: &[u8]) -> Result<String, String> {
-        let path = format!("s3://{}/{}/{}", self.bucket, artifact.pipeline_id, artifact.name);
+        let path = format!(
+            "s3://{}/{}/{}",
+            self.bucket, artifact.pipeline_id, artifact.name
+        );
         tracing::info!("Uploading artifact to S3: {}", path);
         Ok(path)
     }

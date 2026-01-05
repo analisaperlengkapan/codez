@@ -1,7 +1,7 @@
 use super::AppState;
-use codeza_mfe_manager::MicroFrontend;
-use codeza_mfe_manager::MFERepository;
 use axum::Json;
+use codeza_mfe_manager::MFERepository;
+use codeza_mfe_manager::MicroFrontend;
 
 /// List all MFEs
 #[utoipa::path(

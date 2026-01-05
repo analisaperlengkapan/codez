@@ -1,15 +1,14 @@
-
+use crate::routing::{AppState, build_routes};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use tower::ServiceExt;
 use codeza_shared::Config;
 use sqlx::postgres::PgPoolOptions;
-use crate::routing::{AppState, build_routes};
+use tower::ServiceExt;
 
-mod orchestrator_flow;
 pub mod end_to_end_flow;
+mod orchestrator_flow;
 
 #[tokio::test]
 async fn test_auth_middleware_integration_401() {
@@ -41,8 +40,14 @@ async fn test_auth_middleware_integration_401() {
     let app = build_routes(state.clone()).with_state(state);
 
     // Test 1: No token
-    let response = app.clone()
-        .oneshot(Request::builder().uri("/auth/user").body(Body::empty()).unwrap())
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/auth/user")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -50,11 +55,13 @@ async fn test_auth_middleware_integration_401() {
 
     // Test 2: Invalid token
     let response = app
-        .oneshot(Request::builder()
-            .uri("/auth/user")
-            .header("Authorization", "Bearer invalid_token")
-            .body(Body::empty())
-            .unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/auth/user")
+                .header("Authorization", "Bearer invalid_token")
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -105,23 +112,25 @@ async fn test_mfe_registration_validation() {
     });
 
     let response = app
-        .oneshot(Request::builder()
-            .uri("/api/v1/mfe")
-            .method("POST")
-            .header("Content-Type", "application/json")
-            // We need to bypass auth for this unit test or mock it.
-            // Since middleware is applied to protected routes, and we don't have a valid token generator handy without auth-service running,
-            // this test would fail with 401 unless we mock the middleware or test the handler directly.
-            // But we are testing integration here.
-            // Let's assume we can't easily bypass auth middleware in this integration test setup without more work.
-            // However, the validation logic is inside the handler.
-            // We can test the validation logic by unit testing the `validate` method (already done implicitly by logic)
-            // or by refactoring the test to call the handler directly if possible.
-            // Given the constraints, I will add a comment about this limitation and just verify the test compiles and runs as much as it can (it will return 401).
-            // Actually, for the purpose of this task, I will test that the wiring is correct by checking 401 is returned,
-            // which confirms the route is reachable.
-            .body(Body::from(serde_json::to_string(&invalid_mfe).unwrap()))
-            .unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/mfe")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                // We need to bypass auth for this unit test or mock it.
+                // Since middleware is applied to protected routes, and we don't have a valid token generator handy without auth-service running,
+                // this test would fail with 401 unless we mock the middleware or test the handler directly.
+                // But we are testing integration here.
+                // Let's assume we can't easily bypass auth middleware in this integration test setup without more work.
+                // However, the validation logic is inside the handler.
+                // We can test the validation logic by unit testing the `validate` method (already done implicitly by logic)
+                // or by refactoring the test to call the handler directly if possible.
+                // Given the constraints, I will add a comment about this limitation and just verify the test compiles and runs as much as it can (it will return 401).
+                // Actually, for the purpose of this task, I will test that the wiring is correct by checking 401 is returned,
+                // which confirms the route is reachable.
+                .body(Body::from(serde_json::to_string(&invalid_mfe).unwrap()))
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -162,10 +171,15 @@ async fn test_manifest_integration() {
     // Call get_manifest
     let superapp_id = uuid::Uuid::new_v4();
     let response = app
-        .oneshot(Request::builder()
-            .uri(&format!("/api/v1/orchestrator/apps/{}/manifest", superapp_id))
-            .body(Body::empty())
-            .unwrap())
+        .oneshot(
+            Request::builder()
+                .uri(&format!(
+                    "/api/v1/orchestrator/apps/{}/manifest",
+                    superapp_id
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 

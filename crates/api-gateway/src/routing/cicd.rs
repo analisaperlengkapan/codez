@@ -1,5 +1,7 @@
 use super::AppState;
-use codeza_cicd_engine::{JobExecutionRecord, PipelineExecutionRecord, PipelineExecutionRepository};
+use codeza_cicd_engine::{
+    JobExecutionRecord, PipelineExecutionRecord, PipelineExecutionRepository,
+};
 
 #[utoipa::path(
     get,

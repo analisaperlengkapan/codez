@@ -6,13 +6,15 @@ use std::sync::Arc;
 
 pub mod provider;
 pub mod providers;
-pub mod webhook;
 pub mod repository_service;
+pub mod webhook;
 
-pub use provider::{GitProvider, ProviderType, ProviderConfig, RemoteRepository, RemoteUser, RemoteOrganization};
-pub use providers::{GiteaProvider, GitLabProvider};
-pub use webhook::{WebhookValidator, WebhookEventType, PushEvent, PullRequestEvent, IssueEvent};
-pub use repository_service::{RepositoryService, Repository, CreateRepositoryRequest};
+pub use provider::{
+    GitProvider, ProviderConfig, ProviderType, RemoteOrganization, RemoteRepository, RemoteUser,
+};
+pub use providers::{GitHubProvider, GitLabProvider, GiteaProvider};
+pub use repository_service::{CreateRepositoryRequest, Repository, RepositoryService};
+pub use webhook::{IssueEvent, PullRequestEvent, PushEvent, WebhookEventType, WebhookValidator};
 
 pub fn create_git_provider(config: provider::ProviderConfig) -> Arc<dyn provider::GitProvider> {
     let provider_type = config.provider_type;
@@ -27,7 +29,7 @@ pub fn create_git_provider(config: provider::ProviderConfig) -> Arc<dyn provider
             Arc::new(providers::GitLabProvider::new(base_url, access_token))
         }
         provider::ProviderType::GitHub => {
-            panic!("GitHub provider is not implemented yet")
+            Arc::new(providers::GitHubProvider::new(base_url, access_token))
         }
     }
 }
@@ -58,5 +60,17 @@ mod tests {
 
         let provider = create_git_provider(config);
         assert_eq!(provider.provider_type(), provider::ProviderType::Gitea);
+    }
+
+    #[test]
+    fn create_github_provider_uses_github_type() {
+        let config = provider::ProviderConfig::new(
+            provider::ProviderType::GitHub,
+            "https://api.github.com".to_string(),
+            "token".to_string(),
+        );
+
+        let provider = create_git_provider(config);
+        assert_eq!(provider.provider_type(), provider::ProviderType::GitHub);
     }
 }

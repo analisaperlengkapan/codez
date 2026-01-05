@@ -90,7 +90,9 @@ mod tests {
     async fn test_state_store() {
         let store = StateStore::new();
 
-        store.set("user".to_string(), serde_json::json!({"name": "John"})).await;
+        store
+            .set("user".to_string(), serde_json::json!({"name": "John"}))
+            .await;
         let value = store.get("user").await;
 
         assert!(value.is_some());

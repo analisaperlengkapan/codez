@@ -1,8 +1,8 @@
 //! Container image models and operations
 
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// Container image
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

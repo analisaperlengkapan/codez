@@ -183,12 +183,12 @@ mod tests {
     fn test_pipeline_execution() {
         let pipeline_id = Uuid::new_v4();
         let mut execution = PipelineExecution::new(pipeline_id);
-        
+
         assert_eq!(execution.status, PipelineStatus::Pending);
-        
+
         execution.start();
         assert_eq!(execution.status, PipelineStatus::Running);
-        
+
         execution.success();
         assert_eq!(execution.status, PipelineStatus::Success);
     }

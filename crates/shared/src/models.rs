@@ -1,8 +1,8 @@
 //! Data models for Codeza Platform
 
-use utoipa::ToSchema;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// User model
@@ -85,13 +85,13 @@ pub struct Permission {
 /// JWT Claims
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct JwtClaims {
-    pub sub: String,           // user_id
+    pub sub: String, // user_id
     pub username: String,
     pub email: String,
     pub roles: Vec<String>,
-    pub exp: i64,              // expiration time
-    pub iat: i64,              // issued at
-    pub nbf: i64,              // not before
+    pub exp: i64, // expiration time
+    pub iat: i64, // issued at
+    pub nbf: i64, // not before
 }
 
 /// Registration request

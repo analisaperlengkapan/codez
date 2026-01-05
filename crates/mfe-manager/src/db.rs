@@ -1,7 +1,7 @@
+use crate::mfe::{MFEStatus, MicroFrontend};
+use codeza_shared::CodezaError;
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::mfe::{MicroFrontend, MFEStatus};
-use codeza_shared::CodezaError;
 
 pub struct MFERepository {
     pool: PgPool,
@@ -50,7 +50,10 @@ impl MFERepository {
         }
     }
 
-    pub async fn get_active_mfes_by_names(&self, names: &[String]) -> Result<std::collections::HashMap<String, MicroFrontend>, CodezaError> {
+    pub async fn get_active_mfes_by_names(
+        &self,
+        names: &[String],
+    ) -> Result<std::collections::HashMap<String, MicroFrontend>, CodezaError> {
         let rows = sqlx::query(
             "SELECT id, name, description, version, remote_entry, scope, status, created_at, updated_at \
              FROM micro_frontends \
@@ -83,7 +86,11 @@ impl MFERepository {
             MFEStatus::Maintenance => "Maintenance",
         };
 
-        let mut tx = self.pool.begin().await.map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
 
         sqlx::query(
             "INSERT INTO micro_frontends (id, name, description, version, remote_entry, scope, status, created_at, updated_at) \
@@ -124,15 +131,13 @@ impl MFERepository {
 
         // Insert dependencies
         for (name, version) in &mfe.dependencies {
-            sqlx::query(
-                "INSERT INTO mfe_dependencies (mfe_id, name, version) VALUES ($1, $2, $3)"
-            )
-            .bind(mfe.id)
-            .bind(name)
-            .bind(version)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+            sqlx::query("INSERT INTO mfe_dependencies (mfe_id, name, version) VALUES ($1, $2, $3)")
+                .bind(mfe.id)
+                .bind(name)
+                .bind(version)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
         }
 
         // Insert shared dependencies
@@ -151,18 +156,29 @@ impl MFERepository {
             .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
         }
 
-        tx.commit().await.map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        tx.commit()
+            .await
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
 
         Ok(mfe)
     }
 
-    async fn map_row_to_mfe(&self, row: sqlx::postgres::PgRow) -> Result<MicroFrontend, CodezaError> {
-        use sqlx::Row;
+    async fn map_row_to_mfe(
+        &self,
+        row: sqlx::postgres::PgRow,
+    ) -> Result<MicroFrontend, CodezaError> {
         use crate::mfe::SharedDependency;
+        use sqlx::Row;
 
-        let id: Uuid = row.try_get("id").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
-        let name: String = row.try_get("name").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
-        let status_str: String = row.try_get("status").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        let id: Uuid = row
+            .try_get("id")
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        let name: String = row
+            .try_get("name")
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        let status_str: String = row
+            .try_get("status")
+            .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
 
         let status = match status_str.as_str() {
             "Active" | "active" => MFEStatus::Active,
@@ -173,18 +189,21 @@ impl MFERepository {
         };
 
         // Fetch dependencies
-        let dependencies_rows = sqlx::query(
-            "SELECT name, version FROM mfe_dependencies WHERE mfe_id = $1"
-        )
-        .bind(id)
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+        let dependencies_rows =
+            sqlx::query("SELECT name, version FROM mfe_dependencies WHERE mfe_id = $1")
+                .bind(id)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
 
         let mut dependencies = std::collections::HashMap::new();
         for row in dependencies_rows {
-            let name: String = row.try_get("name").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
-            let version: String = row.try_get("version").map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+            let name: String = row
+                .try_get("name")
+                .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
+            let version: String = row
+                .try_get("version")
+                .map_err(|e| CodezaError::DatabaseError(e.to_string()))?;
             dependencies.insert(name, version);
         }
 
@@ -200,10 +219,18 @@ impl MFERepository {
         let mut shared_dependencies = Vec::new();
         for row in shared_rows {
             shared_dependencies.push(SharedDependency {
-                name: row.try_get("name").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
-                version: row.try_get("version").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
-                singleton: row.try_get("singleton").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
-                strict_version: row.try_get("strict_version").map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+                name: row
+                    .try_get("name")
+                    .map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+                version: row
+                    .try_get("version")
+                    .map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+                singleton: row
+                    .try_get("singleton")
+                    .map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
+                strict_version: row
+                    .try_get("strict_version")
+                    .map_err(|e| CodezaError::DatabaseError(e.to_string()))?,
             });
         }
 
@@ -217,8 +244,12 @@ impl MFERepository {
             dependencies,
             shared_dependencies,
             status,
-            created_at: row.try_get("created_at").unwrap_or_else(|_| chrono::Utc::now()),
-            updated_at: row.try_get("updated_at").unwrap_or_else(|_| chrono::Utc::now()),
+            created_at: row
+                .try_get("created_at")
+                .unwrap_or_else(|_| chrono::Utc::now()),
+            updated_at: row
+                .try_get("updated_at")
+                .unwrap_or_else(|_| chrono::Utc::now()),
         })
     }
 }

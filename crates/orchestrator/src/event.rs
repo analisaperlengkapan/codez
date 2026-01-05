@@ -37,7 +37,10 @@ impl EventBus {
     /// Subscribe to event
     pub async fn subscribe(&self, event_type: String, handler: EventHandler) {
         let mut handlers = self.handlers.write().await;
-        handlers.entry(event_type).or_insert_with(Vec::new).push(handler);
+        handlers
+            .entry(event_type)
+            .or_insert_with(Vec::new)
+            .push(handler);
     }
 
     /// Publish event

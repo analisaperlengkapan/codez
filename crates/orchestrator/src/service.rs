@@ -1,7 +1,7 @@
 //! Service layer for Orchestrator logic
-use std::collections::HashMap;
 use crate::superapp::SuperApp;
-use codeza_mfe_manager::mfe::{MFEManifest, SharedConfig, MicroFrontend};
+use codeza_mfe_manager::mfe::{MFEManifest, MicroFrontend, SharedConfig};
+use std::collections::HashMap;
 
 /// Generate MFE Manifest for a SuperApp based on active MFEs
 pub fn generate_manifest(
@@ -28,18 +28,24 @@ pub fn generate_manifest(
     let mut shared = app.config.shared_dependencies.clone();
 
     if shared.is_empty() {
-        shared.insert("react".to_string(), SharedConfig {
-            singleton: true,
-            strict_version: true,
-            eager: true,
-            required_version: Some("^18.0.0".to_string()),
-        });
-        shared.insert("react-dom".to_string(), SharedConfig {
-            singleton: true,
-            strict_version: true,
-            eager: true,
-            required_version: Some("^18.0.0".to_string()),
-        });
+        shared.insert(
+            "react".to_string(),
+            SharedConfig {
+                singleton: true,
+                strict_version: true,
+                eager: true,
+                required_version: Some("^18.0.0".to_string()),
+            },
+        );
+        shared.insert(
+            "react-dom".to_string(),
+            SharedConfig {
+                singleton: true,
+                strict_version: true,
+                eager: true,
+                required_version: Some("^18.0.0".to_string()),
+            },
+        );
     }
 
     MFEManifest {
@@ -67,14 +73,17 @@ mod tests {
             "dashboard".to_string(),
             "1.0.0".to_string(),
             "http://fallback.com/remoteEntry.js".to_string(),
-            "@dashboard".to_string()
+            "@dashboard".to_string(),
         ));
 
         // Case 1: MFE is not active/registered -> should use fallback
         let active_mfes = HashMap::new();
         let manifest = generate_manifest(&app, &active_mfes);
 
-        assert_eq!(manifest.remotes.get("@dashboard").unwrap(), "http://fallback.com/remoteEntry.js");
+        assert_eq!(
+            manifest.remotes.get("@dashboard").unwrap(),
+            "http://fallback.com/remoteEntry.js"
+        );
 
         // Case 2: MFE is active -> should use registry URL
         let mut active_mfes = HashMap::new();
@@ -82,13 +91,16 @@ mod tests {
             "dashboard".to_string(),
             "1.2.0".to_string(),
             "http://registry.com/remoteEntry.js".to_string(),
-            "@dashboard".to_string()
+            "@dashboard".to_string(),
         );
         mfe.status = MFEStatus::Active;
         active_mfes.insert("dashboard".to_string(), mfe);
 
         let manifest = generate_manifest(&app, &active_mfes);
-        assert_eq!(manifest.remotes.get("@dashboard").unwrap(), "http://registry.com/remoteEntry.js");
+        assert_eq!(
+            manifest.remotes.get("@dashboard").unwrap(),
+            "http://registry.com/remoteEntry.js"
+        );
     }
 
     #[test]

@@ -1,12 +1,12 @@
 //! Codeza MicroService Registry (MSR)
 //! Handles service registration, discovery, health checking, and load balancing
 
-pub mod service;
+pub mod db;
 pub mod health;
 pub mod load_balancer;
-pub mod db;
+pub mod service;
 
-pub use service::{Microservice, ServiceStatus, ServiceEndpoint, ServiceInstance};
 pub use db::MicroserviceRepository;
-pub use health::{HealthChecker, HttpHealthChecker, TcpHealthChecker, HealthCheckResult};
-pub use load_balancer::{LoadBalancer, LoadBalancingStrategy, ConnectionPool};
+pub use health::{HealthCheckResult, HealthChecker, HttpHealthChecker, TcpHealthChecker};
+pub use load_balancer::{ConnectionPool, LoadBalancer, LoadBalancingStrategy};
+pub use service::{Microservice, ServiceEndpoint, ServiceInstance, ServiceStatus};

@@ -1,4 +1,6 @@
-use crate::provider::{GitProvider, ProviderType, RemoteOrganization, RemoteRepository, RemoteUser};
+use crate::provider::{
+    GitProvider, ProviderType, RemoteOrganization, RemoteRepository, RemoteUser,
+};
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::Deserialize;
@@ -59,9 +61,7 @@ struct GitLabGroup {
 
 fn map_project(project: GitLabProject) -> RemoteRepository {
     let created = project.created_at.unwrap_or_default();
-    let updated = project
-        .last_activity_at
-        .unwrap_or_else(|| created.clone());
+    let updated = project.last_activity_at.unwrap_or_else(|| created.clone());
 
     RemoteRepository {
         id: project.id,
@@ -164,10 +164,7 @@ impl GitProvider for GitLabProvider {
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
             Ok(map_project(project))
         } else {
-            Err(format!(
-                "Failed to get repository: {}",
-                response.status()
-            ))
+            Err(format!("Failed to get repository: {}", response.status()))
         }
     }
 
@@ -249,10 +246,7 @@ impl GitProvider for GitLabProvider {
             .map_err(|e| format!("Failed to get user: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(format!(
-                "Failed to get user: {}",
-                response.status()
-            ));
+            return Err(format!("Failed to get user: {}", response.status()));
         }
 
         let users = response
@@ -300,10 +294,7 @@ impl GitProvider for GitLabProvider {
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
             Ok(map_user(user))
         } else {
-            Err(format!(
-                "Failed to create user: {}",
-                response.status()
-            ))
+            Err(format!("Failed to create user: {}", response.status()))
         }
     }
 
@@ -324,10 +315,7 @@ impl GitProvider for GitLabProvider {
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
             Ok(map_group(group))
         } else {
-            Err(format!(
-                "Failed to get organization: {}",
-                response.status()
-            ))
+            Err(format!("Failed to get organization: {}", response.status()))
         }
     }
 

@@ -1,7 +1,7 @@
-use axum::{extract::State, Json};
+use crate::routing::AppState;
+use axum::{Json, extract::State};
 use codeza_msr::{Microservice, MicroserviceRepository};
 use codeza_shared::error::Result;
-use crate::routing::AppState;
 
 /// List microservices
 #[utoipa::path(
@@ -12,9 +12,7 @@ use crate::routing::AppState;
     ),
     tag = "msr"
 )]
-pub async fn list_services(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<Microservice>>> {
+pub async fn list_services(State(state): State<AppState>) -> Result<Json<Vec<Microservice>>> {
     let repo = MicroserviceRepository::new(state.pool);
     let services = repo.list().await?;
     Ok(Json(services))

@@ -2,8 +2,8 @@
 
 use crate::service::ServiceInstance;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 #[allow(unused_imports)]
 use uuid::Uuid;
 
@@ -55,7 +55,10 @@ impl LoadBalancer {
     }
 
     /// Least connections selection
-    fn least_connections<'a>(&self, instances: &'a [ServiceInstance]) -> Option<&'a ServiceInstance> {
+    fn least_connections<'a>(
+        &self,
+        instances: &'a [ServiceInstance],
+    ) -> Option<&'a ServiceInstance> {
         // Simplified: just return first instance
         // In production, would track actual connections
         instances.first()

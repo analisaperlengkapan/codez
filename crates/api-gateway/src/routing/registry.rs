@@ -1,7 +1,10 @@
-use axum::{extract::{State, Path}, Json};
+use crate::routing::AppState;
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use codeza_registry::image::Image;
 use codeza_shared::error::{CodezaError, Result};
-use crate::routing::AppState;
 
 /// List images
 #[utoipa::path(
@@ -13,10 +16,10 @@ use crate::routing::AppState;
     ),
     tag = "registry"
 )]
-pub async fn list_images(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<Image>>> {
-    let images = state.registry.list_images(None)
+pub async fn list_images(State(state): State<AppState>) -> Result<Json<Vec<Image>>> {
+    let images = state
+        .registry
+        .list_images(None)
         .await
         .map_err(CodezaError::InternalError)?;
     Ok(Json(images))

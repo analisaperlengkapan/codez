@@ -9,7 +9,11 @@ use uuid::Uuid;
 #[async_trait]
 pub trait JobExecutor: Send + Sync {
     /// Execute a job
-    async fn execute(&self, job: &Job, variables: &HashMap<String, String>) -> Result<JobExecution, String>;
+    async fn execute(
+        &self,
+        job: &Job,
+        variables: &HashMap<String, String>,
+    ) -> Result<JobExecution, String>;
 
     /// Cancel a running job
     async fn cancel(&self, job_id: Uuid) -> Result<(), String>;
@@ -23,7 +27,11 @@ pub struct LocalJobExecutor;
 
 #[async_trait]
 impl JobExecutor for LocalJobExecutor {
-    async fn execute(&self, job: &Job, _variables: &HashMap<String, String>) -> Result<JobExecution, String> {
+    async fn execute(
+        &self,
+        job: &Job,
+        _variables: &HashMap<String, String>,
+    ) -> Result<JobExecution, String> {
         let mut execution = JobExecution {
             id: Uuid::new_v4(),
             name: job.name.clone(),
@@ -75,7 +83,11 @@ impl DockerJobExecutor {
 
 #[async_trait]
 impl JobExecutor for DockerJobExecutor {
-    async fn execute(&self, job: &Job, variables: &HashMap<String, String>) -> Result<JobExecution, String> {
+    async fn execute(
+        &self,
+        job: &Job,
+        variables: &HashMap<String, String>,
+    ) -> Result<JobExecution, String> {
         let mut execution = JobExecution {
             id: Uuid::new_v4(),
             name: job.name.clone(),
@@ -143,7 +155,7 @@ mod tests {
 
         let variables = HashMap::new();
         let result = executor.execute(&job, &variables).await;
-        
+
         assert!(result.is_ok());
         let execution = result.unwrap();
         assert_eq!(execution.status, PipelineStatus::Success);
@@ -170,7 +182,7 @@ mod tests {
 
         let variables = HashMap::new();
         let result = executor.execute(&job, &variables).await;
-        
+
         assert!(result.is_ok());
         let execution = result.unwrap();
         assert_eq!(execution.status, PipelineStatus::Success);

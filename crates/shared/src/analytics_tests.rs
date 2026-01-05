@@ -3,9 +3,9 @@
 #[cfg(test)]
 mod integration_tests {
     use crate::analytics::*;
+    use crate::analytics_api::*;
     use crate::dashboard::*;
     use crate::report_generator::*;
-    use crate::analytics_api::*;
     use uuid::Uuid;
 
     // ============= Analytics Engine Tests =============
@@ -264,9 +264,7 @@ mod integration_tests {
             .await
             .unwrap();
 
-        let exported = service
-            .export_report(report.id, ExportFormat::JSON)
-            .await;
+        let exported = service.export_report(report.id, ExportFormat::JSON).await;
 
         assert!(exported.is_ok());
         let data = exported.unwrap();
@@ -301,8 +299,16 @@ mod integration_tests {
     #[test]
     fn test_query_builder_fluent_api() {
         let query = QueryBuilder::new(EntityType::Repository)
-            .filter("status".to_string(), FilterOperator::Equals, "active".to_string())
-            .filter("created_at".to_string(), FilterOperator::GreaterThan, "2025-01-01".to_string())
+            .filter(
+                "status".to_string(),
+                FilterOperator::Equals,
+                "active".to_string(),
+            )
+            .filter(
+                "created_at".to_string(),
+                FilterOperator::GreaterThan,
+                "2025-01-01".to_string(),
+            )
             .sort("updated_at".to_string(), SortOrder::Descending)
             .paginate(25, 50)
             .build();
@@ -330,9 +336,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn test_query_executor_pagination_offset() {
-        let query = QueryBuilder::new(EntityType::User)
-            .paginate(10, 50)
-            .build();
+        let query = QueryBuilder::new(EntityType::User).paginate(10, 50).build();
 
         let data: Vec<i32> = (1..=100).collect();
         let response = QueryExecutor::execute(query, data).await;
@@ -399,7 +403,10 @@ mod integration_tests {
             parameters: std::collections::HashMap::new(),
             created_at: chrono::Utc::now(),
         };
-        report_service.create_template(template.clone()).await.unwrap();
+        report_service
+            .create_template(template.clone())
+            .await
+            .unwrap();
 
         let report = report_service
             .generate_report(template.id, ExportFormat::PDF, owner_id)
