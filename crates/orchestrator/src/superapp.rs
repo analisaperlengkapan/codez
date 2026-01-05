@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// SuperApp definition
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

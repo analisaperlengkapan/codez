@@ -1,24 +1,21 @@
 //! Codeza API Gateway
 //! Entry point for all API requests
 
-mod rate_limiter;
-mod routing;
 mod circuit_breaker;
 mod openapi;
+mod rate_limiter;
+mod routing;
 #[cfg(test)]
 mod tests;
 
-use axum::{
-    extract::DefaultBodyLimit,
-    middleware,
-};
+use axum::{extract::DefaultBodyLimit, middleware};
 use codeza_shared::{config::Config, logging::init_logging};
+use openapi::ApiDoc;
 use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use openapi::ApiDoc;
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +24,11 @@ async fn main() {
 
     // Load configuration
     let config = Config::from_env().expect("Failed to load configuration");
-    tracing::info!("Starting API Gateway on {}:{}", config.server.host, config.server.port);
+    tracing::info!(
+        "Starting API Gateway on {}:{}",
+        config.server.host,
+        config.server.port
+    );
 
     // Setup database connection pool
     let pool = PgPoolOptions::new()
@@ -58,7 +59,8 @@ async fn main() {
     let cors = if config.cors_origins.is_empty() || config.cors_origins.contains(&"*".to_string()) {
         CorsLayer::permissive()
     } else {
-        let origins: Vec<axum::http::HeaderValue> = config.cors_origins
+        let origins: Vec<axum::http::HeaderValue> = config
+            .cors_origins
             .iter()
             .filter_map(|origin| origin.parse().ok())
             .collect();
@@ -71,13 +73,16 @@ async fn main() {
 
     // Build router with routes
     let app = routing::build_routes(state.clone())
-
         .with_state(state)
         .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
         .layer(cors)
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024)) // 10MB limit
-        .layer(middleware::from_fn(codeza_shared::middleware::request_id_middleware))
-        .layer(middleware::from_fn(codeza_shared::middleware::logging_middleware));
+        .layer(middleware::from_fn(
+            codeza_shared::middleware::request_id_middleware,
+        ))
+        .layer(middleware::from_fn(
+            codeza_shared::middleware::logging_middleware,
+        ));
 
     // Run server
     let addr = SocketAddr::from((
@@ -91,7 +96,5 @@ async fn main() {
 
     tracing::info!("API Gateway listening on {}", addr);
 
-    axum::serve(listener, app)
-        .await
-        .expect("Server error");
+    axum::serve(listener, app).await.expect("Server error");
 }

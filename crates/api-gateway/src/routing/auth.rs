@@ -1,5 +1,5 @@
 use super::AppState;
-use codeza_shared::{RegisterRequest, UserResponse, LoginRequest, LoginResponse};
+use codeza_shared::{LoginRequest, LoginResponse, RegisterRequest, UserResponse};
 
 /// Auth register handler
 #[utoipa::path(
@@ -17,7 +17,10 @@ pub async fn auth_register(
     axum::extract::State(state): axum::extract::State<AppState>,
     axum::Json(req): axum::Json<codeza_shared::RegisterRequest>,
 ) -> Result<
-    (axum::http::StatusCode, axum::Json<codeza_shared::UserResponse>),
+    (
+        axum::http::StatusCode,
+        axum::Json<codeza_shared::UserResponse>,
+    ),
     codeza_shared::CodezaError,
 > {
     codeza_auth_service::handlers::register(

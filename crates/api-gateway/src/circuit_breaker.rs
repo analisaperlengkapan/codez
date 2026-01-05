@@ -8,18 +8,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum CircuitState {
-    Closed,      // Normal operation
-    Open,        // Failing, reject requests
-    HalfOpen,    // Testing if service recovered
+    Closed,   // Normal operation
+    Open,     // Failing, reject requests
+    HalfOpen, // Testing if service recovered
 }
 
 /// Circuit breaker configuration
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct CircuitBreakerConfig {
-    pub failure_threshold: u32,      // Failures before opening
-    pub success_threshold: u32,      // Successes before closing from half-open
-    pub timeout_seconds: u64,        // Time before trying half-open
+    pub failure_threshold: u32, // Failures before opening
+    pub success_threshold: u32, // Successes before closing from half-open
+    pub timeout_seconds: u64,   // Time before trying half-open
 }
 
 impl Default for CircuitBreakerConfig {
@@ -62,29 +62,27 @@ impl CircuitBreaker {
         let mut state = self.state.lock().unwrap();
 
         match *state {
-            CircuitState::Closed => {
-                match f() {
-                    Ok(result) => {
-                        self.failure_count.store(0, Ordering::SeqCst);
-                        Ok(result)
-                    }
-                    Err(e) => {
-                        let failures = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs();
-                        self.last_failure_time.store(now, Ordering::SeqCst);
-
-                        if failures >= self.config.failure_threshold {
-                            *state = CircuitState::Open;
-                            tracing::warn!("Circuit breaker opened after {} failures", failures);
-                        }
-
-                        Err(e)
-                    }
+            CircuitState::Closed => match f() {
+                Ok(result) => {
+                    self.failure_count.store(0, Ordering::SeqCst);
+                    Ok(result)
                 }
-            }
+                Err(e) => {
+                    let failures = self.failure_count.fetch_add(1, Ordering::SeqCst) + 1;
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+                    self.last_failure_time.store(now, Ordering::SeqCst);
+
+                    if failures >= self.config.failure_threshold {
+                        *state = CircuitState::Open;
+                        tracing::warn!("Circuit breaker opened after {} failures", failures);
+                    }
+
+                    Err(e)
+                }
+            },
             CircuitState::Open => {
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -102,31 +100,29 @@ impl CircuitBreaker {
                     Err("Circuit breaker is open".to_string())
                 }
             }
-            CircuitState::HalfOpen => {
-                match f() {
-                    Ok(result) => {
-                        let successes = self.success_count.fetch_add(1, Ordering::SeqCst) + 1;
+            CircuitState::HalfOpen => match f() {
+                Ok(result) => {
+                    let successes = self.success_count.fetch_add(1, Ordering::SeqCst) + 1;
 
-                        if successes >= self.config.success_threshold {
-                            *state = CircuitState::Closed;
-                            self.failure_count.store(0, Ordering::SeqCst);
-                            tracing::info!("Circuit breaker closed, service recovered");
-                        }
+                    if successes >= self.config.success_threshold {
+                        *state = CircuitState::Closed;
+                        self.failure_count.store(0, Ordering::SeqCst);
+                        tracing::info!("Circuit breaker closed, service recovered");
+                    }
 
-                        Ok(result)
-                    }
-                    Err(e) => {
-                        *state = CircuitState::Open;
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs();
-                        self.last_failure_time.store(now, Ordering::SeqCst);
-                        tracing::warn!("Circuit breaker re-opened during half-open state");
-                        Err(e)
-                    }
+                    Ok(result)
                 }
-            }
+                Err(e) => {
+                    *state = CircuitState::Open;
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs();
+                    self.last_failure_time.store(now, Ordering::SeqCst);
+                    tracing::warn!("Circuit breaker re-opened during half-open state");
+                    Err(e)
+                }
+            },
         }
     }
 
@@ -143,7 +139,7 @@ mod tests {
     #[test]
     fn test_circuit_breaker_closed() {
         let cb = CircuitBreaker::new(CircuitBreakerConfig::default());
-        
+
         let result = cb.call(|| Ok::<_, String>(42));
         assert!(result.is_ok());
         assert_eq!(cb.state(), CircuitState::Closed);

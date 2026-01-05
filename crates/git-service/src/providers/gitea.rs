@@ -1,6 +1,8 @@
 //! Gitea provider implementation
 
-use crate::provider::{GitProvider, ProviderType, RemoteRepository, RemoteUser, RemoteOrganization};
+use crate::provider::{
+    GitProvider, ProviderType, RemoteOrganization, RemoteRepository, RemoteUser,
+};
 use async_trait::async_trait;
 use reqwest::Client;
 
@@ -59,7 +61,10 @@ impl GitProvider for GiteaProvider {
                 .await
                 .map_err(|e| format!("Failed to parse response: {}", e))
         } else {
-            Err(format!("Failed to create repository: {}", response.status()))
+            Err(format!(
+                "Failed to create repository: {}",
+                response.status()
+            ))
         }
     }
 
@@ -101,7 +106,10 @@ impl GitProvider for GiteaProvider {
                 .await
                 .map_err(|e| format!("Failed to parse response: {}", e))
         } else {
-            Err(format!("Failed to list repositories: {}", response.status()))
+            Err(format!(
+                "Failed to list repositories: {}",
+                response.status()
+            ))
         }
     }
 
@@ -119,7 +127,10 @@ impl GitProvider for GiteaProvider {
         if response.status().is_success() || response.status().as_u16() == 404 {
             Ok(())
         } else {
-            Err(format!("Failed to delete repository: {}", response.status()))
+            Err(format!(
+                "Failed to delete repository: {}",
+                response.status()
+            ))
         }
     }
 
@@ -229,7 +240,10 @@ impl GitProvider for GiteaProvider {
                 .await
                 .map_err(|e| format!("Failed to parse response: {}", e))
         } else {
-            Err(format!("Failed to create organization: {}", response.status()))
+            Err(format!(
+                "Failed to create organization: {}",
+                response.status()
+            ))
         }
     }
 

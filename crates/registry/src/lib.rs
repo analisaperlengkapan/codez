@@ -7,4 +7,4 @@ pub mod tag;
 
 pub use image::{Image, ImageConfig, ImageManifest, Layer};
 pub use push_pull::{ImageStorage, LocalImageStorage, RemoteImageStorage};
-pub use tag::{ImageTag, TagPolicy, SemanticVersion};
+pub use tag::{ImageTag, SemanticVersion, TagPolicy};

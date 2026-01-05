@@ -199,7 +199,9 @@ impl ReportGeneratorService {
             ExportFormat::CSV => format!("CSV: {}", report.content).into_bytes(),
             ExportFormat::JSON => serde_json::to_vec(&report)
                 .map_err(|e| format!("JSON serialization error: {}", e))?,
-            ExportFormat::HTML => format!("<html><body>{}</body></html>", report.content).into_bytes(),
+            ExportFormat::HTML => {
+                format!("<html><body>{}</body></html>", report.content).into_bytes()
+            }
         };
 
         Ok(content)

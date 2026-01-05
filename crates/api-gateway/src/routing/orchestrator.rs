@@ -1,9 +1,12 @@
-use axum::{extract::{State, Path}, Json};
-use codeza_orchestrator::{SuperApp, AppModule, SuperAppRepository};
-use codeza_mfe_manager::mfe::MFEManifest;
-use codeza_mfe_manager::MFERepository;
-use codeza_shared::error::{CodezaError, Result};
 use crate::routing::AppState;
+use axum::{
+    Json,
+    extract::{Path, State},
+};
+use codeza_mfe_manager::MFERepository;
+use codeza_mfe_manager::mfe::MFEManifest;
+use codeza_orchestrator::{AppModule, SuperApp, SuperAppRepository};
+use codeza_shared::error::{CodezaError, Result};
 use uuid::Uuid;
 
 /// List SuperApps
@@ -15,9 +18,7 @@ use uuid::Uuid;
     ),
     tag = "orchestrator"
 )]
-pub async fn list_superapps(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<SuperApp>>> {
+pub async fn list_superapps(State(state): State<AppState>) -> Result<Json<Vec<SuperApp>>> {
     let repo = SuperAppRepository::new(state.pool);
     let apps = repo.list().await?;
     Ok(Json(apps))
@@ -114,7 +115,9 @@ pub async fn get_manifest(
     Path(id): Path<Uuid>,
 ) -> Result<Json<MFEManifest>> {
     let repo = SuperAppRepository::new(state.pool.clone());
-    let app = repo.get(id).await?
+    let app = repo
+        .get(id)
+        .await?
         .ok_or_else(|| CodezaError::NotFound(format!("SuperApp {}", id)))?;
 
     // In a real scenario, we might want to resolve `latest` versions from MFERegistry

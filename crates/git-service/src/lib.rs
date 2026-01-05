@@ -6,13 +6,15 @@ use std::sync::Arc;
 
 pub mod provider;
 pub mod providers;
-pub mod webhook;
 pub mod repository_service;
+pub mod webhook;
 
-pub use provider::{GitProvider, ProviderType, ProviderConfig, RemoteRepository, RemoteUser, RemoteOrganization};
-pub use providers::{GiteaProvider, GitLabProvider};
-pub use webhook::{WebhookValidator, WebhookEventType, PushEvent, PullRequestEvent, IssueEvent};
-pub use repository_service::{RepositoryService, Repository, CreateRepositoryRequest};
+pub use provider::{
+    GitProvider, ProviderConfig, ProviderType, RemoteOrganization, RemoteRepository, RemoteUser,
+};
+pub use providers::{GitLabProvider, GiteaProvider};
+pub use repository_service::{CreateRepositoryRequest, Repository, RepositoryService};
+pub use webhook::{IssueEvent, PullRequestEvent, PushEvent, WebhookEventType, WebhookValidator};
 
 pub fn create_git_provider(config: provider::ProviderConfig) -> Arc<dyn provider::GitProvider> {
     let provider_type = config.provider_type;

@@ -1,9 +1,9 @@
 //! User service for database operations
 
 use codeza_shared::{
-    error::{CodezaError, Result},
-    models::{User, UserResponse, RegisterRequest},
     auth::{hash_password, verify_password},
+    error::{CodezaError, Result},
+    models::{RegisterRequest, User, UserResponse},
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -88,7 +88,7 @@ impl UserService {
     pub async fn verify_credentials(&self, username: &str, password: &str) -> Result<User> {
         let user = self.get_user_by_username(username).await?;
         let is_valid = verify_password(password, &user.password_hash)?;
-        
+
         if !is_valid {
             return Err(CodezaError::AuthenticationError(
                 "Invalid credentials".to_string(),

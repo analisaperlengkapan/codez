@@ -1,34 +1,36 @@
 //! Codeza Shared Library
 //! Common utilities, error handling, and middleware for all services
 
-pub mod error;
-pub mod config;
-pub mod logging;
-pub mod middleware;
-pub mod models;
+pub mod alerting;
+pub mod analytics;
+pub mod analytics_api;
 pub mod auth;
 pub mod auth_middleware;
 mod auth_test;
-pub mod metrics;
-pub mod tracing_module;
-pub mod alerting;
-pub mod analytics;
+pub mod config;
 pub mod dashboard;
+pub mod error;
+pub mod logging;
+pub mod metrics;
+pub mod middleware;
+pub mod models;
 pub mod report_generator;
-pub mod analytics_api;
+pub mod tracing_module;
 
 #[cfg(test)]
 mod analytics_tests;
 
-pub use error::{CodezaError, Result};
-pub use config::Config;
-pub use logging::init_logging;
-pub use models::*;
+pub use alerting::{Alert, AlertManager, AlertRule};
+pub use analytics::{
+    AnalyticsEngine, PipelineAnalytics, Report, RepositoryAnalytics, UserActivity,
+};
+pub use analytics_api::{AnalyticsQuery, AnalyticsResponse, QueryBuilder, QueryExecutor};
 pub use auth::*;
-pub use metrics::{MetricsRegistry, Counter, Gauge, Histogram};
-pub use tracing_module::{Tracer, Span, Trace};
-pub use alerting::{AlertManager, AlertRule, Alert};
-pub use analytics::{AnalyticsEngine, RepositoryAnalytics, PipelineAnalytics, UserActivity, Report};
-pub use dashboard::{Dashboard, DashboardService, WidgetConfig, DashboardPermission};
-pub use report_generator::{ReportGeneratorService, ReportTemplate, GeneratedReport, ExportFormat};
-pub use analytics_api::{QueryBuilder, QueryExecutor, AnalyticsQuery, AnalyticsResponse};
+pub use config::Config;
+pub use dashboard::{Dashboard, DashboardPermission, DashboardService, WidgetConfig};
+pub use error::{CodezaError, Result};
+pub use logging::init_logging;
+pub use metrics::{Counter, Gauge, Histogram, MetricsRegistry};
+pub use models::*;
+pub use report_generator::{ExportFormat, GeneratedReport, ReportGeneratorService, ReportTemplate};
+pub use tracing_module::{Span, Trace, Tracer};

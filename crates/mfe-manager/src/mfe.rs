@@ -1,11 +1,11 @@
 //! Micro Frontend (MFE) models and operations
 use utoipa::ToSchema;
 
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use uuid::Uuid;
-use regex::Regex;
 
 static NAME_REGEX: OnceLock<Regex> = OnceLock::new();
 static URL_REGEX: OnceLock<Regex> = OnceLock::new();
@@ -110,7 +110,8 @@ impl MicroFrontend {
     /// Validate MFE configuration
     pub fn validate(&self) -> Result<(), String> {
         // Validate name (alphanumeric, kebab-case)
-        let name_regex = NAME_REGEX.get_or_init(|| Regex::new(r"^[a-z0-9]+(?:-[a-z0-9]+)*$").unwrap());
+        let name_regex =
+            NAME_REGEX.get_or_init(|| Regex::new(r"^[a-z0-9]+(?:-[a-z0-9]+)*$").unwrap());
         if !name_regex.is_match(&self.name) {
             return Err("name must be kebab-case (e.g., my-app)".to_string());
         }
@@ -133,8 +134,10 @@ impl MicroFrontend {
 
         // Semantic version check (x.y.z)
         let version_regex = VERSION_REGEX.get_or_init(|| {
-            Regex::new(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+)?$")
-                .unwrap()
+            Regex::new(
+                r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+)?$",
+            )
+            .unwrap()
         });
         if !version_regex.is_match(&self.version) {
             return Err("version must follow semantic versioning (e.g. 1.0.0)".to_string());

@@ -1,11 +1,11 @@
+use crate::routing::{AppState, build_routes};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use tower::ServiceExt;
 use codeza_shared::Config;
 use sqlx::postgres::PgPoolOptions;
-use crate::routing::{AppState, build_routes};
+use tower::ServiceExt;
 use uuid::Uuid;
 
 #[tokio::test]
@@ -67,7 +67,9 @@ async fn test_end_to_end_flow() {
         .uri("/auth/register")
         .method("POST")
         .header("Content-Type", "application/json")
-        .body(Body::from(serde_json::to_string(&register_payload).unwrap()))
+        .body(Body::from(
+            serde_json::to_string(&register_payload).unwrap(),
+        ))
         .unwrap();
 
     // In a real environment with DB, this would return 201.
@@ -76,9 +78,12 @@ async fn test_end_to_end_flow() {
     // 500 implies it tried to hit DB (which doesn't exist/is unreachable),
     // 404 would mean routing failed. 400 means validation failed.
     // We expect 500 (DB connection failed) or 201 (if DB was there).
-    assert!(response.status() == StatusCode::INTERNAL_SERVER_ERROR || response.status() == StatusCode::CREATED,
-            "Expected 500 (DB error) or 201, got {}", response.status());
-
+    assert!(
+        response.status() == StatusCode::INTERNAL_SERVER_ERROR
+            || response.status() == StatusCode::CREATED,
+        "Expected 500 (DB error) or 201, got {}",
+        response.status()
+    );
 
     // 3. Simulate Protected Route without Token (Expect 401)
     let req = Request::builder()
@@ -101,8 +106,9 @@ async fn test_end_to_end_flow() {
         "test@example.com".to_string(),
         vec!["admin".to_string()],
         "dev-secret-key-change-in-production", // Default from Config::default_dev()
-        1
-    ).unwrap();
+        1,
+    )
+    .unwrap();
 
     let req = Request::builder()
         .uri("/api/v1/mfe")
@@ -130,7 +136,11 @@ async fn test_end_to_end_flow() {
     // In my test above I used "dev_secret_key_do_not_use_in_prod". THIS WAS THE ERROR.
 
     // Correction:
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR, "Should pass auth but fail at DB");
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Should pass auth but fail at DB"
+    );
 
     // 5. Simulate Frontend fetching Manifest (The contract between Frontend and Backend)
     // The Frontend (Shell App) calls GET /api/v1/orchestrator/apps/{id}/manifest
@@ -141,7 +151,10 @@ async fn test_end_to_end_flow() {
 
     let superapp_id = Uuid::new_v4();
     let req = Request::builder()
-        .uri(&format!("/api/v1/orchestrator/apps/{}/manifest", superapp_id))
+        .uri(&format!(
+            "/api/v1/orchestrator/apps/{}/manifest",
+            superapp_id
+        ))
         .method("GET")
         .header("Authorization", format!("Bearer {}", valid_token))
         .body(Body::empty())
@@ -151,6 +164,9 @@ async fn test_end_to_end_flow() {
     // 500 = Reached Controller -> Tried DB -> Failed.
     // 404 = Wrong Route.
     // 401 = Auth Failed.
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR, "Manifest route should be reachable");
-
+    assert_eq!(
+        response.status(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Manifest route should be reachable"
+    );
 }

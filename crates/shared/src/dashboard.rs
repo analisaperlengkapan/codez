@@ -141,11 +141,7 @@ impl DashboardService {
     }
 
     /// Add widget
-    pub async fn add_widget(
-        &self,
-        dashboard_id: Uuid,
-        widget: WidgetConfig,
-    ) -> Result<(), String> {
+    pub async fn add_widget(&self, dashboard_id: Uuid, widget: WidgetConfig) -> Result<(), String> {
         let mut dashboards = self.dashboards.write().await;
         if let Some(dashboard) = dashboards.get_mut(&dashboard_id) {
             dashboard.widgets.push(widget);
@@ -186,7 +182,11 @@ impl DashboardService {
             .ok_or_else(|| format!("Dashboard not found: {}", dashboard_id))?;
 
         let versions = self.versions.read().await;
-        let version_num = versions.iter().filter(|v| v.dashboard_id == dashboard_id).count() as u32 + 1;
+        let version_num = versions
+            .iter()
+            .filter(|v| v.dashboard_id == dashboard_id)
+            .count() as u32
+            + 1;
 
         drop(versions);
 

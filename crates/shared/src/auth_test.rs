@@ -19,7 +19,8 @@ mod tests {
             roles.clone(),
             secret,
             1,
-        ).unwrap();
+        )
+        .unwrap();
 
         let claims = crate::auth::verify_token(&token, secret).unwrap();
         assert_eq!(claims.sub, user_id.to_string());

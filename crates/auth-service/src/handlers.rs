@@ -1,17 +1,17 @@
 //! HTTP handlers for authentication endpoints
 
 use axum::{
+    Json,
     extract::{Extension, State},
     http::StatusCode,
-    Json,
 };
-use std::sync::Arc;
 use codeza_shared::{
     config::Config,
     error::Result,
     models::{LoginRequest, LoginResponse, RegisterRequest, UserResponse},
 };
 use sqlx::PgPool;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::UserService;
@@ -33,7 +33,9 @@ pub async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>> {
     let service = UserService::new(pool);
-    let user = service.verify_credentials(&req.username, &req.password).await?;
+    let user = service
+        .verify_credentials(&req.username, &req.password)
+        .await?;
     let roles = service.get_user_roles(user.id).await?;
 
     let token = codeza_shared::generate_token(

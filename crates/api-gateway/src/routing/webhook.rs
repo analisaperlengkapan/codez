@@ -1,13 +1,15 @@
 use super::AppState;
 use crate::routing::git::build_git_provider_config;
-use codeza_cicd_engine::{LocalJobExecutor, GitPushContext, trigger_push_pipeline, trigger_push_pipeline_from_yaml, PipelineExecutionRepository};
+use codeza_cicd_engine::{
+    GitPushContext, LocalJobExecutor, PipelineExecutionRepository, trigger_push_pipeline,
+    trigger_push_pipeline_from_yaml,
+};
 use codeza_git_service::create_git_provider;
 
 pub async fn git_webhook(
     axum::extract::State(state): axum::extract::State<AppState>,
     headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
-
 ) -> Result<axum::http::StatusCode, codeza_shared::CodezaError> {
     let provider_str = state.config.git.provider.to_lowercase();
 
@@ -20,10 +22,7 @@ pub async fn git_webhook(
 
     // Count all webhook hits per provider
     let counter_name = format!("git_webhook_events_total.{}", provider_str);
-    state
-        .metrics
-        .register_counter(counter_name)
-        .inc();
+    state.metrics.register_counter(counter_name).inc();
 
     match provider_str.as_str() {
         "gitea" => handle_gitea_webhook(state.clone(), headers, body).await,
@@ -77,10 +76,7 @@ async fn handle_gitea_webhook(
     if let Some(event_type) = event_type {
         // Count webhook events by type for Gitea
         let event_counter_name = format!("git_webhook_events_total.gitea.{}", event_header);
-        state
-            .metrics
-            .register_counter(event_counter_name)
-            .inc();
+        state.metrics.register_counter(event_counter_name).inc();
 
         match event_type {
             codeza_git_service::WebhookEventType::Push => {
@@ -104,7 +100,12 @@ async fn handle_gitea_webhook(
                     let provider_config = build_git_provider_config(&state.config)?;
                     let provider = create_git_provider(provider_config);
 
-                    let yaml = codeza_cicd_engine::load_yaml_pipeline_config(provider.as_ref(), &event.repository.full_name, &event.ref_).await;
+                    let yaml = codeza_cicd_engine::load_yaml_pipeline_config(
+                        provider.as_ref(),
+                        &event.repository.full_name,
+                        &event.ref_,
+                    )
+                    .await;
                     let trigger_result = if let Some(yaml) = yaml {
                         trigger_push_pipeline_from_yaml(&executor, &ctx, &yaml).await
                     } else {
@@ -126,14 +127,17 @@ async fn handle_gitea_webhook(
                         "Created CI/CD pipeline stub from Gitea push",
                     );
 
-                    if let Err(e) = repo.create_execution(
-                        "gitea",
-                        &event.repository.full_name,
-                        &event.ref_,
-                        &event.after,
-                        pipeline.id,
-                    ).await {
-                         tracing::warn!("Failed to persist pipeline execution: {}", e);
+                    if let Err(e) = repo
+                        .create_execution(
+                            "gitea",
+                            &event.repository.full_name,
+                            &event.ref_,
+                            &event.after,
+                            pipeline.id,
+                        )
+                        .await
+                    {
+                        tracing::warn!("Failed to persist pipeline execution: {}", e);
                     }
 
                     if let Some(execution) = trigger_result.job_execution {
@@ -145,21 +149,26 @@ async fn handle_gitea_webhook(
                             "Executed CI/CD job from Gitea push",
                         );
 
-                        if let Err(e) = repo.create_job_execution(
-                            pipeline.id,
-                            "gitea",
-                            &event.repository.full_name,
-                            &event.ref_,
-                            &event.after,
-                            &execution,
-                        ).await {
+                        if let Err(e) = repo
+                            .create_job_execution(
+                                pipeline.id,
+                                "gitea",
+                                &event.repository.full_name,
+                                &event.ref_,
+                                &event.after,
+                                &execution,
+                            )
+                            .await
+                        {
                             tracing::warn!("Failed to persist job execution: {}", e);
                         }
                     }
                 }
             }
             codeza_git_service::WebhookEventType::PullRequest => {
-                if let Ok(event) = serde_json::from_slice::<codeza_git_service::PullRequestEvent>(&body) {
+                if let Ok(event) =
+                    serde_json::from_slice::<codeza_git_service::PullRequestEvent>(&body)
+                {
                     tracing::info!(
                         target = "git-webhook",
                         "Received Gitea pull request event #{} on repo {}",
@@ -261,7 +270,12 @@ async fn handle_gitlab_webhook(
                 let provider_config = build_git_provider_config(&state.config)?;
                 let provider = create_git_provider(provider_config);
 
-                let yaml = codeza_cicd_engine::load_yaml_pipeline_config(provider.as_ref(), &event.project.path_with_namespace, &event.ref_).await;
+                let yaml = codeza_cicd_engine::load_yaml_pipeline_config(
+                    provider.as_ref(),
+                    &event.project.path_with_namespace,
+                    &event.ref_,
+                )
+                .await;
                 let trigger_result = if let Some(yaml) = yaml {
                     trigger_push_pipeline_from_yaml(&executor, &ctx, &yaml).await
                 } else {
@@ -283,13 +297,16 @@ async fn handle_gitlab_webhook(
                     "Created CI/CD pipeline stub from GitLab push",
                 );
 
-                if let Err(e) = repo.create_execution(
-                    "gitlab",
-                    &event.project.path_with_namespace,
-                    &event.ref_,
-                    &event.after,
-                    pipeline.id,
-                ).await {
+                if let Err(e) = repo
+                    .create_execution(
+                        "gitlab",
+                        &event.project.path_with_namespace,
+                        &event.ref_,
+                        &event.after,
+                        pipeline.id,
+                    )
+                    .await
+                {
                     tracing::warn!("Failed to persist pipeline execution: {}", e);
                 }
 
@@ -302,15 +319,18 @@ async fn handle_gitlab_webhook(
                         "Executed CI/CD job from GitLab push",
                     );
 
-                    if let Err(e) = repo.create_job_execution(
-                        pipeline.id,
-                        "gitlab",
-                        &event.project.path_with_namespace,
-                        &event.ref_,
-                        &event.after,
-                        &execution,
-                    ).await {
-                         tracing::warn!("Failed to persist job execution: {}", e);
+                    if let Err(e) = repo
+                        .create_job_execution(
+                            pipeline.id,
+                            "gitlab",
+                            &event.project.path_with_namespace,
+                            &event.ref_,
+                            &event.after,
+                            &execution,
+                        )
+                        .await
+                    {
+                        tracing::warn!("Failed to persist job execution: {}", e);
                     }
                 }
             } else {

@@ -1,7 +1,7 @@
 //! Configuration management for Codeza Platform
 
+use config::{Config as ConfigLoader, Environment, File};
 use serde::{Deserialize, Serialize};
-use config::{Config as ConfigLoader, File, Environment};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -57,7 +57,10 @@ impl Config {
             .set_default("server.host", "127.0.0.1")?
             .set_default("server.port", 3000)?
             .set_default("server.env", "development")?
-            .set_default("database.url", "postgres://codeza:codeza@localhost:5432/codeza_dev")?
+            .set_default(
+                "database.url",
+                "postgres://codeza:codeza@localhost:5432/codeza_dev",
+            )?
             .set_default("database.max_connections", 10)?
             .set_default("database.min_connections", 2)?
             .set_default("redis.url", "redis://localhost:6379")?
@@ -67,17 +70,17 @@ impl Config {
             .set_default("git.provider", "gitea")?
             .set_default("git.base_url", "http://localhost:3001")?
             .set_default("git.access_token", "dev-git-token-change-in-production")?
-            .set_default("git.webhook_secret", "dev-git-webhook-secret-change-in-production")?
+            .set_default(
+                "git.webhook_secret",
+                "dev-git-webhook-secret-change-in-production",
+            )?
             .set_default("cors_origins", Vec::<String>::new())?
-
             // Add configuration from files (optional)
             .add_source(File::with_name("config/default").required(false))
             .add_source(File::with_name(&format!("config/{}", run_mode)).required(false))
-
             // Add Environment Variables
             // e.g., APP_SERVER__PORT=8080 maps to server.port
             .add_source(Environment::with_prefix("APP").separator("__"))
-
             .build()?;
 
         s.try_deserialize().map_err(|e| e.into())

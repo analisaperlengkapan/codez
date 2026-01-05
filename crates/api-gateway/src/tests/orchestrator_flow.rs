@@ -1,11 +1,11 @@
+use crate::routing::{AppState, build_routes};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use tower::ServiceExt;
 use codeza_shared::Config;
 use sqlx::postgres::PgPoolOptions;
-use crate::routing::{AppState, build_routes};
+use tower::ServiceExt;
 
 #[tokio::test]
 async fn test_orchestrator_routes_wiring() {
@@ -38,11 +38,17 @@ async fn test_orchestrator_routes_wiring() {
 
     // Test: Get Manifest (should be protected)
     let superapp_id = uuid::Uuid::new_v4();
-    let response = app.clone()
-        .oneshot(Request::builder()
-            .uri(&format!("/api/v1/orchestrator/apps/{}/manifest", superapp_id))
-            .body(Body::empty())
-            .unwrap())
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(&format!(
+                    "/api/v1/orchestrator/apps/{}/manifest",
+                    superapp_id
+                ))
+                .body(Body::empty())
+                .unwrap(),
+        )
         .await
         .unwrap();
 
@@ -52,12 +58,14 @@ async fn test_orchestrator_routes_wiring() {
 
     // Test: Create SuperApp (should be protected)
     let response = app
-        .oneshot(Request::builder()
-            .uri("/api/v1/orchestrator/apps")
-            .method("POST")
-            .header("Content-Type", "application/json")
-            .body(Body::from("{}")) // Invalid body but auth check happens first
-            .unwrap())
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/orchestrator/apps")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from("{}")) // Invalid body but auth check happens first
+                .unwrap(),
+        )
         .await
         .unwrap();
 

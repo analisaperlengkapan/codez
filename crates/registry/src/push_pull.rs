@@ -1,6 +1,6 @@
 //! Image push and pull operations
 
-use crate::image::{Image, ImageManifest, PushImageRequest, PullImageRequest, PullImageResponse};
+use crate::image::{Image, ImageManifest, PullImageRequest, PullImageResponse, PushImageRequest};
 use async_trait::async_trait;
 use std::collections::HashMap;
 
@@ -181,7 +181,11 @@ impl ImageStorage for RemoteImageStorage {
     }
 
     async fn get_image(&self, name: &str, tag: &str) -> Result<Image, String> {
-        let image = Image::new(name.to_string(), self.endpoint.clone(), "sha256:remote".to_string());
+        let image = Image::new(
+            name.to_string(),
+            self.endpoint.clone(),
+            "sha256:remote".to_string(),
+        );
         tracing::info!("Got image from remote: {}:{}", name, tag);
         Ok(image)
     }
@@ -197,7 +201,11 @@ impl ImageStorage for RemoteImageStorage {
     }
 
     async fn get_image_by_digest(&self, digest: &str) -> Result<Image, String> {
-        let image = Image::new("unknown".to_string(), self.endpoint.clone(), digest.to_string());
+        let image = Image::new(
+            "unknown".to_string(),
+            self.endpoint.clone(),
+            digest.to_string(),
+        );
         Ok(image)
     }
 }

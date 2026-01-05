@@ -1,12 +1,12 @@
-use utoipa::OpenApi;
-use codeza_shared::{LoginRequest, LoginResponse, RegisterRequest, UserResponse};
+use codeza_cicd_engine::{JobExecutionRecord, PipelineExecutionRecord};
+use codeza_git_service::{CreateRepositoryRequest, Repository};
 use codeza_mfe_manager::MicroFrontend;
 use codeza_mfe_manager::mfe::{MFEManifest, SharedConfig, SharedDependency};
-use codeza_git_service::{CreateRepositoryRequest, Repository};
-use codeza_cicd_engine::{PipelineExecutionRecord, JobExecutionRecord};
-use codeza_registry::image::Image;
 use codeza_msr::Microservice;
-use codeza_orchestrator::{SuperApp, AppModule};
+use codeza_orchestrator::{AppModule, SuperApp};
+use codeza_registry::image::Image;
+use codeza_shared::{LoginRequest, LoginResponse, RegisterRequest, UserResponse};
+use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(

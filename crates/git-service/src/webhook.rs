@@ -174,22 +174,28 @@ mod tests {
     fn test_webhook_validator() {
         let secret = "test_secret".to_string();
         let validator = WebhookValidator::new(secret);
-        
+
         let payload = b"test payload";
         let mut mac = HmacSha256::new_from_slice(b"test_secret").unwrap();
         mac.update(payload);
         let signature = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
-        
+
         assert!(validator.validate(payload, &signature));
     }
 
     #[test]
     fn test_parse_event_type() {
         assert_eq!(parse_event_type("push"), Some(WebhookEventType::Push));
-        assert_eq!(parse_event_type("pull_request"), Some(WebhookEventType::PullRequest));
+        assert_eq!(
+            parse_event_type("pull_request"),
+            Some(WebhookEventType::PullRequest)
+        );
         assert_eq!(parse_event_type("issues"), Some(WebhookEventType::Issue));
         assert_eq!(parse_event_type("release"), Some(WebhookEventType::Release));
-        assert_eq!(parse_event_type("repository"), Some(WebhookEventType::Repository));
+        assert_eq!(
+            parse_event_type("repository"),
+            Some(WebhookEventType::Repository)
+        );
         assert_eq!(parse_event_type("unknown"), None);
     }
 }

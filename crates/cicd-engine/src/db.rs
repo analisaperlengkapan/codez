@@ -1,9 +1,9 @@
-use utoipa::ToSchema;
-use sqlx::{PgPool, Row};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
 use codeza_shared::CodezaError;
+use serde::{Deserialize, Serialize};
+use sqlx::{PgPool, Row};
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PipelineExecutionRecord {

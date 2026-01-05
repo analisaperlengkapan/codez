@@ -1,10 +1,10 @@
 //! Authentication and authorization utilities
 
 use crate::error::{CodezaError, Result};
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::SaltString;
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use chrono::Utc;
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use rand::Rng;
 use uuid::Uuid;
 
@@ -14,7 +14,7 @@ use crate::models::JwtClaims;
 pub fn hash_password(password: &str) -> Result<String> {
     let salt = SaltString::generate(rand::thread_rng());
     let argon2 = Argon2::default();
-    
+
     argon2
         .hash_password(password.as_bytes(), &salt)
         .map(|hash| hash.to_string())
@@ -25,7 +25,7 @@ pub fn hash_password(password: &str) -> Result<String> {
 pub fn verify_password(password: &str, hash: &str) -> Result<bool> {
     let parsed_hash = PasswordHash::new(hash)
         .map_err(|_| CodezaError::InternalError("Invalid password hash".to_string()))?;
-    
+
     let argon2 = Argon2::default();
     match argon2.verify_password(password.as_bytes(), &parsed_hash) {
         Ok(_) => Ok(true),
@@ -45,7 +45,7 @@ pub fn generate_token(
     let now = Utc::now();
     let exp = (now + chrono::Duration::hours(expiration_hours)).timestamp();
     let iat = now.timestamp();
-    
+
     let claims = JwtClaims {
         sub: user_id.to_string(),
         username,
@@ -55,7 +55,7 @@ pub fn generate_token(
         iat,
         nbf: iat,
     };
-    
+
     let encoding_key = EncodingKey::from_secret(secret.as_bytes());
     encode(&Header::default(), &claims, &encoding_key)
         .map_err(|_| CodezaError::InternalError("Failed to generate token".to_string()))
@@ -94,7 +94,7 @@ mod tests {
         let hash = hash_password(password).unwrap();
         let is_valid = verify_password(password, &hash).unwrap();
         assert!(is_valid);
-        
+
         let is_invalid = verify_password("wrong_password", &hash).unwrap();
         assert!(!is_invalid);
     }
@@ -106,7 +106,7 @@ mod tests {
         let username = "testuser".to_string();
         let email = "test@example.com".to_string();
         let roles = vec!["developer".to_string()];
-        
+
         let token = generate_token(
             user_id,
             username.clone(),
@@ -114,8 +114,9 @@ mod tests {
             roles.clone(),
             secret,
             24,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let claims = verify_token(&token, secret).unwrap();
         assert_eq!(claims.sub, user_id.to_string());
         assert_eq!(claims.username, username);
@@ -127,7 +128,7 @@ mod tests {
     fn test_generate_refresh_token() {
         let token1 = generate_refresh_token();
         let token2 = generate_refresh_token();
-        
+
         assert!(!token1.is_empty());
         assert!(!token2.is_empty());
         assert_ne!(token1, token2);
