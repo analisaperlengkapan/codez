@@ -62,6 +62,25 @@ pub struct CreateIssueOption {
     pub body: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PullRequest {
+    pub id: u64,
+    pub number: u64,
+    pub title: String,
+    pub body: Option<String>,
+    pub state: String,
+    pub user: User,
+    pub merged: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreatePullRequestOption {
+    pub title: String,
+    pub body: Option<String>,
+    pub head: String,
+    pub base: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -71,6 +90,30 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_pull_request_structs() {
+        let user = User::new(1, "user".to_string(), None);
+        let pr = PullRequest {
+            id: 1,
+            number: 1,
+            title: "PR Title".to_string(),
+            body: None,
+            state: "open".to_string(),
+            user,
+            merged: false,
+        };
+        assert_eq!(pr.title, "PR Title");
+        assert!(!pr.merged);
+
+        let opts = CreatePullRequestOption {
+            title: "New Feature".to_string(),
+            body: None,
+            head: "feature".to_string(),
+            base: "main".to_string(),
+        };
+        assert_eq!(opts.head, "feature");
     }
 
     #[test]

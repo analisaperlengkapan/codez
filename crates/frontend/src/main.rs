@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{CreateRepoOption, Issue, Repository, User};
+use shared::{CreateRepoOption, Issue, PullRequest, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -22,6 +22,7 @@ fn App() -> impl IntoView {
                     <Route path="/users/:username" view=UserProfile/>
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
                     <Route path="/repos/:owner/:repo/issues" view=IssueList/>
+                    <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
                 </Routes>
             </main>
         </Router>
@@ -128,12 +129,59 @@ fn RepoDetail() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
     let issues_href = move || format!("/repos/{}/{}/issues", owner(), repo_name());
+    let pulls_href = move || format!("/repos/{}/{}/pulls", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
             <p>"Clone URL: https://codeza.com/" {owner} "/" {repo_name} ".git"</p>
-            <p><a href=issues_href>"View Issues"</a></p>
+            <p><a href=issues_href>"View Issues"</a> " | " <a href=pulls_href>"View Pull Requests"</a></p>
+        </div>
+    }
+}
+
+#[component]
+fn PullRequestList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (pulls, set_pulls) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        // Mock fetch
+        let user = User::new(1, "admin".to_string(), None);
+        let mock = vec![
+             PullRequest {
+                id: 1,
+                number: 1,
+                title: "First PR".to_string(),
+                body: Some("Desc".to_string()),
+                state: "open".to_string(),
+                user,
+                merged: false,
+            }
+        ];
+        set_pulls.set(mock);
+    });
+
+    view! {
+        <div class="pull-list">
+             <h3>"Pull Requests for " {owner} " / " {repo_name}</h3>
+             <ul>
+                <For
+                    each=move || pulls.get()
+                    key=|pr| pr.id
+                    children=move |pr| {
+                        view! {
+                            <li>
+                                <strong>"#" {pr.number} " " {pr.title}</strong>
+                                " (" {pr.state} ") by " {pr.user.username}
+                            </li>
+                        }
+                    }
+                />
+             </ul>
         </div>
     }
 }
@@ -217,5 +265,20 @@ mod tests {
             user
         };
         assert_eq!(issue.title, "t");
+    }
+
+    #[test]
+    fn test_pr_logic() {
+        let user = User::new(1, "u".to_string(), None);
+        let pr = PullRequest {
+            id: 1,
+            number: 1,
+            title: "p".to_string(),
+            body: None,
+            state: "o".to_string(),
+            user,
+            merged: false,
+        };
+        assert_eq!(pr.title, "p");
     }
 }

@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{CreateIssueOption, CreateRepoOption, Issue, Repository, User};
+use shared::{CreateIssueOption, CreatePullRequestOption, CreateRepoOption, Issue, PullRequest, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -25,6 +25,7 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo", get(get_repo))
         .route("/api/v1/user/repos", post(create_repo))
         .route("/api/v1/repos/:owner/:repo/issues", get(list_issues).post(create_issue))
+        .route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls).post(create_pull))
         .layer(CorsLayer::permissive())
 }
 
@@ -89,6 +90,39 @@ async fn create_issue(
         user,
     };
     (StatusCode::CREATED, Json(issue))
+}
+
+async fn list_pulls(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let pulls = vec![
+        PullRequest {
+            id: 1,
+            number: 1,
+            title: "First PR".to_string(),
+            body: Some("Description".to_string()),
+            state: "open".to_string(),
+            user,
+            merged: false,
+        }
+    ];
+    Json(pulls)
+}
+
+async fn create_pull(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreatePullRequestOption>
+) -> (StatusCode, Json<PullRequest>) {
+    let user = User::new(1, "admin".to_string(), None);
+    let pr = PullRequest {
+        id: 2,
+        number: 2,
+        title: payload.title,
+        body: payload.body,
+        state: "open".to_string(),
+        user,
+        merged: false,
+    };
+    (StatusCode::CREATED, Json(pr))
 }
 
 #[cfg(test)]
@@ -222,5 +256,51 @@ mod tests {
         let issue: Issue = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(issue.title, "New Bug");
+    }
+
+    #[tokio::test]
+    async fn test_list_pulls() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/pulls").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let pulls: Vec<PullRequest> = serde_json::from_slice(&body).unwrap();
+
+        assert!(!pulls.is_empty());
+        assert_eq!(pulls[0].title, "First PR");
+    }
+
+    #[tokio::test]
+    async fn test_create_pull() {
+        let app = app();
+        let payload = CreatePullRequestOption {
+            title: "New Feature".to_string(),
+            body: None,
+            head: "feature".to_string(),
+            base: "main".to_string(),
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/pulls")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let pr: PullRequest = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(pr.title, "New Feature");
     }
 }
