@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Organization, PullRequest, RegisterOption, Release, Repository, User};
+use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Organization, PullRequest, RegisterOption, Release, Repository, Topic, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -12,6 +12,7 @@ fn App() -> impl IntoView {
         <Router>
             <nav>
                 <a href="/">"Home"</a> " | "
+                <a href="/search">"Search"</a> " | "
                 <a href="/login">"Login"</a> " | "
                 <a href="/register">"Register"</a> " | "
                 <a href="/users/admin">"Admin Profile"</a> " | "
@@ -21,6 +22,7 @@ fn App() -> impl IntoView {
             <main>
                 <Routes>
                     <Route path="/" view=Home/>
+                    <Route path="/search" view=Search/>
                     <Route path="/login" view=Login/>
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
@@ -68,6 +70,45 @@ fn Home() -> impl IntoView {
                             <li>
                                 <a href=href>{repo.owner} " / " {repo.name}</a>
                             </li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn Search() -> impl IntoView {
+    let (query, set_query) = create_signal("".to_string());
+    let (results, set_results) = create_signal(vec![]);
+
+    let on_search = move |_| {
+        // Mock search
+        let q = query.get();
+        if !q.is_empty() {
+            let mock = vec![
+                Repository::new(1, format!("{}-repo", q), "user".to_string())
+            ];
+            set_results.set(mock);
+        }
+    };
+
+    view! {
+        <div class="search-page">
+            <h2>"Search Repositories"</h2>
+            <input type="text" placeholder="Search..."
+                prop:value=query
+                on:input=move |ev| set_query.set(event_target_value(&ev))
+            />
+            <button on:click=on_search>"Search"</button>
+            <ul>
+                <For
+                    each=move || results.get()
+                    key=|r| r.id
+                    children=move |r| {
+                        view! {
+                            <li>{r.owner} "/" {r.name}</li>
                         }
                     }
                 />
@@ -253,6 +294,38 @@ fn RepoDetail() -> impl IntoView {
                 <a href=labels_href>"Labels"</a> " | "
                 <a href=milestones_href>"Milestones"</a>
             </p>
+            <TopicList/>
+        </div>
+    }
+}
+
+#[component]
+fn TopicList() -> impl IntoView {
+    let params = use_params_map();
+
+    let (topics, set_topics) = create_signal(vec![]);
+    create_effect(move |_| {
+         let mock = vec![
+             Topic { id: 1, name: "rust".to_string(), created: "2023-01-01".to_string() }
+         ];
+         set_topics.set(mock);
+    });
+
+    view! {
+        <div class="topic-list">
+            <ul>
+                <For
+                    each=move || topics.get()
+                    key=|t| t.id
+                    children=move |t| {
+                        view! {
+                            <li>
+                                <span class="topic">{t.name}</span>
+                            </li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -738,5 +811,11 @@ mod tests {
     fn test_label_logic() {
         let l = Label { id: 1, name: "l".to_string(), color: "c".to_string(), description: None };
         assert_eq!(l.name, "l");
+    }
+
+    #[test]
+    fn test_topic_logic() {
+        let t = Topic { id: 1, name: "t".to_string(), created: "d".to_string() };
+        assert_eq!(t.name, "t");
     }
 }

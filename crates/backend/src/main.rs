@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Organization, PullRequest, RegisterOption, Release, Repository, User};
+use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Organization, PullRequest, RegisterOption, Release, RepoTopicOptions, Repository, Topic, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -39,6 +39,8 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/pulls/:index/merge", post(merge_pull))
         .route("/api/v1/repos/:owner/:repo/labels", get(list_labels).post(create_label))
         .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))
+        .route("/api/v1/repos/:owner/:repo/topics", get(list_topics).put(update_topics))
+        .route("/api/v1/repos/search", get(search_repos))
         .layer(CorsLayer::permissive())
 }
 
@@ -347,6 +349,27 @@ async fn create_milestone(
         state: "open".to_string(),
     };
     (StatusCode::CREATED, Json(milestone))
+}
+
+async fn list_topics(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Topic>> {
+    let topics = vec![
+        Topic { id: 1, name: "rust".to_string(), created: "2023-01-01".to_string() }
+    ];
+    Json(topics)
+}
+
+async fn update_topics(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(_payload): Json<RepoTopicOptions>
+) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn search_repos() -> Json<Vec<Repository>> {
+    let repos = vec![
+        Repository::new(1, "searched-repo".to_string(), "user".to_string())
+    ];
+    Json(repos)
 }
 
 #[cfg(test)]
@@ -702,5 +725,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_list_topics() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/topics").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let topics: Vec<Topic> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(topics[0].name, "rust");
+    }
+
+    #[tokio::test]
+    async fn test_search_repos() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/search").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let repos: Vec<Repository> = serde_json::from_slice(&body).unwrap();
+        assert!(!repos.is_empty());
     }
 }

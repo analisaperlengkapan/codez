@@ -191,6 +191,24 @@ pub struct CreateMilestoneOption {
     pub due_on: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Topic {
+    pub id: u64,
+    pub name: String,
+    pub created: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RepoTopicOptions {
+    pub topics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RepoSearchOptions {
+    pub q: String,
+    pub uid: Option<u64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,6 +218,21 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_topic_structs() {
+        let topic = Topic { id: 1, name: "rust".to_string(), created: "date".to_string() };
+        assert_eq!(topic.name, "rust");
+
+        let opts = RepoTopicOptions { topics: vec!["rust".to_string(), "gitea".to_string()] };
+        assert_eq!(opts.topics.len(), 2);
+    }
+
+    #[test]
+    fn test_search_struct() {
+        let search = RepoSearchOptions { q: "test".to_string(), uid: Some(1) };
+        assert_eq!(search.q, "test");
     }
 
     #[test]
