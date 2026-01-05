@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, CreateIssueOption, CreatePullRequestOption, CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
+use shared::{Commit, CreateIssueOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, PullRequest, Release, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -29,6 +29,7 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/contents/*path", get(get_contents))
         .route("/api/v1/repos/:owner/:repo/contents", get(get_root_contents))
         .route("/api/v1/repos/:owner/:repo/commits", get(list_commits))
+        .route("/api/v1/repos/:owner/:repo/releases", get(list_releases).post(create_release))
         .layer(CorsLayer::permissive())
 }
 
@@ -170,6 +171,41 @@ async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec
         }
     ];
     Json(commits)
+}
+
+async fn list_releases(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Release>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let releases = vec![
+        Release {
+            id: 1,
+            tag_name: "v1.0.0".to_string(),
+            name: "Initial Release".to_string(),
+            body: Some("Description".to_string()),
+            draft: false,
+            prerelease: false,
+            created_at: "2023-01-01".to_string(),
+            author: user,
+        }
+    ];
+    Json(releases)
+}
+
+async fn create_release(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateReleaseOption>
+) -> (StatusCode, Json<Release>) {
+    let user = User::new(1, "admin".to_string(), None);
+    let release = Release {
+        id: 2,
+        tag_name: payload.tag_name,
+        name: payload.name,
+        body: payload.body,
+        draft: payload.draft,
+        prerelease: payload.prerelease,
+        created_at: "2023-01-02".to_string(),
+        author: user,
+    };
+    (StatusCode::CREATED, Json(release))
 }
 
 #[cfg(test)]
@@ -381,5 +417,52 @@ mod tests {
 
         assert!(!commits.is_empty());
         assert_eq!(commits[0].sha, "abc123456789");
+    }
+
+    #[tokio::test]
+    async fn test_list_releases() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/releases").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let releases: Vec<Release> = serde_json::from_slice(&body).unwrap();
+
+        assert!(!releases.is_empty());
+        assert_eq!(releases[0].tag_name, "v1.0.0");
+    }
+
+    #[tokio::test]
+    async fn test_create_release() {
+        let app = app();
+        let payload = CreateReleaseOption {
+            tag_name: "v1.1.0".to_string(),
+            name: "Next Release".to_string(),
+            body: None,
+            draft: false,
+            prerelease: false,
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/releases")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let release: Release = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(release.tag_name, "v1.1.0");
     }
 }

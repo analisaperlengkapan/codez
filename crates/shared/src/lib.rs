@@ -97,6 +97,27 @@ pub struct Commit {
     pub date: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Release {
+    pub id: u64,
+    pub tag_name: String,
+    pub name: String,
+    pub body: Option<String>,
+    pub draft: bool,
+    pub prerelease: bool,
+    pub created_at: String,
+    pub author: User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateReleaseOption {
+    pub tag_name: String,
+    pub name: String,
+    pub body: Option<String>,
+    pub draft: bool,
+    pub prerelease: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,6 +127,31 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_release_structs() {
+        let user = User::new(1, "u".to_string(), None);
+        let rel = Release {
+            id: 1,
+            tag_name: "v1.0".to_string(),
+            name: "Release 1.0".to_string(),
+            body: None,
+            draft: false,
+            prerelease: false,
+            created_at: "date".to_string(),
+            author: user,
+        };
+        assert_eq!(rel.tag_name, "v1.0");
+
+        let opts = CreateReleaseOption {
+            tag_name: "v1.1".to_string(),
+            name: "Next".to_string(),
+            body: None,
+            draft: true,
+            prerelease: false,
+        };
+        assert!(opts.draft);
     }
 
     #[test]

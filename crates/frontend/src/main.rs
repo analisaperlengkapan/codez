@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Commit, CreateRepoOption, FileEntry, Issue, PullRequest, Repository, User};
+use shared::{Commit, CreateRepoOption, FileEntry, Issue, PullRequest, Release, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -25,6 +25,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
+                    <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
                 </Routes>
             </main>
         </Router>
@@ -134,6 +135,7 @@ fn RepoDetail() -> impl IntoView {
     let pulls_href = move || format!("/repos/{}/{}/pulls", owner(), repo_name());
     let code_href = move || format!("/repos/{}/{}/src/", owner(), repo_name());
     let commits_href = move || format!("/repos/{}/{}/commits", owner(), repo_name());
+    let releases_href = move || format!("/repos/{}/{}/releases", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
@@ -143,8 +145,55 @@ fn RepoDetail() -> impl IntoView {
                 <a href=code_href>"Code"</a> " | "
                 <a href=commits_href>"Commits"</a> " | "
                 <a href=issues_href>"Issues"</a> " | "
-                <a href=pulls_href>"Pull Requests"</a>
+                <a href=pulls_href>"Pull Requests"</a> " | "
+                <a href=releases_href>"Releases"</a>
             </p>
+        </div>
+    }
+}
+
+#[component]
+fn ReleaseList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (releases, set_releases) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        // Mock contents
+        let user = User::new(1, "admin".to_string(), None);
+        let mock = vec![
+            Release {
+                id: 1,
+                tag_name: "v1.0.0".to_string(),
+                name: "Initial".to_string(),
+                body: Some("Desc".to_string()),
+                draft: false,
+                prerelease: false,
+                created_at: "2023-01-01".to_string(),
+                author: user,
+            }
+        ];
+        set_releases.set(mock);
+    });
+
+    view! {
+        <div class="release-list">
+            <h3>"Releases for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || releases.get()
+                    key=|r| r.id
+                    children=move |r| {
+                        view! {
+                            <li>
+                                <strong>{r.tag_name}</strong> " - " {r.name}
+                            </li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -396,5 +445,21 @@ mod tests {
             date: "d".to_string(),
         };
         assert_eq!(c.sha, "s");
+    }
+
+    #[test]
+    fn test_release_logic() {
+        let user = User::new(1, "u".to_string(), None);
+        let r = Release {
+            id: 1,
+            tag_name: "v".to_string(),
+            name: "n".to_string(),
+            body: None,
+            draft: false,
+            prerelease: false,
+            created_at: "d".to_string(),
+            author: user,
+        };
+        assert_eq!(r.tag_name, "v");
     }
 }
