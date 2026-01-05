@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Organization, PullRequest, RegisterOption, Release, RepoTopicOptions, Repository, Topic, User};
+use shared::{Commit, Comment, CreateCommentOption, CreateIssueOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Organization, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Topic, User, UserSettingsOption, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -41,6 +41,10 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))
         .route("/api/v1/repos/:owner/:repo/topics", get(list_topics).put(update_topics))
         .route("/api/v1/repos/search", get(search_repos))
+        .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page))
+        .route("/api/v1/repos/:owner/:repo/wiki/pages", post(create_wiki_page))
+        .route("/api/v1/repos/:owner/:repo/settings", get(get_repo_settings).patch(update_repo_settings))
+        .route("/api/v1/user/settings", get(get_user_settings).patch(update_user_settings))
         .layer(CorsLayer::permissive())
 }
 
@@ -370,6 +374,58 @@ async fn search_repos() -> Json<Vec<Repository>> {
         Repository::new(1, "searched-repo".to_string(), "user".to_string())
     ];
     Json(repos)
+}
+
+async fn get_wiki_page(Path((_owner, _repo, page_name)): Path<(String, String, String)>) -> Json<Option<WikiPage>> {
+    if page_name == "Home" {
+        Json(Some(WikiPage {
+            title: "Home".to_string(),
+            content: "Welcome to the wiki!".to_string(),
+            commit_message: None,
+        }))
+    } else {
+        Json(None)
+    }
+}
+
+async fn create_wiki_page(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateWikiPageOption>
+) -> (StatusCode, Json<WikiPage>) {
+    let page = WikiPage {
+        title: payload.title,
+        content: payload.content,
+        commit_message: payload.message,
+    };
+    (StatusCode::CREATED, Json(page))
+}
+
+async fn get_repo_settings(Path((_owner, _repo)): Path<(String, String)>) -> Json<RepoSettingsOption> {
+    Json(RepoSettingsOption {
+        description: Some("Description".to_string()),
+        private: Some(false),
+        website: None,
+    })
+}
+
+async fn update_repo_settings(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(_payload): Json<RepoSettingsOption>
+) -> StatusCode {
+    StatusCode::OK
+}
+
+async fn get_user_settings() -> Json<UserSettingsOption> {
+    Json(UserSettingsOption {
+        full_name: Some("Admin User".to_string()),
+        website: None,
+        description: None,
+        location: None,
+    })
+}
+
+async fn update_user_settings(Json(_payload): Json<UserSettingsOption>) -> StatusCode {
+    StatusCode::OK
 }
 
 #[cfg(test)]
@@ -751,5 +807,47 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let repos: Vec<Repository> = serde_json::from_slice(&body).unwrap();
         assert!(!repos.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_wiki_page() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/wiki/pages/Home").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_create_wiki_page() {
+        let app = app();
+        let payload = CreateWikiPageOption {
+            title: "NewPage".to_string(),
+            content: "Content".to_string(),
+            message: None,
+        };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/wiki/pages")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_get_settings() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/user/settings").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

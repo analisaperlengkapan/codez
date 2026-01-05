@@ -209,6 +209,35 @@ pub struct RepoSearchOptions {
     pub uid: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WikiPage {
+    pub title: String,
+    pub content: String,
+    pub commit_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateWikiPageOption {
+    pub title: String,
+    pub content: String,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RepoSettingsOption {
+    pub description: Option<String>,
+    pub private: Option<bool>,
+    pub website: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UserSettingsOption {
+    pub full_name: Option<String>,
+    pub website: Option<String>,
+    pub description: Option<String>,
+    pub location: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +247,34 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_wiki_structs() {
+        let page = WikiPage {
+            title: "Home".to_string(),
+            content: "Welcome".to_string(),
+            commit_message: None,
+        };
+        assert_eq!(page.title, "Home");
+    }
+
+    #[test]
+    fn test_settings_structs() {
+        let r_opts = RepoSettingsOption {
+            description: Some("desc".to_string()),
+            private: Some(true),
+            website: None,
+        };
+        assert_eq!(r_opts.description, Some("desc".to_string()));
+
+        let u_opts = UserSettingsOption {
+            full_name: Some("Name".to_string()),
+            website: None,
+            description: None,
+            location: None,
+        };
+        assert_eq!(u_opts.full_name, Some("Name".to_string()));
     }
 
     #[test]

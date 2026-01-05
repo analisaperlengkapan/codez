@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Organization, PullRequest, RegisterOption, Release, Repository, Topic, User};
+use shared::{Comment, Commit, CreateCommentOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Organization, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Topic, User, UserSettingsOption, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -27,6 +27,7 @@ fn App() -> impl IntoView {
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
                     <Route path="/users/:username" view=UserProfile/>
+                    <Route path="/settings/profile" view=UserSettings/>
                     <Route path="/orgs/:org" view=OrgProfile/>
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
                     <Route path="/repos/:owner/:repo/issues" view=IssueList/>
@@ -38,6 +39,8 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
                     <Route path="/repos/:owner/:repo/labels" view=LabelList/>
                     <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>
+                    <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
+                    <Route path="/repos/:owner/:repo/settings" view=RepoSettings/>
                 </Routes>
             </main>
         </Router>
@@ -280,6 +283,8 @@ fn RepoDetail() -> impl IntoView {
     let releases_href = move || format!("/repos/{}/{}/releases", owner(), repo_name());
     let labels_href = move || format!("/repos/{}/{}/labels", owner(), repo_name());
     let milestones_href = move || format!("/repos/{}/{}/milestones", owner(), repo_name());
+    let wiki_href = move || format!("/repos/{}/{}/wiki", owner(), repo_name());
+    let settings_href = move || format!("/repos/{}/{}/settings", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
@@ -292,7 +297,9 @@ fn RepoDetail() -> impl IntoView {
                 <a href=pulls_href>"Pull Requests"</a> " | "
                 <a href=releases_href>"Releases"</a> " | "
                 <a href=labels_href>"Labels"</a> " | "
-                <a href=milestones_href>"Milestones"</a>
+                <a href=milestones_href>"Milestones"</a> " | "
+                <a href=wiki_href>"Wiki"</a> " | "
+                <a href=settings_href>"Settings"</a>
             </p>
             <TopicList/>
         </div>
@@ -576,6 +583,90 @@ fn MilestoneList() -> impl IntoView {
 }
 
 #[component]
+fn Wiki() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (page, set_page) = create_signal(None::<WikiPage>);
+
+    create_effect(move |_| {
+        // Mock
+        set_page.set(Some(WikiPage {
+            title: "Home".to_string(),
+            content: "Welcome to the wiki!".to_string(),
+            commit_message: None,
+        }));
+    });
+
+    view! {
+        <div class="wiki">
+            <h3>"Wiki for " {owner} " / " {repo_name}</h3>
+            {move || match page.get() {
+                Some(p) => view! {
+                    <div>
+                        <h4>{p.title}</h4>
+                        <p>{p.content}</p>
+                    </div>
+                }.into_view(),
+                None => view! { <p>"No page"</p> }.into_view()
+            }}
+        </div>
+    }
+}
+
+#[component]
+fn RepoSettings() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (desc, set_desc) = create_signal("".to_string());
+
+    let on_save = move |_| {
+        let payload = RepoSettingsOption {
+            description: Some(desc.get()),
+            private: None,
+            website: None,
+        };
+        leptos::logging::log!("Saving settings: {:?}", payload);
+    };
+
+    view! {
+        <div class="repo-settings">
+            <h3>"Settings for " {owner} " / " {repo_name}</h3>
+            <input type="text" placeholder="Description" prop:value=desc
+                on:input=move |ev| set_desc.set(event_target_value(&ev)) />
+            <button on:click=on_save>"Save"</button>
+        </div>
+    }
+}
+
+#[component]
+fn UserSettings() -> impl IntoView {
+    let (name, set_name) = create_signal("".to_string());
+
+    let on_save = move |_| {
+        let payload = UserSettingsOption {
+            full_name: Some(name.get()),
+            website: None,
+            description: None,
+            location: None,
+        };
+        leptos::logging::log!("Saving user settings: {:?}", payload);
+    };
+
+    view! {
+        <div class="user-settings">
+            <h3>"User Settings"</h3>
+            <input type="text" placeholder="Full Name" prop:value=name
+                on:input=move |ev| set_name.set(event_target_value(&ev)) />
+            <button on:click=on_save>"Save"</button>
+        </div>
+    }
+}
+
+#[component]
 fn PullRequestDetail() -> impl IntoView {
     let params = use_params_map();
     let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default());
@@ -817,5 +908,11 @@ mod tests {
     fn test_topic_logic() {
         let t = Topic { id: 1, name: "t".to_string(), created: "d".to_string() };
         assert_eq!(t.name, "t");
+    }
+
+    #[test]
+    fn test_wiki_logic() {
+        let p = WikiPage { title: "t".to_string(), content: "c".to_string(), commit_message: None };
+        assert_eq!(p.title, "t");
     }
 }
