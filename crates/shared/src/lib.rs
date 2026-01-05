@@ -21,9 +21,33 @@ impl Repository {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct User {
+    pub id: u64,
+    pub username: String,
+    pub email: Option<String>,
+}
+
+impl User {
+    pub fn new(id: u64, username: String, email: Option<String>) -> Self {
+        Self {
+            id,
+            username,
+            email,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_user_creation() {
+        let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
+        assert_eq!(user.username, "jules");
+        assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
 
     #[test]
     fn test_repository_creation() {
