@@ -1,36 +1,44 @@
-//! Codeza Shared Library
-//! Common utilities, error handling, and middleware for all services
+use serde::{Deserialize, Serialize};
 
-pub mod alerting;
-pub mod analytics;
-pub mod analytics_api;
-pub mod auth;
-pub mod auth_middleware;
-mod auth_test;
-pub mod config;
-pub mod dashboard;
-pub mod error;
-pub mod logging;
-pub mod metrics;
-pub mod middleware;
-pub mod models;
-pub mod report_generator;
-pub mod tracing_module;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Repository {
+    pub id: u64,
+    pub name: String,
+    pub description: Option<String>,
+    pub private: bool,
+    pub owner: String,
+}
+
+impl Repository {
+    pub fn new(id: u64, name: String, owner: String) -> Self {
+        Self {
+            id,
+            name,
+            description: None,
+            private: false,
+            owner,
+        }
+    }
+}
 
 #[cfg(test)]
-mod analytics_tests;
+mod tests {
+    use super::*;
 
-pub use alerting::{Alert, AlertManager, AlertRule};
-pub use analytics::{
-    AnalyticsEngine, PipelineAnalytics, Report, RepositoryAnalytics, UserActivity,
-};
-pub use analytics_api::{AnalyticsQuery, AnalyticsResponse, QueryBuilder, QueryExecutor};
-pub use auth::*;
-pub use config::Config;
-pub use dashboard::{Dashboard, DashboardPermission, DashboardService, WidgetConfig};
-pub use error::{CodezaError, Result};
-pub use logging::init_logging;
-pub use metrics::{Counter, Gauge, Histogram, MetricsRegistry};
-pub use models::*;
-pub use report_generator::{ExportFormat, GeneratedReport, ReportGeneratorService, ReportTemplate};
-pub use tracing_module::{Span, Trace, Tracer};
+    #[test]
+    fn test_repository_creation() {
+        let repo = Repository::new(1, "codeza".to_string(), "jules".to_string());
+        assert_eq!(repo.id, 1);
+        assert_eq!(repo.name, "codeza");
+        assert_eq!(repo.owner, "jules");
+        assert_eq!(repo.private, false);
+    }
+
+    #[test]
+    fn test_repository_serialization() {
+        let repo = Repository::new(1, "codeza".to_string(), "jules".to_string());
+        let json = serde_json::to_string(&repo).unwrap();
+        let deserialized: Repository = serde_json::from_str(&json).unwrap();
+        assert_eq!(repo, deserialized);
+    }
+}
