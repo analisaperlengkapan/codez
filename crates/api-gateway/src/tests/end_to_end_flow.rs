@@ -132,4 +132,25 @@ async fn test_end_to_end_flow() {
     // Correction:
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR, "Should pass auth but fail at DB");
 
+    // 5. Simulate Frontend fetching Manifest (The contract between Frontend and Backend)
+    // The Frontend (Shell App) calls GET /api/v1/orchestrator/apps/{id}/manifest
+    // We expect 500 (DB error) but that confirms the path exists and is reachable.
+    // Ideally we would mock the DB response to return a valid manifest, but without mocking `sqlx`,
+    // we settle for verifying the contract types via unit tests (already done in `mfe-manager`)
+    // and verifying the route reachability here.
+
+    let superapp_id = Uuid::new_v4();
+    let req = Request::builder()
+        .uri(&format!("/api/v1/orchestrator/apps/{}/manifest", superapp_id))
+        .method("GET")
+        .header("Authorization", format!("Bearer {}", valid_token))
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().oneshot(req).await.unwrap();
+    // 500 = Reached Controller -> Tried DB -> Failed.
+    // 404 = Wrong Route.
+    // 401 = Auth Failed.
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR, "Manifest route should be reachable");
+
 }
