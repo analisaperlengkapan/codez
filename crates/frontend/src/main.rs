@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Commit, CreateRepoOption, FileEntry, Issue, PullRequest, Release, Repository, User};
+use shared::{Commit, CreateRepoOption, FileEntry, Issue, LoginOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -12,14 +12,20 @@ fn App() -> impl IntoView {
         <Router>
             <nav>
                 <a href="/">"Home"</a> " | "
+                <a href="/login">"Login"</a> " | "
+                <a href="/register">"Register"</a> " | "
                 <a href="/users/admin">"Admin Profile"</a> " | "
+                <a href="/orgs/codeza-org">"Org Profile"</a> " | "
                 <a href="/repo/create">"New Repo"</a>
             </nav>
             <main>
                 <Routes>
                     <Route path="/" view=Home/>
+                    <Route path="/login" view=Login/>
+                    <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
                     <Route path="/users/:username" view=UserProfile/>
+                    <Route path="/orgs/:org" view=OrgProfile/>
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
                     <Route path="/repos/:owner/:repo/issues" view=IssueList/>
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
@@ -62,6 +68,97 @@ fn Home() -> impl IntoView {
                     }
                 />
             </ul>
+        </div>
+    }
+}
+
+#[component]
+fn Login() -> impl IntoView {
+    let (username, set_username) = create_signal("".to_string());
+    let (password, set_password) = create_signal("".to_string());
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = LoginOption {
+            username: username.get(),
+            password: password.get(),
+        };
+        logging::log!("Logging in: {:?}", payload);
+    };
+
+    view! {
+        <div class="login">
+            <h2>"Login"</h2>
+            <form on:submit=on_submit>
+                <input type="text" placeholder="Username" prop:value=username
+                    on:input=move |ev| set_username.set(event_target_value(&ev)) />
+                <input type="password" placeholder="Password" prop:value=password
+                    on:input=move |ev| set_password.set(event_target_value(&ev)) />
+                <button type="submit">"Login"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+fn Register() -> impl IntoView {
+    let (username, set_username) = create_signal("".to_string());
+    let (email, set_email) = create_signal("".to_string());
+    let (password, set_password) = create_signal("".to_string());
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = RegisterOption {
+            username: username.get(),
+            email: email.get(),
+            password: password.get(),
+        };
+        logging::log!("Registering: {:?}", payload);
+    };
+
+    view! {
+        <div class="register">
+            <h2>"Register"</h2>
+            <form on:submit=on_submit>
+                <input type="text" placeholder="Username" prop:value=username
+                    on:input=move |ev| set_username.set(event_target_value(&ev)) />
+                <input type="email" placeholder="Email" prop:value=email
+                    on:input=move |ev| set_email.set(event_target_value(&ev)) />
+                <input type="password" placeholder="Password" prop:value=password
+                    on:input=move |ev| set_password.set(event_target_value(&ev)) />
+                <button type="submit">"Register"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+fn OrgProfile() -> impl IntoView {
+    let params = use_params_map();
+    let org_name = move || params.with(|params| params.get("org").cloned().unwrap_or_default());
+
+    let org = create_memo(move |_| {
+         if org_name() == "codeza-org" {
+             Some(Organization {
+                 id: 1,
+                 username: "codeza-org".to_string(),
+                 description: Some("Description".to_string()),
+                 avatar_url: None,
+             })
+         } else {
+             None
+         }
+    });
+
+    view! {
+        <div class="org-profile">
+            <h2>"Organization: " {org_name}</h2>
+            {move || match org.get() {
+                Some(o) => view! {
+                    <p>{o.description.unwrap_or_default()}</p>
+                }.into_view(),
+                None => view! { <p>"Org not found"</p> }.into_view()
+            }}
         </div>
     }
 }
@@ -461,5 +558,25 @@ mod tests {
             author: user,
         };
         assert_eq!(r.tag_name, "v");
+    }
+
+    #[test]
+    fn test_auth_logic() {
+        let l = LoginOption {
+            username: "u".to_string(),
+            password: "p".to_string(),
+        };
+        assert_eq!(l.username, "u");
+    }
+
+    #[test]
+    fn test_org_logic() {
+        let o = Organization {
+            id: 1,
+            username: "o".to_string(),
+            description: None,
+            avatar_url: None,
+        };
+        assert_eq!(o.username, "o");
     }
 }

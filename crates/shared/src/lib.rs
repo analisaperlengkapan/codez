@@ -118,6 +118,27 @@ pub struct CreateReleaseOption {
     pub prerelease: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LoginOption {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RegisterOption {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Organization {
+    pub id: u64,
+    pub username: String,
+    pub description: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,6 +148,33 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_auth_structs() {
+        let login = LoginOption {
+            username: "u".to_string(),
+            password: "p".to_string(),
+        };
+        assert_eq!(login.username, "u");
+
+        let reg = RegisterOption {
+            username: "u".to_string(),
+            email: "e".to_string(),
+            password: "p".to_string(),
+        };
+        assert_eq!(reg.email, "e");
+    }
+
+    #[test]
+    fn test_org_struct() {
+        let org = Organization {
+            id: 1,
+            username: "org".to_string(),
+            description: None,
+            avatar_url: None,
+        };
+        assert_eq!(org.username, "org");
     }
 
     #[test]

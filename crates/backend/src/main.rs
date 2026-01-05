@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, CreateIssueOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, PullRequest, Release, Repository, User};
+use shared::{Commit, CreateIssueOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, FileEntry, Issue, LoginOption, Organization, PullRequest, RegisterOption, Release, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -30,6 +30,10 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/contents", get(get_root_contents))
         .route("/api/v1/repos/:owner/:repo/commits", get(list_commits))
         .route("/api/v1/repos/:owner/:repo/releases", get(list_releases).post(create_release))
+        .route("/api/v1/users/login", post(login_user))
+        .route("/api/v1/users/register", post(register_user))
+        .route("/api/v1/orgs/:org", get(get_org))
+        .route("/api/v1/orgs/:org/repos", get(list_org_repos))
         .layer(CorsLayer::permissive())
 }
 
@@ -206,6 +210,40 @@ async fn create_release(
         author: user,
     };
     (StatusCode::CREATED, Json(release))
+}
+
+async fn login_user(Json(payload): Json<LoginOption>) -> (StatusCode, Json<Option<User>>) {
+    if payload.username == "admin" && payload.password == "password" {
+        (StatusCode::OK, Json(Some(User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string())))))
+    } else {
+        (StatusCode::UNAUTHORIZED, Json(None))
+    }
+}
+
+async fn register_user(Json(payload): Json<RegisterOption>) -> (StatusCode, Json<User>) {
+    // Mock register
+    let user = User::new(2, payload.username, Some(payload.email));
+    (StatusCode::CREATED, Json(user))
+}
+
+async fn get_org(Path(org): Path<String>) -> Json<Option<Organization>> {
+    if org == "codeza-org" {
+        Json(Some(Organization {
+            id: 1,
+            username: "codeza-org".to_string(),
+            description: Some("Codeza Organization".to_string()),
+            avatar_url: None,
+        }))
+    } else {
+        Json(None)
+    }
+}
+
+async fn list_org_repos(Path(_org): Path<String>) -> Json<Vec<Repository>> {
+    let repos = vec![
+        Repository::new(1, "org-repo".to_string(), "codeza-org".to_string())
+    ];
+    Json(repos)
 }
 
 #[cfg(test)]
@@ -464,5 +502,39 @@ mod tests {
         let release: Release = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(release.tag_name, "v1.1.0");
+    }
+
+    #[tokio::test]
+    async fn test_login_success() {
+        let app = app();
+        let payload = LoginOption {
+            username: "admin".to_string(),
+            password: "password".to_string(),
+        };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/users/login")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_get_org() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/orgs/codeza-org").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let org: Option<Organization> = serde_json::from_slice(&body).unwrap();
+        assert!(org.is_some());
     }
 }
