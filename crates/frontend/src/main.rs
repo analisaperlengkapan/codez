@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{CreateRepoOption, Repository, User};
+use shared::{CreateRepoOption, Issue, Repository, User};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -21,6 +21,7 @@ fn App() -> impl IntoView {
                     <Route path="/repo/create" view=CreateRepo/>
                     <Route path="/users/:username" view=UserProfile/>
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
+                    <Route path="/repos/:owner/:repo/issues" view=IssueList/>
                 </Routes>
             </main>
         </Router>
@@ -126,10 +127,58 @@ fn RepoDetail() -> impl IntoView {
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
+    let issues_href = move || format!("/repos/{}/{}/issues", owner(), repo_name());
+
     view! {
         <div class="repo-detail">
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
             <p>"Clone URL: https://codeza.com/" {owner} "/" {repo_name} ".git"</p>
+            <p><a href=issues_href>"View Issues"</a></p>
+        </div>
+    }
+}
+
+#[component]
+fn IssueList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (issues, set_issues) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        // Mock fetch
+        let user = User::new(1, "admin".to_string(), None);
+        let mock = vec![
+             Issue {
+                id: 1,
+                number: 1,
+                title: "First Issue".to_string(),
+                body: Some("Bug report".to_string()),
+                state: "open".to_string(),
+                user,
+            }
+        ];
+        set_issues.set(mock);
+    });
+
+    view! {
+        <div class="issue-list">
+             <h3>"Issues for " {owner} " / " {repo_name}</h3>
+             <ul>
+                <For
+                    each=move || issues.get()
+                    key=|issue| issue.id
+                    children=move |issue| {
+                        view! {
+                            <li>
+                                <strong>"#" {issue.number} " " {issue.title}</strong>
+                                " (" {issue.state} ") by " {issue.user.username}
+                            </li>
+                        }
+                    }
+                />
+             </ul>
         </div>
     }
 }
@@ -154,5 +203,19 @@ mod tests {
             auto_init: true,
         };
         assert_eq!(opts.name, "test");
+    }
+
+    #[test]
+    fn test_issue_logic() {
+        let user = User::new(1, "u".to_string(), None);
+        let issue = Issue {
+            id: 1,
+            number: 1,
+            title: "t".to_string(),
+            body: None,
+            state: "o".to_string(),
+            user
+        };
+        assert_eq!(issue.title, "t");
     }
 }

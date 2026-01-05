@@ -46,6 +46,22 @@ pub struct CreateRepoOption {
     pub auto_init: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Issue {
+    pub id: u64,
+    pub number: u64,
+    pub title: String,
+    pub body: Option<String>,
+    pub state: String,
+    pub user: User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateIssueOption {
+    pub title: String,
+    pub body: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -55,6 +71,26 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_issue_structs() {
+        let user = User::new(1, "user".to_string(), None);
+        let issue = Issue {
+            id: 1,
+            number: 1,
+            title: "Bug".to_string(),
+            body: None,
+            state: "open".to_string(),
+            user,
+        };
+        assert_eq!(issue.title, "Bug");
+
+        let opts = CreateIssueOption {
+            title: "New Bug".to_string(),
+            body: Some("Description".to_string()),
+        };
+        assert_eq!(opts.title, "New Bug");
     }
 
     #[test]

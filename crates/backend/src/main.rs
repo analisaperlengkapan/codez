@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{CreateRepoOption, Repository, User};
+use shared::{CreateIssueOption, CreateRepoOption, Issue, Repository, User};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -24,6 +24,7 @@ fn app() -> Router {
         .route("/api/v1/users/:username", get(get_user))
         .route("/api/v1/repos/:owner/:repo", get(get_repo))
         .route("/api/v1/user/repos", post(create_repo))
+        .route("/api/v1/repos/:owner/:repo/issues", get(list_issues).post(create_issue))
         .layer(CorsLayer::permissive())
 }
 
@@ -57,6 +58,37 @@ async fn create_repo(Json(payload): Json<CreateRepoOption>) -> (StatusCode, Json
     // Mock creation
     let repo = Repository::new(3, payload.name, "admin".to_string());
     (StatusCode::CREATED, Json(repo))
+}
+
+async fn list_issues(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Issue>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let issues = vec![
+        Issue {
+            id: 1,
+            number: 1,
+            title: "First Issue".to_string(),
+            body: Some("This is a bug".to_string()),
+            state: "open".to_string(),
+            user,
+        }
+    ];
+    Json(issues)
+}
+
+async fn create_issue(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateIssueOption>
+) -> (StatusCode, Json<Issue>) {
+    let user = User::new(1, "admin".to_string(), None);
+    let issue = Issue {
+        id: 2,
+        number: 2,
+        title: payload.title,
+        body: payload.body,
+        state: "open".to_string(),
+        user,
+    };
+    (StatusCode::CREATED, Json(issue))
 }
 
 #[cfg(test)]
@@ -146,5 +178,49 @@ mod tests {
         let repo: Repository = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(repo.name, "new-project");
+    }
+
+    #[tokio::test]
+    async fn test_list_issues() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/issues").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
+
+        assert!(!issues.is_empty());
+        assert_eq!(issues[0].title, "First Issue");
+    }
+
+    #[tokio::test]
+    async fn test_create_issue() {
+        let app = app();
+        let payload = CreateIssueOption {
+            title: "New Bug".to_string(),
+            body: Some("Description".to_string()),
+        };
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issue: Issue = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(issue.title, "New Bug");
     }
 }
