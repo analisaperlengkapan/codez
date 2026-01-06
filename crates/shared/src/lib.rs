@@ -291,6 +291,14 @@ pub struct Project {
     pub is_closed: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AdminStats {
+    pub users: u64,
+    pub repos: u64,
+    pub orgs: u64,
+    pub issues: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,6 +308,12 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_admin_stats() {
+        let stats = AdminStats { users: 10, repos: 20, orgs: 5, issues: 100 };
+        assert_eq!(stats.users, 10);
     }
 
     #[test]

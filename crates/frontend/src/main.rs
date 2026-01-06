@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -14,6 +14,7 @@ fn App() -> impl IntoView {
                 <a href="/">"Home"</a> " | "
                 <a href="/search">"Search"</a> " | "
                 <a href="/notifications">"Notifications"</a> " | "
+                <a href="/admin">"Admin"</a> " | "
                 <a href="/login">"Login"</a> " | "
                 <a href="/register">"Register"</a> " | "
                 <a href="/users/admin">"Admin Profile"</a> " | "
@@ -23,6 +24,7 @@ fn App() -> impl IntoView {
             <main>
                 <Routes>
                     <Route path="/" view=Home/>
+                    <Route path="/admin" view=AdminDashboard/>
                     <Route path="/search" view=Search/>
                     <Route path="/notifications" view=NotificationList/>
                     <Route path="/login" view=Login/>
@@ -80,6 +82,32 @@ fn Home() -> impl IntoView {
                     }
                 />
             </ul>
+        </div>
+    }
+}
+
+#[component]
+fn AdminDashboard() -> impl IntoView {
+    let (stats, set_stats) = create_signal(None::<AdminStats>);
+    create_effect(move |_| {
+        // Mock
+        set_stats.set(Some(AdminStats { users: 10, repos: 20, orgs: 5, issues: 100 }));
+    });
+
+    view! {
+        <div class="admin-dashboard">
+            <h2>"Admin Dashboard"</h2>
+            {move || match stats.get() {
+                Some(s) => view! {
+                    <div>
+                        <p>"Users: " {s.users}</p>
+                        <p>"Repos: " {s.repos}</p>
+                        <p>"Orgs: " {s.orgs}</p>
+                        <p>"Issues: " {s.issues}</p>
+                    </div>
+                }.into_view(),
+                None => view! { <p>"Loading..."</p> }.into_view()
+            }}
         </div>
     }
 }
@@ -1089,5 +1117,11 @@ mod tests {
     fn test_team_logic() {
         let t = Team { id: 1, name: "t".to_string(), description: None, permission: "p".to_string() };
         assert_eq!(t.name, "t");
+    }
+
+    #[test]
+    fn test_admin_logic() {
+        let s = AdminStats { users: 1, repos: 2, orgs: 3, issues: 4 };
+        assert_eq!(s.users, 1);
     }
 }

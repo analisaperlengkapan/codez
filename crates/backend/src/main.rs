@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -50,6 +50,7 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/hooks", get(list_hooks).post(create_hook))
         .route("/api/v1/orgs/:org/teams", get(list_teams))
         .route("/api/v1/repos/:owner/:repo/projects", get(list_projects))
+        .route("/api/v1/admin/stats", get(get_admin_stats))
         .layer(CorsLayer::permissive())
 }
 
@@ -514,6 +515,15 @@ async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Json<Ve
         }
     ];
     Json(projects)
+}
+
+async fn get_admin_stats() -> Json<AdminStats> {
+    Json(AdminStats {
+        users: 10,
+        repos: 20,
+        orgs: 5,
+        issues: 100,
+    })
 }
 
 #[cfg(test)]
@@ -1019,5 +1029,18 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let projects: Vec<Project> = serde_json::from_slice(&body).unwrap();
         assert!(!projects.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_admin_stats() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/admin/stats").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let stats: AdminStats = serde_json::from_slice(&body).unwrap();
+        assert!(stats.users > 0);
     }
 }
