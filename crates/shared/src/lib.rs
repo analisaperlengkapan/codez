@@ -437,6 +437,25 @@ pub struct CreateReactionOption {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DiffLine {
+    pub line_no_old: Option<u64>,
+    pub line_no_new: Option<u64>,
+    pub content: String,
+    pub type_: String, // "add", "delete", "context"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DiffFile {
+    pub name: String,
+    pub old_name: Option<String>,
+    pub index: String,
+    pub additions: u64,
+    pub deletions: u64,
+    pub type_: String, // "add", "modify", "delete", "rename"
+    pub lines: Vec<DiffLine>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -486,6 +505,28 @@ mod tests {
 
         let opt = CreateReactionOption { content: "+1".to_string() };
         assert_eq!(opt.content, "+1");
+    }
+
+    #[test]
+    fn test_diff_structs() {
+        let line = DiffLine {
+            line_no_old: Some(1),
+            line_no_new: Some(1),
+            content: "code".to_string(),
+            type_: "context".to_string(),
+        };
+        assert_eq!(line.content, "code");
+
+        let file = DiffFile {
+            name: "file.rs".to_string(),
+            old_name: None,
+            index: "idx".to_string(),
+            additions: 1,
+            deletions: 0,
+            type_: "modify".to_string(),
+            lines: vec![line],
+        };
+        assert_eq!(file.name, "file.rs");
     }
 
     #[test]

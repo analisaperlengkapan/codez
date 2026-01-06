@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -69,6 +69,10 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/media", post(upload_media))
         .route("/api/v1/user/oauth2", get(list_oauth2_providers))
         .route("/api/v1/repos/:owner/:repo/issues/comments/:id/reactions", post(add_reaction))
+        .route("/api/v1/repos/:owner/:repo/commits/:sha/diff", get(get_commit_diff))
+        .route("/api/v1/repos/:owner/:repo/raw/*path", get(get_raw_file))
+        .route("/api/v1/users/:username/followers", get(list_followers))
+        .route("/api/v1/users/:username/following", get(list_following))
         .layer(CorsLayer::permissive())
 }
 
@@ -746,6 +750,37 @@ async fn add_reaction(
         created_at: "now".to_string(),
     };
     (StatusCode::CREATED, Json(reaction))
+}
+
+async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, String)>) -> Json<Vec<DiffFile>> {
+    let diffs = vec![
+        DiffFile {
+            name: "src/main.rs".to_string(),
+            old_name: None,
+            index: "123".to_string(),
+            additions: 10,
+            deletions: 5,
+            type_: "modify".to_string(),
+            lines: vec![
+                DiffLine { line_no_old: Some(1), line_no_new: Some(1), content: " fn main() {".to_string(), type_: "context".to_string() },
+                DiffLine { line_no_old: Some(2), line_no_new: None, content: "-    println!(\"old\");".to_string(), type_: "delete".to_string() },
+                DiffLine { line_no_old: None, line_no_new: Some(2), content: "+    println!(\"new\");".to_string(), type_: "add".to_string() },
+            ],
+        }
+    ];
+    Json(diffs)
+}
+
+async fn get_raw_file(Path((_owner, _repo, _path)): Path<(String, String, String)>) -> String {
+    "fn main() { println!(\"Hello World\"); }".to_string()
+}
+
+async fn list_followers(Path(_username): Path<String>) -> Json<Vec<User>> {
+    vec![User::new(2, "follower".to_string(), None)].into()
+}
+
+async fn list_following(Path(_username): Path<String>) -> Json<Vec<User>> {
+    vec![User::new(3, "following".to_string(), None)].into()
 }
 
 #[cfg(test)]
@@ -1496,5 +1531,51 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_get_commit_diff() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/commits/abc/diff").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let diffs: Vec<DiffFile> = serde_json::from_slice(&body).unwrap();
+        assert!(!diffs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_raw_file() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/raw/src/main.rs").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let content = String::from_utf8(body.to_vec()).unwrap();
+        assert!(content.contains("fn main"));
+    }
+
+    #[tokio::test]
+    async fn test_list_followers() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/users/admin/followers").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_list_following() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/users/admin/following").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

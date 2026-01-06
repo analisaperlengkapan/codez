@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, CreateReactionOption, DeployKey, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, CreateReactionOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -34,6 +34,8 @@ fn App() -> impl IntoView {
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
                     <Route path="/users/:username" view=UserProfile/>
+                    <Route path="/users/:username/followers" view=UserFollowers/>
+                    <Route path="/users/:username/following" view=UserFollowing/>
                     <Route path="/settings/profile" view=UserSettings/>
                     <Route path="/orgs/:org" view=OrgProfile/>
                     <Route path="/repos/:owner/:repo" view=RepoDetail/>
@@ -46,6 +48,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/tags" view=TagList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
+                    <Route path="/repos/:owner/:repo/commits/:sha/diff" view=CommitDiff/>
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
                     <Route path="/repos/:owner/:repo/labels" view=LabelList/>
                     <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>
@@ -413,10 +416,60 @@ fn UserProfile() -> impl IntoView {
             <h2>"User Profile: " {username}</h2>
             {move || match user.get() {
                 Some(u) => view! {
-                    <p>"Email: " {u.email.unwrap_or("Hidden".to_string())}</p>
+                    <div>
+                        <p>"Email: " {u.email.unwrap_or("Hidden".to_string())}</p>
+                        <p>
+                            <a href=format!("/users/{}/followers", u.username)>"Followers"</a> " | "
+                            <a href=format!("/users/{}/following", u.username)>"Following"</a>
+                        </p>
+                    </div>
                 }.into_view(),
                 None => view! { <p>"User not found"</p> }.into_view()
             }}
+        </div>
+    }
+}
+
+#[component]
+fn UserFollowers() -> impl IntoView {
+    let params = use_params_map();
+    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let (users, set_users) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        set_users.set(vec![User::new(2, "follower".to_string(), None)]);
+    });
+
+    view! {
+        <div class="followers">
+            <h3>"Followers of " {username}</h3>
+            <ul>
+                <For each=move || users.get() key=|u| u.id children=move |u| {
+                    view! { <li>{u.username}</li> }
+                }/>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn UserFollowing() -> impl IntoView {
+    let params = use_params_map();
+    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let (users, set_users) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        set_users.set(vec![User::new(3, "following".to_string(), None)]);
+    });
+
+    view! {
+        <div class="following">
+            <h3>{username} " is following"</h3>
+            <ul>
+                <For each=move || users.get() key=|u| u.id children=move |u| {
+                    view! { <li>{u.username}</li> }
+                }/>
+            </ul>
         </div>
     }
 }
@@ -637,14 +690,68 @@ fn CommitList() -> impl IntoView {
                     each=move || commits.get()
                     key=|c| c.sha.clone()
                     children=move |c| {
+                        let diff_href = format!("/repos/{}/{}/commits/{}/diff", owner(), repo_name(), c.sha);
                         view! {
                             <li>
-                                <code>{c.sha}</code> " - " {c.message} " (" {c.author.username} ")"
+                                <a href=diff_href><code>{c.sha}</code></a> " - " {c.message} " (" {c.author.username} ")"
                             </li>
                         }
                     }
                 />
             </ul>
+        </div>
+    }
+}
+
+#[component]
+fn CommitDiff() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let sha = move || params.with(|params| params.get("sha").cloned().unwrap_or_default());
+
+    let (diffs, set_diffs) = create_signal(vec![]);
+
+    create_effect(move |_| {
+         let mock = vec![
+             DiffFile {
+                 name: "src/main.rs".to_string(),
+                 old_name: None,
+                 index: "123".to_string(),
+                 additions: 10,
+                 deletions: 5,
+                 type_: "modify".to_string(),
+                 lines: vec![
+                     DiffLine { line_no_old: Some(1), line_no_new: Some(1), content: " fn main() {".to_string(), type_: "context".to_string() },
+                     DiffLine { line_no_old: Some(2), line_no_new: None, content: "-    println!(\"old\");".to_string(), type_: "delete".to_string() },
+                     DiffLine { line_no_old: None, line_no_new: Some(2), content: "+    println!(\"new\");".to_string(), type_: "add".to_string() },
+                 ],
+             }
+         ];
+         set_diffs.set(mock);
+    });
+
+    view! {
+        <div class="commit-diff">
+            <h3>"Diff for " {owner} "/" {repo_name} " @ " {sha}</h3>
+            <For each=move || diffs.get() key=|d| d.name.clone() children=move |d| {
+                view! {
+                    <div class="diff-file">
+                        <h4>{d.name} " (" {d.additions} "+ / " {d.deletions} "-)"</h4>
+                        <pre>
+                            <For each=move || d.lines.clone() key=|l| (l.line_no_old, l.line_no_new) children=move |l| {
+                                view! {
+                                    <div class=format!("diff-line {}", l.type_)>
+                                        <span>{l.line_no_old.map(|n| n.to_string()).unwrap_or_default()}</span>
+                                        <span>{l.line_no_new.map(|n| n.to_string()).unwrap_or_default()}</span>
+                                        <span>{l.content}</span>
+                                    </div>
+                                }
+                            }/>
+                        </pre>
+                    </div>
+                }
+            }/>
         </div>
     }
 }
@@ -673,6 +780,7 @@ fn RepoCode() -> impl IntoView {
     view! {
         <div class="repo-code">
             <h3>"Code: " {owner} " / " {repo_name} " / " {path}</h3>
+            <p><a href=format!("/api/v1/repos/{}/{}/raw/{}", owner(), repo_name(), path()) target="_blank">"View Raw"</a></p>
             <ul>
                 <For
                     each=move || files.get()
@@ -1570,5 +1678,11 @@ mod tests {
         let u = User::new(1, "u".to_string(), None);
         let r = Reaction { id: 1, user: u, content: "c".to_string(), created_at: "t".to_string() };
         assert_eq!(r.content, "c");
+    }
+
+    #[test]
+    fn test_diff_components() {
+        let line = DiffLine { line_no_old: None, line_no_new: Some(1), content: "c".to_string(), type_: "add".to_string() };
+        assert_eq!(line.content, "c");
     }
 }
