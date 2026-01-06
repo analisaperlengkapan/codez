@@ -320,6 +320,21 @@ pub struct Activity {
     pub created: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ActionWorkflow {
+    pub id: u64,
+    pub name: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Package {
+    pub id: u64,
+    pub name: String,
+    pub version: String,
+    pub package_type: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,6 +344,15 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_actions_packages_structs() {
+        let wf = ActionWorkflow { id: 1, name: "build".to_string(), status: "success".to_string() };
+        assert_eq!(wf.name, "build");
+
+        let pkg = Package { id: 1, name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() };
+        assert_eq!(pkg.package_type, "npm");
     }
 
     #[test]

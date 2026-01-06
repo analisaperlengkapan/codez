@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -12,6 +12,7 @@ fn App() -> impl IntoView {
         <Router>
             <nav>
                 <a href="/">"Home"</a> " | "
+                <a href="/explore">"Explore"</a> " | "
                 <a href="/search">"Search"</a> " | "
                 <a href="/notifications">"Notifications"</a> " | "
                 <a href="/admin">"Admin"</a> " | "
@@ -24,8 +25,10 @@ fn App() -> impl IntoView {
             <main>
                 <Routes>
                     <Route path="/" view=Home/>
+                    <Route path="/explore" view=Explore/>
                     <Route path="/admin" view=AdminDashboard/>
                     <Route path="/search" view=Search/>
+                    <Route path="/packages/:owner" view=PackageList/>
                     <Route path="/notifications" view=NotificationList/>
                     <Route path="/login" view=Login/>
                     <Route path="/register" view=Register/>
@@ -38,6 +41,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/issues/:index" view=IssueDetail/>
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
                     <Route path="/repos/:owner/:repo/pulls/:index" view=PullRequestDetail/>
+                    <Route path="/repos/:owner/:repo/actions" view=ActionsList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
@@ -221,6 +225,48 @@ fn Search() -> impl IntoView {
 }
 
 #[component]
+fn Explore() -> impl IntoView {
+    view! {
+        <div class="explore">
+            <h2>"Explore Codeza"</h2>
+            <Search/>
+        </div>
+    }
+}
+
+#[component]
+fn PackageList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+
+    let (packages, set_packages) = create_signal(vec![]);
+    create_effect(move |_| {
+         // Mock
+         let mock = vec![
+             Package { id: 1, name: "lib-rs".to_string(), version: "0.1.0".to_string(), package_type: "cargo".to_string() }
+         ];
+         set_packages.set(mock);
+    });
+
+    view! {
+        <div class="package-list">
+            <h3>"Packages for " {owner}</h3>
+            <ul>
+                <For
+                    each=move || packages.get()
+                    key=|p| p.id
+                    children=move |p| {
+                        view! {
+                            <li>{p.name} " (" {p.package_type} ") - " {p.version}</li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
 fn Login() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
@@ -387,6 +433,7 @@ fn RepoDetail() -> impl IntoView {
     let projects_href = move || format!("/repos/{}/{}/projects", owner(), repo_name());
     let wiki_href = move || format!("/repos/{}/{}/wiki", owner(), repo_name());
     let settings_href = move || format!("/repos/{}/{}/settings", owner(), repo_name());
+    let actions_href = move || format!("/repos/{}/{}/actions", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
@@ -402,9 +449,43 @@ fn RepoDetail() -> impl IntoView {
                 <a href=milestones_href>"Milestones"</a> " | "
                 <a href=projects_href>"Projects"</a> " | "
                 <a href=wiki_href>"Wiki"</a> " | "
+                <a href=actions_href>"Actions"</a> " | "
                 <a href=settings_href>"Settings"</a>
             </p>
             <TopicList/>
+        </div>
+    }
+}
+
+#[component]
+fn ActionsList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (workflows, set_workflows) = create_signal(vec![]);
+    create_effect(move |_| {
+         // Mock
+         let mock = vec![
+             ActionWorkflow { id: 1, name: "Build".to_string(), status: "Success".to_string() }
+         ];
+         set_workflows.set(mock);
+    });
+
+    view! {
+        <div class="actions-list">
+            <h3>"Actions for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || workflows.get()
+                    key=|w| w.id
+                    children=move |w| {
+                        view! {
+                            <li>{w.name} " - " {w.status}</li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -1175,5 +1256,14 @@ mod tests {
             created: "t".to_string(),
         };
         assert_eq!(a.op_type, "op");
+    }
+
+    #[test]
+    fn test_actions_pkg_logic() {
+        let wf = ActionWorkflow { id: 1, name: "w".to_string(), status: "s".to_string() };
+        assert_eq!(wf.name, "w");
+
+        let p = Package { id: 1, name: "p".to_string(), version: "v".to_string(), package_type: "t".to_string() };
+        assert_eq!(p.name, "p");
     }
 }
