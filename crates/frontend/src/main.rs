@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -922,6 +922,21 @@ fn RepoSettings() -> impl IntoView {
             <Webhooks/>
             <SecretList/>
             <DeployKeyList/>
+            <MirrorSettings/>
+        </div>
+    }
+}
+
+#[component]
+fn MirrorSettings() -> impl IntoView {
+    let on_sync = move |_| {
+        leptos::logging::log!("Syncing mirror...");
+    };
+
+    view! {
+        <div class="mirror-settings">
+            <h4>"Mirror Settings"</h4>
+            <button on:click=on_sync>"Sync Now"</button>
         </div>
     }
 }
@@ -1029,7 +1044,35 @@ fn UserSettings() -> impl IntoView {
                 on:input=move |ev| set_name.set(event_target_value(&ev)) />
             <button on:click=on_save>"Save"</button>
             <SSHKeys/>
+            <GpgKeys/>
             <TwoFactorSettings/>
+        </div>
+    }
+}
+
+#[component]
+fn GpgKeys() -> impl IntoView {
+    let (keys, set_keys) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_keys.set(vec![
+            GpgKey { id: 1, key_id: "ID".to_string(), primary_key_id: "PID".to_string(), public_key: "PUB".to_string(), emails: vec![] }
+        ]);
+    });
+
+    view! {
+        <div class="gpg-keys">
+            <h4>"GPG Keys"</h4>
+            <ul>
+                <For
+                    each=move || keys.get()
+                    key=|k| k.id
+                    children=move |k| {
+                        view! {
+                            <li>{k.key_id}</li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -1201,6 +1244,12 @@ mod tests {
         // Simple verification that types align
         let repo = Repository::new(1, "test".to_string(), "me".to_string());
         assert_eq!(repo.name, "test");
+    }
+
+    #[test]
+    fn test_gpg_mirror_logic() {
+        let k = GpgKey { id: 1, key_id: "id".to_string(), primary_key_id: "p".to_string(), public_key: "k".to_string(), emails: vec![] };
+        assert_eq!(k.key_id, "id");
     }
 
     #[test]

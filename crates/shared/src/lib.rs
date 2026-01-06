@@ -10,6 +10,7 @@ pub struct Repository {
     pub stars_count: u64,
     pub forks_count: u64,
     pub watchers_count: u64,
+    pub is_mirror: bool,
 }
 
 impl Repository {
@@ -23,8 +24,23 @@ impl Repository {
             stars_count: 0,
             forks_count: 0,
             watchers_count: 0,
+            is_mirror: false,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GpgKey {
+    pub id: u64,
+    pub key_id: String,
+    pub primary_key_id: String,
+    pub public_key: String,
+    pub emails: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateGpgKeyOption {
+    pub armored_public_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -675,6 +691,13 @@ mod tests {
         assert_eq!(repo.owner, "jules");
         assert_eq!(repo.private, false);
         assert_eq!(repo.stars_count, 0);
+        assert_eq!(repo.is_mirror, false);
+    }
+
+    #[test]
+    fn test_gpg_key() {
+        let key = GpgKey { id: 1, key_id: "ID".to_string(), primary_key_id: "PID".to_string(), public_key: "PUB".to_string(), emails: vec![] };
+        assert_eq!(key.key_id, "ID");
     }
 
     #[test]

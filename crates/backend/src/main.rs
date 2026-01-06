@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -61,6 +61,8 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))
         .route("/api/v1/admin/notices", get(list_notices))
         .route("/api/v1/user/2fa", get(get_2fa).post(update_2fa))
+        .route("/api/v1/user/gpg_keys", get(list_gpg_keys).post(create_gpg_key))
+        .route("/api/v1/repos/:owner/:repo/mirror-sync", post(mirror_sync))
         .layer(CorsLayer::permissive())
 }
 
@@ -631,6 +633,34 @@ async fn get_2fa() -> Json<TwoFactor> {
 }
 
 async fn update_2fa(Json(_payload): Json<TwoFactor>) -> StatusCode {
+    StatusCode::OK
+}
+
+async fn list_gpg_keys() -> Json<Vec<GpgKey>> {
+    let keys = vec![
+        GpgKey {
+            id: 1,
+            key_id: "ID".to_string(),
+            primary_key_id: "PID".to_string(),
+            public_key: "PUB".to_string(),
+            emails: vec![],
+        }
+    ];
+    Json(keys)
+}
+
+async fn create_gpg_key(Json(payload): Json<CreateGpgKeyOption>) -> (StatusCode, Json<GpgKey>) {
+    let key = GpgKey {
+        id: 2,
+        key_id: "NEWID".to_string(),
+        primary_key_id: "NEWPID".to_string(),
+        public_key: payload.armored_public_key,
+        emails: vec![],
+    };
+    (StatusCode::CREATED, Json(key))
+}
+
+async fn mirror_sync(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
     StatusCode::OK
 }
 
@@ -1265,6 +1295,34 @@ mod tests {
         let app = app();
         let response = app
             .oneshot(Request::builder().uri("/api/v1/user/2fa").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_create_gpg_key() {
+        let app = app();
+        let payload = CreateGpgKeyOption { armored_public_key: "key".to_string() };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/user/gpg_keys")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_mirror_sync() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/mirror-sync").body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
