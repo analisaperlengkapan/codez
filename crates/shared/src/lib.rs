@@ -525,6 +525,19 @@ pub struct OAuth2Application {
     pub redirect_uris: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MigrateRepoOption {
+    pub clone_addr: String,
+    pub repo_name: String,
+    pub service: String, // "git", "github", "gitlab", "gitea"
+    pub mirror: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TransferRepoOption {
+    pub new_owner: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -950,5 +963,19 @@ mod tests {
 
         let app = OAuth2Application { id: 1, name: "app".to_string(), client_id: "cid".to_string(), redirect_uris: vec![] };
         assert_eq!(app.client_id, "cid");
+    }
+
+    #[test]
+    fn test_migrate_transfer_options() {
+        let m = MigrateRepoOption {
+            clone_addr: "url".to_string(),
+            repo_name: "name".to_string(),
+            service: "git".to_string(),
+            mirror: true,
+        };
+        assert!(m.mirror);
+
+        let t = TransferRepoOption { new_owner: "new".to_string() };
+        assert_eq!(t.new_owner, "new");
     }
 }

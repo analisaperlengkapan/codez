@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -86,6 +86,10 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/branch_protections", get(list_branch_protections))
         .route("/api/v1/user/emails", get(list_emails))
         .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps))
+        .route("/api/v1/repos/migrate", post(migrate_repo))
+        .route("/api/v1/repos/:owner/:repo/transfer", post(transfer_repo))
+        .route("/api/v1/user/keys/:id", axum::routing::delete(delete_ssh_key))
+        .route("/api/v1/user/gpg_keys/:id", axum::routing::delete(delete_gpg_key))
         .layer(CorsLayer::permissive())
 }
 
@@ -881,6 +885,24 @@ async fn list_oauth2_apps() -> Json<Vec<OAuth2Application>> {
     vec![
         OAuth2Application { id: 1, name: "MyApp".to_string(), client_id: "client-id".to_string(), redirect_uris: vec![] }
     ].into()
+}
+
+async fn migrate_repo(Json(payload): Json<MigrateRepoOption>) -> (StatusCode, Json<Repository>) {
+    // Stub
+    let repo = Repository::new(4, payload.repo_name, "admin".to_string());
+    (StatusCode::CREATED, Json(repo))
+}
+
+async fn transfer_repo(Path((_owner, _repo)): Path<(String, String)>, Json(_payload): Json<TransferRepoOption>) -> StatusCode {
+    StatusCode::ACCEPTED
+}
+
+async fn delete_ssh_key(Path(_id): Path<u64>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn delete_gpg_key(Path(_id): Path<u64>) -> StatusCode {
+    StatusCode::NO_CONTENT
 }
 
 #[cfg(test)]
@@ -1821,5 +1843,32 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_migrate_transfer_delete_endpoints() {
+        let app = app();
+
+        let migrate_payload = MigrateRepoOption { clone_addr: "u".to_string(), repo_name: "m".to_string(), service: "git".to_string(), mirror: false };
+        let response = app.clone()
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/migrate").header("Content-Type", "application/json").body(Body::from(serde_json::to_string(&migrate_payload).unwrap())).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let transfer_payload = TransferRepoOption { new_owner: "new".to_string() };
+        let response = app.clone()
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/transfer").header("Content-Type", "application/json").body(Body::from(serde_json::to_string(&transfer_payload).unwrap())).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+
+        let response = app.clone()
+            .oneshot(Request::builder().method("DELETE").uri("/api/v1/user/keys/1").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let response = app
+            .oneshot(Request::builder().method("DELETE").uri("/api/v1/user/gpg_keys/1").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 }
