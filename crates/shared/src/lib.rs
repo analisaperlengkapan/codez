@@ -496,6 +496,35 @@ pub struct AdminUserEditOption {
     pub admin: Option<bool>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LanguageStat {
+    pub language: String,
+    pub percentage: u8,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProtectedBranch {
+    pub name: String,
+    pub enable_push: bool,
+    pub enable_force_push: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EmailAddress {
+    pub email: String,
+    pub verified: bool,
+    pub primary: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OAuth2Application {
+    pub id: u64,
+    pub name: String,
+    pub client_id: String,
+    pub redirect_uris: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -888,5 +917,38 @@ mod tests {
         let json = serde_json::to_string(&repo).unwrap();
         let deserialized: Repository = serde_json::from_str(&json).unwrap();
         assert_eq!(repo, deserialized);
+    }
+
+    #[test]
+    fn test_templates() {
+        let l = LicenseTemplate { key: "mit".to_string(), name: "MIT".to_string(), url: "u".to_string() };
+        assert_eq!(l.key, "mit");
+        let g = GitignoreTemplate { name: "Rust".to_string(), source: "target/".to_string() };
+        assert_eq!(g.name, "Rust");
+    }
+
+    #[test]
+    fn test_review_admin_structs() {
+        let u = User::new(1, "u".to_string(), None);
+        let rr = ReviewRequest { reviewer: u, status: "s".to_string() };
+        assert_eq!(rr.status, "s");
+
+        let a = AdminUserEditOption { email: Some("e".to_string()), password: None, active: Some(true), admin: None };
+        assert!(a.active.unwrap());
+    }
+
+    #[test]
+    fn test_lang_prot_email_app() {
+        let l = LanguageStat { language: "Rust".to_string(), percentage: 100, color: "#dea584".to_string() };
+        assert_eq!(l.percentage, 100);
+
+        let pb = ProtectedBranch { name: "main".to_string(), enable_push: false, enable_force_push: false };
+        assert!(!pb.enable_push);
+
+        let e = EmailAddress { email: "e".to_string(), verified: true, primary: true };
+        assert!(e.primary);
+
+        let app = OAuth2Application { id: 1, name: "app".to_string(), client_id: "cid".to_string(), redirect_uris: vec![] };
+        assert_eq!(app.client_id, "cid");
     }
 }

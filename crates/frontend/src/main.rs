@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -652,6 +652,37 @@ fn RepoDetail() -> impl IntoView {
                 <a href=settings_href>"Settings"</a>
             </p>
             <TopicList/>
+            <RepoLanguages/>
+        </div>
+    }
+}
+
+#[component]
+fn RepoLanguages() -> impl IntoView {
+    let params = use_params_map();
+    let (stats, set_stats) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_stats.set(vec![
+            LanguageStat { language: "Rust".to_string(), percentage: 100, color: "#dea584".to_string() }
+        ]);
+    });
+
+    view! {
+        <div class="repo-languages">
+            <div class="lang-bar" style="display: flex; height: 10px; border-radius: 5px; overflow: hidden;">
+                <For each=move || stats.get() key=|s| s.language.clone() children=move |s| {
+                    view! {
+                        <div style=format!("width: {}%; background-color: {}", s.percentage, s.color) title=format!("{} {}%", s.language, s.percentage)></div>
+                    }
+                }/>
+            </div>
+            <ul>
+                <For each=move || stats.get() key=|s| s.language.clone() children=move |s| {
+                    view! {
+                        <li><span style=format!("color: {}", s.color)>"●"</span> {s.language} " " {s.percentage} "%"</li>
+                    }
+                }/>
+            </ul>
         </div>
     }
 }
@@ -1045,6 +1076,7 @@ fn BranchList() -> impl IntoView {
     view! {
         <div class="branch-list">
             <h3>"Branches for " {owner} " / " {repo_name}</h3>
+            <p><a href="settings/branches">"Protection Rules"</a></p>
             <ul>
                 <For
                     each=move || branches.get()
@@ -1384,6 +1416,50 @@ fn UserSettings() -> impl IntoView {
             <SSHKeys/>
             <GpgKeys/>
             <TwoFactorSettings/>
+            <EmailSettings/>
+            <AppSettings/>
+        </div>
+    }
+}
+
+#[component]
+fn EmailSettings() -> impl IntoView {
+    let (emails, set_emails) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_emails.set(vec![
+            EmailAddress { email: "user@example.com".to_string(), verified: true, primary: true }
+        ]);
+    });
+
+    view! {
+        <div class="email-settings">
+            <h4>"Email Addresses"</h4>
+            <ul>
+                <For each=move || emails.get() key=|e| e.email.clone() children=move |e| {
+                    view! { <li>{e.email} {if e.primary { "(Primary)" } else { "" }} {if e.verified { "(Verified)" } else { "(Unverified)" }}</li> }
+                }/>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn AppSettings() -> impl IntoView {
+    let (apps, set_apps) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_apps.set(vec![
+            OAuth2Application { id: 1, name: "App1".to_string(), client_id: "id".to_string(), redirect_uris: vec![] }
+        ]);
+    });
+
+    view! {
+        <div class="app-settings">
+            <h4>"Applications"</h4>
+            <ul>
+                <For each=move || apps.get() key=|a| a.id children=move |a| {
+                    view! { <li>{a.name} " (" {a.client_id} ")"</li> }
+                }/>
+            </ul>
         </div>
     }
 }
@@ -1823,5 +1899,13 @@ mod tests {
         assert_eq!(rr.status, "s");
         let ae = AdminUserEditOption { email: None, password: None, active: None, admin: Some(true) };
         assert!(ae.admin.unwrap());
+    }
+
+    #[test]
+    fn test_new_settings_ui() {
+        let l = LanguageStat { language: "L".to_string(), percentage: 50, color: "c".to_string() };
+        assert_eq!(l.percentage, 50);
+        let e = EmailAddress { email: "e".to_string(), verified: true, primary: false };
+        assert!(!e.primary);
     }
 }

@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -82,6 +82,10 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/pulls/:index/requested_reviewers", post(request_review))
         .route("/api/v1/admin/users", get(admin_list_users))
         .route("/api/v1/admin/users/:username", post(admin_edit_user).delete(admin_delete_user))
+        .route("/api/v1/repos/:owner/:repo/languages", get(get_repo_languages))
+        .route("/api/v1/repos/:owner/:repo/branch_protections", get(list_branch_protections))
+        .route("/api/v1/user/emails", get(list_emails))
+        .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps))
         .layer(CorsLayer::permissive())
 }
 
@@ -853,6 +857,30 @@ async fn admin_edit_user(
 
 async fn admin_delete_user(Path(_username): Path<String>) -> StatusCode {
     StatusCode::NO_CONTENT
+}
+
+async fn get_repo_languages(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<LanguageStat>> {
+    vec![
+        LanguageStat { language: "Rust".to_string(), percentage: 100, color: "#dea584".to_string() }
+    ].into()
+}
+
+async fn list_branch_protections(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<ProtectedBranch>> {
+    vec![
+        ProtectedBranch { name: "main".to_string(), enable_push: false, enable_force_push: false }
+    ].into()
+}
+
+async fn list_emails() -> Json<Vec<EmailAddress>> {
+    vec![
+        EmailAddress { email: "admin@codeza.com".to_string(), verified: true, primary: true }
+    ].into()
+}
+
+async fn list_oauth2_apps() -> Json<Vec<OAuth2Application>> {
+    vec![
+        OAuth2Application { id: 1, name: "MyApp".to_string(), client_id: "client-id".to_string(), redirect_uris: vec![] }
+    ].into()
 }
 
 #[cfg(test)]
@@ -1762,5 +1790,36 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_lang_prot_email_apps_endpoints() {
+        let app = app();
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/languages").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/branch_protections").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/user/emails").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/user/applications/oauth2").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
