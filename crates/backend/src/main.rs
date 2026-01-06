@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -90,6 +90,10 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/transfer", post(transfer_repo))
         .route("/api/v1/user/keys/:id", axum::routing::delete(delete_ssh_key))
         .route("/api/v1/user/gpg_keys/:id", axum::routing::delete(delete_gpg_key))
+        .route("/api/v1/repos/:owner/:repo/milestones/:id/stats", get(get_milestone_stats))
+        .route("/api/v1/repos/:owner/:repo/pulls/:index/files", get(get_pr_files))
+        .route("/api/v1/repos/:owner/:repo/issues/:index/labels", post(add_issue_label))
+        .route("/api/v1/repos/:owner/:repo/issues/:index/labels/:id", axum::routing::delete(remove_issue_label))
         .layer(CorsLayer::permissive())
 }
 
@@ -902,6 +906,33 @@ async fn delete_ssh_key(Path(_id): Path<u64>) -> StatusCode {
 }
 
 async fn delete_gpg_key(Path(_id): Path<u64>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn get_milestone_stats(Path((_owner, _repo, _id)): Path<(String, String, u64)>) -> Json<MilestoneStats> {
+    Json(MilestoneStats { open_issues: 10, closed_issues: 5 })
+}
+
+async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<DiffFile>> {
+    let diffs = vec![
+        DiffFile {
+            name: "src/lib.rs".to_string(),
+            old_name: None,
+            index: "idx".to_string(),
+            additions: 2,
+            deletions: 1,
+            type_: "modify".to_string(),
+            lines: vec![],
+        }
+    ];
+    Json(diffs)
+}
+
+async fn add_issue_label(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {
+    StatusCode::CREATED
+}
+
+async fn remove_issue_label(Path((_owner, _repo, _index, _id)): Path<(String, String, u64, u64)>) -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
@@ -1868,6 +1899,30 @@ mod tests {
 
         let response = app
             .oneshot(Request::builder().method("DELETE").uri("/api/v1/user/gpg_keys/1").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_milestone_labels_pr_files() {
+        let app = app();
+        let response = app.clone()
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/milestones/1/stats").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app.clone()
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/pulls/1/files").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app.clone()
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/issues/1/labels").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let response = app
+            .oneshot(Request::builder().method("DELETE").uri("/api/v1/repos/admin/codeza/issues/1/labels/1").body(Body::empty()).unwrap())
             .await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }

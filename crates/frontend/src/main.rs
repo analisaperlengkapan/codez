@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -24,7 +24,7 @@ fn App() -> impl IntoView {
             </nav>
             <main>
                 <Routes>
-                    <Route path="/" view=Home/>
+                    <Route path="/" view=UserDashboard/>
                     <Route path="/explore" view=Explore/>
                     <Route path="/admin" view=AdminDashboard/>
                     <Route path="/admin/users" view=AdminUsers/>
@@ -53,6 +53,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
                     <Route path="/repos/:owner/:repo/labels" view=LabelList/>
                     <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>
+                    <Route path="/repos/:owner/:repo/milestones/:index" view=MilestoneDetail/>
                     <Route path="/repos/:owner/:repo/projects" view=ProjectList/>
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
                     <Route path="/repos/:owner/:repo/settings" view=RepoSettings/>
@@ -64,10 +65,14 @@ fn App() -> impl IntoView {
 
 #[component]
 fn Home() -> impl IntoView {
+    view! { <UserDashboard/> }
+}
+
+#[component]
+fn UserDashboard() -> impl IntoView {
     let (repos, set_repos) = create_signal(vec![]);
 
     create_effect(move |_| {
-        // Mock fetch
         let mock_repos = vec![
             Repository::new(1, "codeza".to_string(), "admin".to_string()),
             Repository::new(2, "gitea-clone".to_string(), "user".to_string()),
@@ -76,23 +81,20 @@ fn Home() -> impl IntoView {
     });
 
     view! {
-        <div class="container">
-            <h1>"Repositories"</h1>
-            <ul>
-                <For
-                    each=move || repos.get()
-                    key=|repo| repo.id
-                    children=move |repo| {
-                        let href = format!("/repos/{}/{}", repo.owner, repo.name);
-                        view! {
-                            <li>
-                                <a href=href>{repo.owner} " / " {repo.name}</a>
-                            </li>
-                        }
-                    }
-                />
-            </ul>
-            <ActivityFeed/>
+        <div class="dashboard container">
+            <div class="dashboard-sidebar">
+                <h3>"My Repositories"</h3>
+                <ul>
+                    <For each=move || repos.get() key=|repo| repo.id children=move |repo| {
+                        view! { <li><a href=format!("/repos/{}/{}", repo.owner, repo.name)>{repo.name}</a></li> }
+                    }/>
+                </ul>
+                <h3>"Organizations"</h3>
+                <p><a href="/orgs/codeza-org">"codeza-org"</a></p>
+            </div>
+            <div class="dashboard-content">
+                <ActivityFeed/>
+            </div>
         </div>
     }
 }
@@ -584,6 +586,7 @@ fn CreateRepo() -> impl IntoView {
     view! {
         <div class="create-repo">
             <h3>"Create New Repository"</h3>
+            <p><a href="/repo/migrate">"Import Repository"</a></p>
             <form on:submit=on_submit>
                 <input
                     type="text"
@@ -602,6 +605,34 @@ fn CreateRepo() -> impl IntoView {
                     </select>
                 </div>
                 <button type="submit">"Create"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+fn MigrateRepo() -> impl IntoView {
+    let (url, set_url) = create_signal("".to_string());
+    let (name, set_name) = create_signal("".to_string());
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = MigrateRepoOption {
+            clone_addr: url.get(),
+            repo_name: name.get(),
+            service: "git".to_string(),
+            mirror: false,
+        };
+        leptos::logging::log!("Migrating repo: {:?}", payload);
+    };
+
+    view! {
+        <div class="migrate-repo">
+            <h3>"Migrate / Import Repository"</h3>
+            <form on:submit=on_submit>
+                <input type="text" placeholder="Clone URL" prop:value=url on:input=move |ev| set_url.set(event_target_value(&ev)) />
+                <input type="text" placeholder="Repository Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
+                <button type="submit">"Migrate Repo"</button>
             </form>
         </div>
     }
@@ -983,6 +1014,8 @@ fn IssueDetail() -> impl IntoView {
              <div class="sidebar">
                  <h4>"Assignees"</h4>
                  <button>"Add Assignee"</button>
+                 <h4>"Labels"</h4>
+                 <button>"Add Label"</button>
              </div>
         </div>
     }
@@ -1048,12 +1081,38 @@ fn MilestoneList() -> impl IntoView {
                     children=move |m| {
                         view! {
                             <li>
-                                <strong>{m.title}</strong> " (" {m.state} ")"
+                                <a href=format!("/repos/{}/{}/milestones/{}", owner(), repo_name(), m.id)>
+                                    <strong>{m.title}</strong>
+                                </a> " (" {m.state} ")"
                             </li>
                         }
                     }
                 />
             </ul>
+        </div>
+    }
+}
+
+#[component]
+fn MilestoneDetail() -> impl IntoView {
+    let params = use_params_map();
+    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default());
+    let (stats, set_stats) = create_signal(MilestoneStats { open_issues: 0, closed_issues: 0 });
+
+    create_effect(move |_| {
+        set_stats.set(MilestoneStats { open_issues: 10, closed_issues: 5 });
+    });
+
+    view! {
+        <div class="milestone-detail">
+            <h3>"Milestone " {index}</h3>
+            <div class="stats">
+                <span>{move || stats.get().open_issues} " Open"</span> " | "
+                <span>{move || stats.get().closed_issues} " Closed"</span>
+            </div>
+            <div class="progress-bar" style="width: 100%; background: #eee; height: 10px;">
+                <div style="width: 33%; background: green; height: 100%;"></div>
+            </div>
         </div>
     }
 }
@@ -1256,6 +1315,28 @@ fn RepoSettings() -> impl IntoView {
             <MirrorSettings/>
             <CollaboratorList/>
             <LfsSettings/>
+            <TransferSettings/>
+        </div>
+    }
+}
+
+#[component]
+fn TransferSettings() -> impl IntoView {
+    let (new_owner, set_new_owner) = create_signal("".to_string());
+
+    let on_transfer = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = TransferRepoOption { new_owner: new_owner.get() };
+        leptos::logging::log!("Transferring repo: {:?}", payload);
+    };
+
+    view! {
+        <div class="transfer-settings">
+            <h4>"Transfer Ownership"</h4>
+            <form on:submit=on_transfer>
+                <input type="text" placeholder="New Owner Username" prop:value=new_owner on:input=move |ev| set_new_owner.set(event_target_value(&ev)) />
+                <button type="submit" class="danger">"Transfer"</button>
+            </form>
         </div>
     }
 }
@@ -1482,7 +1563,7 @@ fn GpgKeys() -> impl IntoView {
                     key=|k| k.id
                     children=move |k| {
                         view! {
-                            <li>{k.key_id}</li>
+                            <li>{k.key_id} <button>"Delete"</button></li>
                         }
                     }
                 />
@@ -1530,7 +1611,7 @@ fn SSHKeys() -> impl IntoView {
                     key=|k| k.id
                     children=move |k| {
                         view! {
-                            <li>{k.title} " - " {k.fingerprint}</li>
+                            <li>{k.title} " - " {k.fingerprint} <button>"Delete"</button></li>
                         }
                     }
                 />
@@ -1554,6 +1635,11 @@ fn PullRequestDetail() -> impl IntoView {
             <div class="sidebar">
                 <h4>"Reviewers"</h4>
                 <button>"Request Review"</button>
+            </div>
+            <div class="tabs">
+                <button>"Conversation"</button>
+                <button>"Commits"</button>
+                <button>"Files Changed"</button>
             </div>
             <button on:click=on_merge>"Merge Pull Request"</button>
         </div>
@@ -1907,5 +1993,19 @@ mod tests {
         assert_eq!(l.percentage, 50);
         let e = EmailAddress { email: "e".to_string(), verified: true, primary: false };
         assert!(!e.primary);
+    }
+
+    #[test]
+    fn test_migrate_transfer_ui() {
+        let m = MigrateRepoOption { clone_addr: "u".to_string(), repo_name: "n".to_string(), service: "s".to_string(), mirror: false };
+        assert!(!m.mirror);
+        let t = TransferRepoOption { new_owner: "o".to_string() };
+        assert_eq!(t.new_owner, "o");
+    }
+
+    #[test]
+    fn test_milestone_detail_ui() {
+        let s = MilestoneStats { open_issues: 1, closed_issues: 0 };
+        assert_eq!(s.open_issues, 1);
     }
 }

@@ -538,6 +538,12 @@ pub struct TransferRepoOption {
     pub new_owner: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MilestoneStats {
+    pub open_issues: u64,
+    pub closed_issues: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -977,5 +983,11 @@ mod tests {
 
         let t = TransferRepoOption { new_owner: "new".to_string() };
         assert_eq!(t.new_owner, "new");
+    }
+
+    #[test]
+    fn test_milestone_stats() {
+        let stats = MilestoneStats { open_issues: 10, closed_issues: 5 };
+        assert_eq!(stats.open_issues, 10);
     }
 }
