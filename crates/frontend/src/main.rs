@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, CreateReactionOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -393,6 +393,33 @@ fn OrgProfile() -> impl IntoView {
                 None => view! { <p>"Org not found"</p> }.into_view()
             }}
             <TeamList/>
+            <OrgMembers/>
+        </div>
+    }
+}
+
+#[component]
+fn OrgMembers() -> impl IntoView {
+    let params = use_params_map();
+    let org = move || params.with(|params| params.get("org").cloned().unwrap_or_default());
+
+    let (members, set_members) = create_signal(vec![]);
+    create_effect(move |_| {
+         // Mock
+         let mock = vec![
+             OrgMember { user: User::new(1, "admin".to_string(), None), role: "owner".to_string() }
+         ];
+         set_members.set(mock);
+    });
+
+    view! {
+        <div class="org-members">
+            <h3>"Members of " {org}</h3>
+            <ul>
+                <For each=move || members.get() key=|m| m.user.id children=move |m| {
+                    view! { <li>{m.user.username} " (" {m.role} ")"</li> }
+                }/>
+            </ul>
         </div>
     }
 }
@@ -422,10 +449,37 @@ fn UserProfile() -> impl IntoView {
                             <a href=format!("/users/{}/followers", u.username)>"Followers"</a> " | "
                             <a href=format!("/users/{}/following", u.username)>"Following"</a>
                         </p>
+                        <UserHeatmap/>
                     </div>
                 }.into_view(),
                 None => view! { <p>"User not found"</p> }.into_view()
             }}
+        </div>
+    }
+}
+
+#[component]
+fn UserHeatmap() -> impl IntoView {
+    let params = use_params_map();
+    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let (data, set_data) = create_signal(vec![]);
+
+    create_effect(move |_| {
+        set_data.set(vec![
+            Contribution { date: "2023-01-01".to_string(), count: 5 }
+        ]);
+    });
+
+    view! {
+        <div class="user-heatmap">
+            <h3>"Contributions for " {username}</h3>
+            <div class="calendar-stub">
+                <For each=move || data.get() key=|c| c.date.clone() children=move |c| {
+                     view! {
+                         <div title=format!("{} commits on {}", c.count, c.date) style="display:inline-block; width: 10px; height: 10px; background-color: green; margin: 1px;"></div>
+                     }
+                }/>
+            </div>
         </div>
     }
 }
@@ -529,6 +583,11 @@ fn RepoDetail() -> impl IntoView {
     view! {
         <div class="repo-detail">
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
+            <div class="repo-actions">
+                <button on:click=move |_| leptos::logging::log!("Watch")>"Watch"</button>
+                <button on:click=move |_| leptos::logging::log!("Star")>"Star"</button>
+                <button on:click=move |_| leptos::logging::log!("Fork")>"Fork"</button>
+            </div>
             <p>"Clone URL: https://codeza.com/" {owner} "/" {repo_name} ".git"</p>
             <p>
                 <a href=code_href>"Code"</a> " | "
@@ -1684,5 +1743,13 @@ mod tests {
     fn test_diff_components() {
         let line = DiffLine { line_no_old: None, line_no_new: Some(1), content: "c".to_string(), type_: "add".to_string() };
         assert_eq!(line.content, "c");
+    }
+
+    #[test]
+    fn test_heatmap_org_logic() {
+        let c = Contribution { date: "d".to_string(), count: 1 };
+        assert_eq!(c.count, 1);
+        let m = OrgMember { user: User::new(1, "u".to_string(), None), role: "r".to_string() };
+        assert_eq!(m.role, "r");
     }
 }

@@ -456,6 +456,18 @@ pub struct DiffFile {
     pub lines: Vec<DiffLine>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Contribution {
+    pub date: String,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OrgMember {
+    pub user: User,
+    pub role: String, // "owner", "member"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -527,6 +539,16 @@ mod tests {
             lines: vec![line],
         };
         assert_eq!(file.name, "file.rs");
+    }
+
+    #[test]
+    fn test_contribution_org_member() {
+        let c = Contribution { date: "2023-01-01".to_string(), count: 5 };
+        assert_eq!(c.count, 5);
+
+        let user = User::new(1, "u".to_string(), None);
+        let m = OrgMember { user, role: "owner".to_string() };
+        assert_eq!(m.role, "owner");
     }
 
     #[test]

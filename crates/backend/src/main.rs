@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -73,6 +73,9 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/raw/*path", get(get_raw_file))
         .route("/api/v1/users/:username/followers", get(list_followers))
         .route("/api/v1/users/:username/following", get(list_following))
+        .route("/api/v1/users/:username/heatmap", get(get_user_heatmap))
+        .route("/api/v1/orgs/:org/members", get(list_org_members))
+        .route("/api/v1/orgs/:org/members/:username", post(add_org_member).delete(remove_org_member))
         .layer(CorsLayer::permissive())
 }
 
@@ -781,6 +784,27 @@ async fn list_followers(Path(_username): Path<String>) -> Json<Vec<User>> {
 
 async fn list_following(Path(_username): Path<String>) -> Json<Vec<User>> {
     vec![User::new(3, "following".to_string(), None)].into()
+}
+
+async fn get_user_heatmap(Path(_username): Path<String>) -> Json<Vec<Contribution>> {
+    vec![
+        Contribution { date: "2023-01-01".to_string(), count: 5 },
+        Contribution { date: "2023-01-02".to_string(), count: 2 },
+    ].into()
+}
+
+async fn list_org_members(Path(_org): Path<String>) -> Json<Vec<OrgMember>> {
+    vec![
+        OrgMember { user: User::new(1, "admin".to_string(), None), role: "owner".to_string() }
+    ].into()
+}
+
+async fn add_org_member(Path((_org, _username)): Path<(String, String)>) -> StatusCode {
+    StatusCode::CREATED
+}
+
+async fn remove_org_member(Path((_org, _username)): Path<(String, String)>) -> StatusCode {
+    StatusCode::NO_CONTENT
 }
 
 #[cfg(test)]
@@ -1577,5 +1601,42 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_get_heatmap() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/users/admin/heatmap").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let heat: Vec<Contribution> = serde_json::from_slice(&body).unwrap();
+        assert!(!heat.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_org_members() {
+        let app = app();
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/orgs/codeza/members").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .clone()
+            .oneshot(Request::builder().method("POST").uri("/api/v1/orgs/codeza/members/newuser").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let response = app
+            .oneshot(Request::builder().method("DELETE").uri("/api/v1/orgs/codeza/members/olduser").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 }
