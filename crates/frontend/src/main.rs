@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -42,6 +42,8 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
                     <Route path="/repos/:owner/:repo/pulls/:index" view=PullRequestDetail/>
                     <Route path="/repos/:owner/:repo/actions" view=ActionsList/>
+                    <Route path="/repos/:owner/:repo/branches" view=BranchList/>
+                    <Route path="/repos/:owner/:repo/tags" view=TagList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
@@ -462,6 +464,8 @@ fn RepoDetail() -> impl IntoView {
     let wiki_href = move || format!("/repos/{}/{}/wiki", owner(), repo_name());
     let settings_href = move || format!("/repos/{}/{}/settings", owner(), repo_name());
     let actions_href = move || format!("/repos/{}/{}/actions", owner(), repo_name());
+    let branches_href = move || format!("/repos/{}/{}/branches", owner(), repo_name());
+    let tags_href = move || format!("/repos/{}/{}/tags", owner(), repo_name());
 
     view! {
         <div class="repo-detail">
@@ -470,6 +474,8 @@ fn RepoDetail() -> impl IntoView {
             <p>
                 <a href=code_href>"Code"</a> " | "
                 <a href=commits_href>"Commits"</a> " | "
+                <a href=branches_href>"Branches"</a> " | "
+                <a href=tags_href>"Tags"</a> " | "
                 <a href=issues_href>"Issues"</a> " | "
                 <a href=pulls_href>"Pull Requests"</a> " | "
                 <a href=releases_href>"Releases"</a> " | "
@@ -795,6 +801,72 @@ fn MilestoneList() -> impl IntoView {
 }
 
 #[component]
+fn BranchList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (branches, set_branches) = create_signal(vec![]);
+    create_effect(move |_| {
+        let user = User::new(1, "admin".to_string(), None);
+        let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+        set_branches.set(vec![
+            Branch { name: "main".to_string(), commit, protected: true }
+        ]);
+    });
+
+    view! {
+        <div class="branch-list">
+            <h3>"Branches for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || branches.get()
+                    key=|b| b.name.clone()
+                    children=move |b| {
+                        view! {
+                            <li>{b.name} " (" {if b.protected { "Protected" } else { "Regular" }} ")"</li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn TagList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (tags, set_tags) = create_signal(vec![]);
+    create_effect(move |_| {
+        let user = User::new(1, "admin".to_string(), None);
+        let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+        set_tags.set(vec![
+            Tag { name: "v1.0".to_string(), id: "1".to_string(), commit }
+        ]);
+    });
+
+    view! {
+        <div class="tag-list">
+            <h3>"Tags for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || tags.get()
+                    key=|t| t.id.clone()
+                    children=move |t| {
+                        view! {
+                            <li>{t.name}</li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
 fn ProjectList() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
@@ -923,6 +995,34 @@ fn RepoSettings() -> impl IntoView {
             <SecretList/>
             <DeployKeyList/>
             <MirrorSettings/>
+            <CollaboratorList/>
+        </div>
+    }
+}
+
+#[component]
+fn CollaboratorList() -> impl IntoView {
+    let (collabs, set_collabs) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_collabs.set(vec![
+            Collaborator { user: User::new(3, "collab".to_string(), None), permissions: "write".to_string() }
+        ]);
+    });
+
+    view! {
+        <div class="collaborators">
+            <h4>"Collaborators"</h4>
+            <ul>
+                <For
+                    each=move || collabs.get()
+                    key=|c| c.user.id
+                    children=move |c| {
+                        view! {
+                            <li>{c.user.username} " (" {c.permissions} ")"</li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }

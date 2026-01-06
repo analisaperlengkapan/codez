@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -63,6 +63,9 @@ fn app() -> Router {
         .route("/api/v1/user/2fa", get(get_2fa).post(update_2fa))
         .route("/api/v1/user/gpg_keys", get(list_gpg_keys).post(create_gpg_key))
         .route("/api/v1/repos/:owner/:repo/mirror-sync", post(mirror_sync))
+        .route("/api/v1/repos/:owner/:repo/collaborators/:collaborator", get(get_collaborator).put(add_collaborator))
+        .route("/api/v1/repos/:owner/:repo/branches", get(list_branches).post(create_branch))
+        .route("/api/v1/repos/:owner/:repo/tags", get(list_tags))
         .layer(CorsLayer::permissive())
 }
 
@@ -662,6 +665,49 @@ async fn create_gpg_key(Json(payload): Json<CreateGpgKeyOption>) -> (StatusCode,
 
 async fn mirror_sync(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
     StatusCode::OK
+}
+
+async fn get_collaborator(Path((_owner, _repo, collaborator)): Path<(String, String, String)>) -> Json<Option<Collaborator>> {
+    if collaborator == "collab" {
+        Json(Some(Collaborator {
+            user: User::new(3, "collab".to_string(), None),
+            permissions: "write".to_string(),
+        }))
+    } else {
+        Json(None)
+    }
+}
+
+async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String, String, String)>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let branches = vec![
+        Branch { name: "main".to_string(), commit, protected: true }
+    ];
+    Json(branches)
+}
+
+async fn create_branch(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateBranchOption>
+) -> (StatusCode, Json<Branch>) {
+    let user = User::new(1, "admin".to_string(), None);
+    let commit = Commit { sha: "def".to_string(), message: "new branch".to_string(), author: user, date: "now".to_string() };
+    let branch = Branch { name: payload.name, commit, protected: false };
+    (StatusCode::CREATED, Json(branch))
+}
+
+async fn list_tags(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Tag>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let tags = vec![
+        Tag { name: "v1.0".to_string(), id: "1".to_string(), commit }
+    ];
+    Json(tags)
 }
 
 #[cfg(test)]
@@ -1326,5 +1372,44 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_get_collaborator() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/collaborators/collab").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let collab: Option<Collaborator> = serde_json::from_slice(&body).unwrap();
+        assert!(collab.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_list_branches() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/branches").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let branches: Vec<Branch> = serde_json::from_slice(&body).unwrap();
+        assert!(!branches.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_tags() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/tags").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let tags: Vec<Tag> = serde_json::from_slice(&body).unwrap();
+        assert!(!tags.is_empty());
     }
 }
