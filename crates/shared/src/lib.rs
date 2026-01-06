@@ -553,6 +553,14 @@ pub struct CodeSearchResult {
     pub content: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LfsLock {
+    pub id: String,
+    pub path: String,
+    pub owner: User,
+    pub locked_at: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1010,5 +1018,12 @@ mod tests {
             content: Some("c".to_string()),
         };
         assert_eq!(r.name, "n");
+    }
+
+    #[test]
+    fn test_lfs_lock() {
+        let u = User::new(1, "u".to_string(), None);
+        let l = LfsLock { id: "1".to_string(), path: "p".to_string(), owner: u, locked_at: "t".to_string() };
+        assert_eq!(l.path, "p");
     }
 }

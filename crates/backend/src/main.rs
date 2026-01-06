@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, CodeSearchResult, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, CodeSearchResult, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsLock, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -96,6 +96,9 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/search", get(search_repo_code))
         .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))
+        .route("/api/v1/repos/:owner/:repo/git/lfs/locks", get(list_lfs_locks).post(create_lfs_lock))
+        .route("/api/v1/user/gpg_keys/:id/verify", post(verify_gpg_key))
+        .route("/api/v1/notifications/threads/:id", axum::routing::patch(mark_notification_read))
         .layer(CorsLayer::permissive())
 }
 
@@ -959,6 +962,25 @@ async fn update_wiki_page(
     Json(_payload): Json<CreateWikiPageOption>
 ) -> StatusCode {
     StatusCode::OK
+}
+
+async fn list_lfs_locks(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<LfsLock>> {
+    let user = User::new(1, "admin".to_string(), None);
+    vec![
+        LfsLock { id: "1".to_string(), path: "file.bin".to_string(), owner: user, locked_at: "now".to_string() }
+    ].into()
+}
+
+async fn create_lfs_lock(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
+    StatusCode::CREATED
+}
+
+async fn verify_gpg_key(Path(_id): Path<u64>) -> StatusCode {
+    StatusCode::OK
+}
+
+async fn mark_notification_read(Path(_id): Path<u64>) -> StatusCode {
+    StatusCode::RESET_CONTENT
 }
 
 #[cfg(test)]
@@ -1977,5 +1999,29 @@ mod tests {
             )
             .await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_lfs_locks_verification_notif() {
+        let app = app();
+        let response = app.clone()
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/git/lfs/locks").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app.clone()
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/git/lfs/locks").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let response = app.clone()
+            .oneshot(Request::builder().method("POST").uri("/api/v1/user/gpg_keys/1/verify").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(Request::builder().method("PATCH").uri("/api/v1/notifications/threads/1").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::RESET_CONTENT);
     }
 }
