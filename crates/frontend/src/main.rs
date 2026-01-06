@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -27,6 +27,7 @@ fn App() -> impl IntoView {
                     <Route path="/" view=Home/>
                     <Route path="/explore" view=Explore/>
                     <Route path="/admin" view=AdminDashboard/>
+                    <Route path="/admin/users" view=AdminUsers/>
                     <Route path="/search" view=Search/>
                     <Route path="/packages/:owner" view=PackageList/>
                     <Route path="/notifications" view=NotificationList/>
@@ -145,6 +146,7 @@ fn AdminDashboard() -> impl IntoView {
     view! {
         <div class="admin-dashboard">
             <h2>"Admin Dashboard"</h2>
+            <p><a href="/admin/users">"Manage Users"</a></p>
             {move || match stats.get() {
                 Some(s) => view! {
                     <div>
@@ -157,6 +159,41 @@ fn AdminDashboard() -> impl IntoView {
                 None => view! { <p>"Loading..."</p> }.into_view()
             }}
             <AdminNotices/>
+        </div>
+    }
+}
+
+#[component]
+fn AdminUsers() -> impl IntoView {
+    let (users, set_users) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_users.set(vec![
+            User::new(1, "admin".to_string(), Some("admin@example.com".to_string())),
+            User::new(2, "user".to_string(), Some("user@example.com".to_string())),
+        ]);
+    });
+
+    view! {
+        <div class="admin-users">
+            <h3>"User Management"</h3>
+            <table>
+                <thead><tr><th>"ID"</th><th>"Username"</th><th>"Email"</th><th>"Actions"</th></tr></thead>
+                <tbody>
+                    <For each=move || users.get() key=|u| u.id children=move |u| {
+                        view! {
+                            <tr>
+                                <td>{u.id}</td>
+                                <td>{u.username}</td>
+                                <td>{u.email}</td>
+                                <td>
+                                    <button>"Edit"</button>
+                                    <button>"Delete"</button>
+                                </td>
+                            </tr>
+                        }
+                    }/>
+                </tbody>
+            </table>
         </div>
     }
 }
@@ -1438,6 +1475,10 @@ fn PullRequestDetail() -> impl IntoView {
     view! {
         <div class="pr-detail">
             <h3>"Pull Request #" {index}</h3>
+            <div class="sidebar">
+                <h4>"Reviewers"</h4>
+                <button>"Request Review"</button>
+            </div>
             <button on:click=on_merge>"Merge Pull Request"</button>
         </div>
     }
@@ -1773,5 +1814,14 @@ mod tests {
     fn test_template_ui_logic() {
         let l = LicenseTemplate { key: "k".to_string(), name: "n".to_string(), url: "u".to_string() };
         assert_eq!(l.name, "n");
+    }
+
+    #[test]
+    fn test_admin_review_ui() {
+        let u = User::new(1, "u".to_string(), None);
+        let rr = ReviewRequest { reviewer: u, status: "s".to_string() };
+        assert_eq!(rr.status, "s");
+        let ae = AdminUserEditOption { email: None, password: None, active: None, admin: Some(true) };
+        assert!(ae.admin.unwrap());
     }
 }

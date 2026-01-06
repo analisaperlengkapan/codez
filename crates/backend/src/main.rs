@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -79,6 +79,9 @@ fn app() -> Router {
         .route("/api/v1/licenses", get(list_licenses))
         .route("/api/v1/gitignore/templates", get(list_gitignores))
         .route("/api/v1/repos/:owner/:repo/issues/:index/assignees", post(add_issue_assignee))
+        .route("/api/v1/repos/:owner/:repo/pulls/:index/requested_reviewers", post(request_review))
+        .route("/api/v1/admin/users", get(admin_list_users))
+        .route("/api/v1/admin/users/:username", post(admin_edit_user).delete(admin_delete_user))
         .layer(CorsLayer::permissive())
 }
 
@@ -827,6 +830,29 @@ async fn list_gitignores() -> Json<Vec<GitignoreTemplate>> {
 
 async fn add_issue_assignee(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {
     StatusCode::CREATED
+}
+
+async fn request_review(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> (StatusCode, Json<ReviewRequest>) {
+    let reviewer = User::new(2, "reviewer".to_string(), None);
+    (StatusCode::CREATED, Json(ReviewRequest { reviewer, status: "requested".to_string() }))
+}
+
+async fn admin_list_users() -> Json<Vec<User>> {
+    vec![
+        User::new(1, "admin".to_string(), Some("admin@example.com".to_string())),
+        User::new(2, "user".to_string(), Some("user@example.com".to_string())),
+    ].into()
+}
+
+async fn admin_edit_user(
+    Path(_username): Path<String>,
+    Json(_payload): Json<AdminUserEditOption>
+) -> StatusCode {
+    StatusCode::OK
+}
+
+async fn admin_delete_user(Path(_username): Path<String>) -> StatusCode {
+    StatusCode::NO_CONTENT
 }
 
 #[cfg(test)]
@@ -1693,5 +1719,48 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_request_review() {
+        let app = app();
+        let response = app
+            .clone()
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/pulls/1/requested_reviewers").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_admin_user_management() {
+        let app = app();
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/admin/users").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let payload = AdminUserEditOption { email: Some("new@e.com".to_string()), password: None, active: None, admin: None };
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/admin/users/user1")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap()
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(Request::builder().method("DELETE").uri("/api/v1/admin/users/user1").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
     }
 }

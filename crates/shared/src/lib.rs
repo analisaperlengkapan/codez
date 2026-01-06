@@ -482,6 +482,20 @@ pub struct GitignoreTemplate {
     pub source: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReviewRequest {
+    pub reviewer: User,
+    pub status: String, // "requested", "approved", "changes_requested", "comment"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AdminUserEditOption {
+    pub email: Option<String>,
+    pub password: Option<String>,
+    pub active: Option<bool>,
+    pub admin: Option<bool>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
