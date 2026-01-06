@@ -299,6 +299,16 @@ pub struct AdminStats {
     pub issues: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Activity {
+    pub id: u64,
+    pub user_id: u64,
+    pub user_name: String,
+    pub op_type: String,
+    pub content: String,
+    pub created: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -308,6 +318,12 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_activity_struct() {
+        let act = Activity { id: 1, user_id: 1, user_name: "u".to_string(), op_type: "push".to_string(), content: "c".to_string(), created: "d".to_string() };
+        assert_eq!(act.op_type, "push");
     }
 
     #[test]

@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -51,6 +51,7 @@ fn app() -> Router {
         .route("/api/v1/orgs/:org/teams", get(list_teams))
         .route("/api/v1/repos/:owner/:repo/projects", get(list_projects))
         .route("/api/v1/admin/stats", get(get_admin_stats))
+        .route("/api/v1/user/feeds", get(list_feeds))
         .layer(CorsLayer::permissive())
 }
 
@@ -524,6 +525,20 @@ async fn get_admin_stats() -> Json<AdminStats> {
         orgs: 5,
         issues: 100,
     })
+}
+
+async fn list_feeds() -> Json<Vec<Activity>> {
+    let feeds = vec![
+        Activity {
+            id: 1,
+            user_id: 1,
+            user_name: "admin".to_string(),
+            op_type: "push_branch".to_string(),
+            content: "pushed to main".to_string(),
+            created: "2023-01-01".to_string(),
+        }
+    ];
+    Json(feeds)
 }
 
 #[cfg(test)]
@@ -1042,5 +1057,18 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let stats: AdminStats = serde_json::from_slice(&body).unwrap();
         assert!(stats.users > 0);
+    }
+
+    #[tokio::test]
+    async fn test_list_feeds() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/user/feeds").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let feeds: Vec<Activity> = serde_json::from_slice(&body).unwrap();
+        assert!(!feeds.is_empty());
     }
 }

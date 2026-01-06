@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -77,6 +77,45 @@ fn Home() -> impl IntoView {
                         view! {
                             <li>
                                 <a href=href>{repo.owner} " / " {repo.name}</a>
+                            </li>
+                        }
+                    }
+                />
+            </ul>
+            <ActivityFeed/>
+        </div>
+    }
+}
+
+#[component]
+fn ActivityFeed() -> impl IntoView {
+    let (activities, set_activities) = create_signal(vec![]);
+    create_effect(move |_| {
+        // Mock
+        let mock = vec![
+            Activity {
+                id: 1,
+                user_id: 1,
+                user_name: "admin".to_string(),
+                op_type: "push_branch".to_string(),
+                content: "pushed to main".to_string(),
+                created: "just now".to_string(),
+            }
+        ];
+        set_activities.set(mock);
+    });
+
+    view! {
+        <div class="activity-feed">
+            <h2>"Activity Feed"</h2>
+            <ul>
+                <For
+                    each=move || activities.get()
+                    key=|a| a.id
+                    children=move |a| {
+                        view! {
+                            <li>
+                                <strong>{a.user_name}</strong> " " {a.op_type} ": " {a.content}
                             </li>
                         }
                     }
@@ -1123,5 +1162,18 @@ mod tests {
     fn test_admin_logic() {
         let s = AdminStats { users: 1, repos: 2, orgs: 3, issues: 4 };
         assert_eq!(s.users, 1);
+    }
+
+    #[test]
+    fn test_activity_logic() {
+        let a = Activity {
+            id: 1,
+            user_id: 1,
+            user_name: "u".to_string(),
+            op_type: "op".to_string(),
+            content: "c".to_string(),
+            created: "t".to_string(),
+        };
+        assert_eq!(a.op_type, "op");
     }
 }
