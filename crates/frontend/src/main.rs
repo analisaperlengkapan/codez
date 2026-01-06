@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -554,6 +554,16 @@ fn CreateRepo() -> impl IntoView {
                     prop:value=name
                     on:input=move |ev| set_name.set(event_target_value(&ev))
                 />
+                <div class="template-selectors">
+                    <select>
+                        <option value="">"Select .gitignore Template"</option>
+                        <option value="Rust">"Rust"</option>
+                    </select>
+                    <select>
+                        <option value="">"Select License"</option>
+                        <option value="MIT">"MIT"</option>
+                    </select>
+                </div>
                 <button type="submit">"Create"</button>
             </form>
         </div>
@@ -902,6 +912,10 @@ fn IssueDetail() -> impl IntoView {
                 <textarea placeholder="Add a comment"></textarea>
                 <button>"Comment"</button>
              </form>
+             <div class="sidebar">
+                 <h4>"Assignees"</h4>
+                 <button>"Add Assignee"</button>
+             </div>
         </div>
     }
 }
@@ -1495,6 +1509,7 @@ fn IssueList() -> impl IntoView {
                 body: Some("Bug report".to_string()),
                 state: "open".to_string(),
                 user,
+                assignees: vec![],
             }
         ];
         set_issues.set(mock);
@@ -1559,7 +1574,8 @@ mod tests {
             title: "t".to_string(),
             body: None,
             state: "o".to_string(),
-            user
+            user,
+            assignees: vec![],
         };
         assert_eq!(issue.title, "t");
     }
@@ -1751,5 +1767,11 @@ mod tests {
         assert_eq!(c.count, 1);
         let m = OrgMember { user: User::new(1, "u".to_string(), None), role: "r".to_string() };
         assert_eq!(m.role, "r");
+    }
+
+    #[test]
+    fn test_template_ui_logic() {
+        let l = LicenseTemplate { key: "k".to_string(), name: "n".to_string(), url: "u".to_string() };
+        assert_eq!(l.name, "n");
     }
 }

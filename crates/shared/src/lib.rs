@@ -89,6 +89,7 @@ pub struct Issue {
     pub body: Option<String>,
     pub state: String,
     pub user: User,
+    pub assignees: Vec<User>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -468,6 +469,19 @@ pub struct OrgMember {
     pub role: String, // "owner", "member"
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LicenseTemplate {
+    pub key: String,
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct GitignoreTemplate {
+    pub name: String,
+    pub source: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -808,6 +822,7 @@ mod tests {
             body: None,
             state: "open".to_string(),
             user,
+            assignees: vec![],
         };
         assert_eq!(issue.title, "Bug");
 

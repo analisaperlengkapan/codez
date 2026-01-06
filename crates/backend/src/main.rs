@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LicenseTemplate, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, OrgMember, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -76,6 +76,9 @@ fn app() -> Router {
         .route("/api/v1/users/:username/heatmap", get(get_user_heatmap))
         .route("/api/v1/orgs/:org/members", get(list_org_members))
         .route("/api/v1/orgs/:org/members/:username", post(add_org_member).delete(remove_org_member))
+        .route("/api/v1/licenses", get(list_licenses))
+        .route("/api/v1/gitignore/templates", get(list_gitignores))
+        .route("/api/v1/repos/:owner/:repo/issues/:index/assignees", post(add_issue_assignee))
         .layer(CorsLayer::permissive())
 }
 
@@ -121,6 +124,7 @@ async fn list_issues(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<
             body: Some("This is a bug".to_string()),
             state: "open".to_string(),
             user,
+            assignees: vec![],
         }
     ];
     Json(issues)
@@ -138,6 +142,7 @@ async fn create_issue(
         body: payload.body,
         state: "open".to_string(),
         user,
+        assignees: vec![],
     };
     (StatusCode::CREATED, Json(issue))
 }
@@ -297,6 +302,7 @@ async fn get_issue(Path((_owner, _repo, index)): Path<(String, String, u64)>) ->
         body: Some("Body".to_string()),
         state: "open".to_string(),
         user,
+        assignees: vec![],
     }))
 }
 
@@ -805,6 +811,22 @@ async fn add_org_member(Path((_org, _username)): Path<(String, String)>) -> Stat
 
 async fn remove_org_member(Path((_org, _username)): Path<(String, String)>) -> StatusCode {
     StatusCode::NO_CONTENT
+}
+
+async fn list_licenses() -> Json<Vec<LicenseTemplate>> {
+    vec![
+        LicenseTemplate { key: "mit".to_string(), name: "MIT License".to_string(), url: "http://...".to_string() }
+    ].into()
+}
+
+async fn list_gitignores() -> Json<Vec<GitignoreTemplate>> {
+    vec![
+        GitignoreTemplate { name: "Rust".to_string(), source: "target/".to_string() }
+    ].into()
+}
+
+async fn add_issue_assignee(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {
+    StatusCode::CREATED
 }
 
 #[cfg(test)]
@@ -1638,5 +1660,38 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_licenses_gitignores() {
+        let app = app();
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/licenses").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/gitignore/templates").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_add_assignee() {
+        let app = app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues/1/assignees")
+                    .body(Body::empty())
+                    .unwrap()
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 }
