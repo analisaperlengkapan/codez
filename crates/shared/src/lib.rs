@@ -410,6 +410,33 @@ pub struct TwoFactor {
     pub method: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LfsObject {
+    pub oid: String,
+    pub size: u64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OAuth2Provider {
+    pub name: String,
+    pub display_name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Reaction {
+    pub id: u64,
+    pub user: User,
+    pub content: String, // e.g., "+1", "-1", "laugh", "confused", "heart", "hooray", "eyes", "rocket"
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateReactionOption {
+    pub content: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,6 +470,22 @@ mod tests {
 
         let two_fa = TwoFactor { enabled: true, method: "totp".to_string() };
         assert!(two_fa.enabled);
+    }
+
+    #[test]
+    fn test_lfs_oauth_reaction() {
+        let lfs = LfsObject { oid: "oid".to_string(), size: 100, created_at: "now".to_string() };
+        assert_eq!(lfs.size, 100);
+
+        let oauth = OAuth2Provider { name: "github".to_string(), display_name: "GitHub".to_string(), url: "http".to_string() };
+        assert_eq!(oauth.name, "github");
+
+        let user = User::new(1, "u".to_string(), None);
+        let react = Reaction { id: 1, user, content: "heart".to_string(), created_at: "now".to_string() };
+        assert_eq!(react.content, "heart");
+
+        let opt = CreateReactionOption { content: "+1".to_string() };
+        assert_eq!(opt.content, "+1");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Comment, Commit, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, CreateReactionOption, DeployKey, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -320,6 +320,12 @@ fn Login() -> impl IntoView {
                     on:input=move |ev| set_password.set(event_target_value(&ev)) />
                 <button type="submit">"Login"</button>
             </form>
+            <div class="oauth2">
+                <h3>"Or sign in with:"</h3>
+                <ul>
+                    <li><a href="/auth/github">"GitHub"</a></li>
+                </ul>
+            </div>
         </div>
     }
 }
@@ -717,6 +723,9 @@ fn IssueDetail() -> impl IntoView {
                         view! {
                             <div class="comment">
                                 <strong>{c.user.username}</strong> ": " {c.body}
+                                <div class="reactions">
+                                    <button>"👍"</button>
+                                </div>
                             </div>
                         }
                     }
@@ -996,6 +1005,17 @@ fn RepoSettings() -> impl IntoView {
             <DeployKeyList/>
             <MirrorSettings/>
             <CollaboratorList/>
+            <LfsSettings/>
+        </div>
+    }
+}
+
+#[component]
+fn LfsSettings() -> impl IntoView {
+    view! {
+        <div class="lfs-settings">
+            <h4>"LFS Settings"</h4>
+            <p>"LFS is enabled for this repository."</p>
         </div>
     }
 }
@@ -1535,5 +1555,20 @@ mod tests {
         assert_eq!(n.type_, "t");
         let tf = TwoFactor { enabled: true, method: "m".to_string() };
         assert!(tf.enabled);
+    }
+
+    #[test]
+    fn test_lfs_oauth_structs() {
+        let lfs = LfsObject { oid: "o".to_string(), size: 10, created_at: "t".to_string() };
+        assert_eq!(lfs.size, 10);
+        let oa = OAuth2Provider { name: "n".to_string(), display_name: "d".to_string(), url: "u".to_string() };
+        assert_eq!(oa.name, "n");
+    }
+
+    #[test]
+    fn test_reaction_struct() {
+        let u = User::new(1, "u".to_string(), None);
+        let r = Reaction { id: 1, user: u, content: "c".to_string(), created_at: "t".to_string() };
+        assert_eq!(r.content, "c");
     }
 }

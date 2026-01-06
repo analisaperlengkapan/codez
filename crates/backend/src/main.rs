@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, GpgKey, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Branch, Collaborator, Commit, Comment, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, GpgKey, Issue, LfsObject, Label, LoginOption, MergePullRequestOption, Milestone, Notification, OAuth2Provider, Organization, Package, Project, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Tag, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -66,6 +66,9 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/collaborators/:collaborator", get(get_collaborator).put(add_collaborator))
         .route("/api/v1/repos/:owner/:repo/branches", get(list_branches).post(create_branch))
         .route("/api/v1/repos/:owner/:repo/tags", get(list_tags))
+        .route("/api/v1/repos/:owner/:repo/media", post(upload_media))
+        .route("/api/v1/user/oauth2", get(list_oauth2_providers))
+        .route("/api/v1/repos/:owner/:repo/issues/comments/:id/reactions", post(add_reaction))
         .layer(CorsLayer::permissive())
 }
 
@@ -708,6 +711,41 @@ async fn list_tags(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Ta
         Tag { name: "v1.0".to_string(), id: "1".to_string(), commit }
     ];
     Json(tags)
+}
+
+async fn upload_media(Path((_owner, _repo)): Path<(String, String)>) -> (StatusCode, Json<LfsObject>) {
+    // Stub LFS upload
+    let lfs = LfsObject {
+        oid: "abc1234567890".to_string(),
+        size: 1024,
+        created_at: "2023-01-01".to_string(),
+    };
+    (StatusCode::CREATED, Json(lfs))
+}
+
+async fn list_oauth2_providers() -> Json<Vec<OAuth2Provider>> {
+    let providers = vec![
+        OAuth2Provider {
+            name: "github".to_string(),
+            display_name: "GitHub".to_string(),
+            url: "http://github.com/login".to_string(),
+        }
+    ];
+    Json(providers)
+}
+
+async fn add_reaction(
+    Path((_owner, _repo, _id)): Path<(String, String, u64)>,
+    Json(payload): Json<CreateReactionOption>
+) -> (StatusCode, Json<Reaction>) {
+    let user = User::new(1, "admin".to_string(), None);
+    let reaction = Reaction {
+        id: 1,
+        user,
+        content: payload.content,
+        created_at: "now".to_string(),
+    };
+    (StatusCode::CREATED, Json(reaction))
 }
 
 #[cfg(test)]
@@ -1411,5 +1449,52 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let tags: Vec<Tag> = serde_json::from_slice(&body).unwrap();
         assert!(!tags.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_upload_media() {
+        let app = app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/media")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_list_oauth2() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/user/oauth2").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let providers: Vec<OAuth2Provider> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(providers[0].name, "github");
+    }
+
+    #[tokio::test]
+    async fn test_add_reaction() {
+        let app = app();
+        let payload = CreateReactionOption { content: "+1".to_string() };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues/comments/1/reactions")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 }
