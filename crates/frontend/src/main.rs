@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Secret, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -151,6 +151,34 @@ fn AdminDashboard() -> impl IntoView {
                 }.into_view(),
                 None => view! { <p>"Loading..."</p> }.into_view()
             }}
+            <AdminNotices/>
+        </div>
+    }
+}
+
+#[component]
+fn AdminNotices() -> impl IntoView {
+    let (notices, set_notices) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_notices.set(vec![
+            SystemNotice { id: 1, type_: "info".to_string(), description: "System update".to_string() }
+        ]);
+    });
+
+    view! {
+        <div class="admin-notices">
+            <h3>"System Notices"</h3>
+            <ul>
+                <For
+                    each=move || notices.get()
+                    key=|n| n.id
+                    children=move |n| {
+                        view! {
+                            <li>[{n.type_}] {n.description}</li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -1001,6 +1029,27 @@ fn UserSettings() -> impl IntoView {
                 on:input=move |ev| set_name.set(event_target_value(&ev)) />
             <button on:click=on_save>"Save"</button>
             <SSHKeys/>
+            <TwoFactorSettings/>
+        </div>
+    }
+}
+
+#[component]
+fn TwoFactorSettings() -> impl IntoView {
+    let (status, set_status) = create_signal(None::<TwoFactor>);
+    create_effect(move |_| {
+        set_status.set(Some(TwoFactor { enabled: false, method: "totp".to_string() }));
+    });
+
+    view! {
+        <div class="2fa-settings">
+            <h4>"Two-Factor Authentication"</h4>
+            {move || match status.get() {
+                Some(s) => view! {
+                    <p>"Status: " {if s.enabled { "Enabled" } else { "Disabled" }} " (" {s.method} ")"</p>
+                }.into_view(),
+                None => view! { <p>"Loading..."</p> }.into_view()
+            }}
         </div>
     }
 }
@@ -1329,5 +1378,13 @@ mod tests {
         assert_eq!(s.name, "n");
         let k = DeployKey { id: 1, title: "t".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
         assert_eq!(k.title, "t");
+    }
+
+    #[test]
+    fn test_notice_2fa_logic() {
+        let n = SystemNotice { id: 1, type_: "t".to_string(), description: "d".to_string() };
+        assert_eq!(n.type_, "t");
+        let tf = TwoFactor { enabled: true, method: "m".to_string() };
+        assert!(tf.enabled);
     }
 }

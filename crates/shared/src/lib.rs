@@ -355,6 +355,19 @@ pub struct DeployKey {
     pub fingerprint: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SystemNotice {
+    pub id: u64,
+    pub type_: String,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct TwoFactor {
+    pub enabled: bool,
+    pub method: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -364,6 +377,15 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_system_notices_2fa() {
+        let notice = SystemNotice { id: 1, type_: "alert".to_string(), description: "System update".to_string() };
+        assert_eq!(notice.type_, "alert");
+
+        let two_fa = TwoFactor { enabled: true, method: "totp".to_string() };
+        assert!(two_fa.enabled);
     }
 
     #[test]

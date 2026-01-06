@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, SystemNotice, Team, Topic, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -59,6 +59,8 @@ fn app() -> Router {
         .route("/api/v1/packages/:owner", get(list_packages))
         .route("/api/v1/repos/:owner/:repo/secrets", get(list_secrets).post(create_secret))
         .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))
+        .route("/api/v1/admin/notices", get(list_notices))
+        .route("/api/v1/user/2fa", get(get_2fa).post(update_2fa))
         .layer(CorsLayer::permissive())
 }
 
@@ -615,6 +617,21 @@ async fn create_deploy_key(
         fingerprint: "SHA...".to_string(),
     };
     (StatusCode::CREATED, Json(key))
+}
+
+async fn list_notices() -> Json<Vec<SystemNotice>> {
+    let notices = vec![
+        SystemNotice { id: 1, type_: "info".to_string(), description: "System maintenance at 00:00".to_string() }
+    ];
+    Json(notices)
+}
+
+async fn get_2fa() -> Json<TwoFactor> {
+    Json(TwoFactor { enabled: false, method: "totp".to_string() })
+}
+
+async fn update_2fa(Json(_payload): Json<TwoFactor>) -> StatusCode {
+    StatusCode::OK
 }
 
 #[cfg(test)]
@@ -1228,5 +1245,28 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_list_notices() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/admin/notices").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let notices: Vec<SystemNotice> = serde_json::from_slice(&body).unwrap();
+        assert!(!notices.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_2fa() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/user/2fa").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
