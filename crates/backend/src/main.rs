@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -40,6 +40,9 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/labels", get(list_labels).post(create_label))
         .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))
         .route("/api/v1/repos/:owner/:repo/topics", get(list_topics).put(update_topics))
+        .route("/api/v1/repos/:owner/:repo/star", post(star_repo))
+        .route("/api/v1/repos/:owner/:repo/watch", post(watch_repo))
+        .route("/api/v1/repos/:owner/:repo/fork", post(fork_repo))
         .route("/api/v1/repos/search", get(search_repos))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page))
         .route("/api/v1/repos/:owner/:repo/wiki/pages", post(create_wiki_page))
@@ -376,6 +379,18 @@ async fn update_topics(
     StatusCode::NO_CONTENT
 }
 
+async fn star_repo(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn watch_repo(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+async fn fork_repo(Path((owner, repo)): Path<(String, String)>) -> Json<Repository> {
+    Json(Repository::new(2, repo, owner))
+}
+
 async fn search_repos() -> Json<Vec<Repository>> {
     let repos = vec![
         Repository::new(1, "searched-repo".to_string(), "user".to_string())
@@ -566,6 +581,26 @@ mod tests {
 
         assert_eq!(repos.len(), 2);
         assert_eq!(repos[0].name, "codeza");
+    }
+
+    #[tokio::test]
+    async fn test_star_repo() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/star").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_fork_repo() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/fork").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 
     #[tokio::test]

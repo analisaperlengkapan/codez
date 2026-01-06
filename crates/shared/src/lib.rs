@@ -7,6 +7,9 @@ pub struct Repository {
     pub description: Option<String>,
     pub private: bool,
     pub owner: String,
+    pub stars_count: u64,
+    pub forks_count: u64,
+    pub watchers_count: u64,
 }
 
 impl Repository {
@@ -17,8 +20,16 @@ impl Repository {
             description: None,
             private: false,
             owner,
+            stars_count: 0,
+            forks_count: 0,
+            watchers_count: 0,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RepoActionOption {
+    pub action: String, // "star", "watch"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -588,6 +599,13 @@ mod tests {
         assert_eq!(repo.name, "codeza");
         assert_eq!(repo.owner, "jules");
         assert_eq!(repo.private, false);
+        assert_eq!(repo.stars_count, 0);
+    }
+
+    #[test]
+    fn test_repo_action() {
+        let act = RepoActionOption { action: "star".to_string() };
+        assert_eq!(act.action, "star");
     }
 
     #[test]
