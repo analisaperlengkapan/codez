@@ -544,6 +544,15 @@ pub struct MilestoneStats {
     pub closed_issues: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CodeSearchResult {
+    pub name: String,
+    pub path: String,
+    pub sha: String,
+    pub url: String,
+    pub content: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -989,5 +998,17 @@ mod tests {
     fn test_milestone_stats() {
         let stats = MilestoneStats { open_issues: 10, closed_issues: 5 };
         assert_eq!(stats.open_issues, 10);
+    }
+
+    #[test]
+    fn test_code_search() {
+        let r = CodeSearchResult {
+            name: "n".to_string(),
+            path: "p".to_string(),
+            sha: "s".to_string(),
+            url: "u".to_string(),
+            content: Some("c".to_string()),
+        };
+        assert_eq!(r.name, "n");
     }
 }

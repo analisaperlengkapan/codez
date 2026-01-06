@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, CodeSearchResult, Collaborator, Comment, Commit, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -29,7 +29,9 @@ fn App() -> impl IntoView {
                     <Route path="/admin" view=AdminDashboard/>
                     <Route path="/admin/users" view=AdminUsers/>
                     <Route path="/search" view=Search/>
+                    <Route path="/repos/:owner/:repo/search" view=RepoCodeSearch/>
                     <Route path="/packages/:owner" view=PackageList/>
+                    <Route path="/packages/:owner/:type/:name/:version" view=PackageDetail/>
                     <Route path="/notifications" view=NotificationList/>
                     <Route path="/login" view=Login/>
                     <Route path="/register" view=Register/>
@@ -56,6 +58,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/milestones/:index" view=MilestoneDetail/>
                     <Route path="/repos/:owner/:repo/projects" view=ProjectList/>
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
+                    <Route path="/repos/:owner/:repo/wiki/pages/:page_name/edit" view=WikiEdit/>
                     <Route path="/repos/:owner/:repo/settings" view=RepoSettings/>
                 </Routes>
             </main>
@@ -328,12 +331,27 @@ fn PackageList() -> impl IntoView {
                     each=move || packages.get()
                     key=|p| p.id
                     children=move |p| {
+                         let href = format!("/packages/{}/{}/{}/{}", owner(), p.package_type, p.name, p.version);
                         view! {
-                            <li>{p.name} " (" {p.package_type} ") - " {p.version}</li>
+                            <li><a href=href>{p.name} " (" {p.package_type} ") - " {p.version}</a></li>
                         }
                     }
                 />
             </ul>
+        </div>
+    }
+}
+
+#[component]
+fn PackageDetail() -> impl IntoView {
+    let params = use_params_map();
+    let name = move || params.with(|params| params.get("name").cloned().unwrap_or_default());
+    let version = move || params.with(|params| params.get("version").cloned().unwrap_or_default());
+
+    view! {
+        <div class="package-detail">
+            <h3>"Package: " {name} " " {version}</h3>
+            <p>"Installation instructions..."</p>
         </div>
     }
 }
@@ -1274,14 +1292,70 @@ fn Wiki() -> impl IntoView {
         <div class="wiki">
             <h3>"Wiki for " {owner} " / " {repo_name}</h3>
             {move || match page.get() {
-                Some(p) => view! {
-                    <div>
-                        <h4>{p.title}</h4>
-                        <p>{p.content}</p>
-                    </div>
-                }.into_view(),
+                Some(p) => {
+                    let edit_href = format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), p.title);
+                    view! {
+                        <div>
+                            <h4>{p.title} <a href=edit_href class="button">"Edit"</a></h4>
+                            <p>{p.content}</p>
+                        </div>
+                    }.into_view()
+                },
                 None => view! { <p>"No page"</p> }.into_view()
             }}
+        </div>
+    }
+}
+
+#[component]
+fn WikiEdit() -> impl IntoView {
+    let params = use_params_map();
+    let page_name = move || params.with(|params| params.get("page_name").cloned().unwrap_or_default());
+    let (content, set_content) = create_signal("".to_string());
+
+    let on_save = move |_| {
+        let payload = CreateWikiPageOption { title: page_name(), content: content.get(), message: Some("Updated".to_string()) };
+        leptos::logging::log!("Updating wiki: {:?}", payload);
+    };
+
+    view! {
+        <div class="wiki-edit">
+            <h3>"Editing " {page_name}</h3>
+            <textarea prop:value=content on:input=move |ev| set_content.set(event_target_value(&ev))></textarea>
+            <button on:click=on_save>"Save Page"</button>
+        </div>
+    }
+}
+
+#[component]
+fn RepoCodeSearch() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let (query, set_query) = create_signal("".to_string());
+    let (results, set_results) = create_signal(vec![]);
+
+    let on_search = move |_| {
+        set_results.set(vec![
+            CodeSearchResult { name: "main.rs".to_string(), path: "src/main.rs".to_string(), sha: "123".to_string(), url: "http://...".to_string(), content: Some("fn main".to_string()) }
+        ]);
+    };
+
+    view! {
+        <div class="repo-search">
+            <h3>"Search in " {owner} "/" {repo_name}</h3>
+            <input type="text" placeholder="Search code..." prop:value=query on:input=move |ev| set_query.set(event_target_value(&ev)) />
+            <button on:click=on_search>"Search"</button>
+            <ul>
+                <For each=move || results.get() key=|r| r.sha.clone() children=move |r| {
+                    view! {
+                        <li>
+                            <a href=r.url>{r.path}</a>
+                            <pre>{r.content.unwrap_or_default()}</pre>
+                        </li>
+                    }
+                }/>
+            </ul>
         </div>
     }
 }
@@ -2007,5 +2081,11 @@ mod tests {
     fn test_milestone_detail_ui() {
         let s = MilestoneStats { open_issues: 1, closed_issues: 0 };
         assert_eq!(s.open_issues, 1);
+    }
+
+    #[test]
+    fn test_search_package_wiki_ui() {
+        let r = CodeSearchResult { name: "n".to_string(), path: "p".to_string(), sha: "s".to_string(), url: "u".to_string(), content: None };
+        assert_eq!(r.name, "n");
     }
 }

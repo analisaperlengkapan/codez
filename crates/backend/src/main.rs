@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, CodeSearchResult, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -44,7 +44,6 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/watch", post(watch_repo))
         .route("/api/v1/repos/:owner/:repo/fork", post(fork_repo))
         .route("/api/v1/repos/search", get(search_repos))
-        .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page))
         .route("/api/v1/repos/:owner/:repo/wiki/pages", post(create_wiki_page))
         .route("/api/v1/repos/:owner/:repo/settings", get(get_repo_settings).patch(update_repo_settings))
         .route("/api/v1/user/settings", get(get_user_settings).patch(update_user_settings))
@@ -94,6 +93,9 @@ fn app() -> Router {
         .route("/api/v1/repos/:owner/:repo/pulls/:index/files", get(get_pr_files))
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels", post(add_issue_label))
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels/:id", axum::routing::delete(remove_issue_label))
+        .route("/api/v1/repos/:owner/:repo/search", get(search_repo_code))
+        .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail))
+        .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))
         .layer(CorsLayer::permissive())
 }
 
@@ -934,6 +936,29 @@ async fn add_issue_label(Path((_owner, _repo, _index)): Path<(String, String, u6
 
 async fn remove_issue_label(Path((_owner, _repo, _index, _id)): Path<(String, String, u64, u64)>) -> StatusCode {
     StatusCode::NO_CONTENT
+}
+
+async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<CodeSearchResult>> {
+    vec![
+        CodeSearchResult {
+            name: "main.rs".to_string(),
+            path: "src/main.rs".to_string(),
+            sha: "abc".to_string(),
+            url: "http://...".to_string(),
+            content: Some("fn main() {}".to_string()),
+        }
+    ].into()
+}
+
+async fn get_package_detail(Path((_owner, _type, _name, _version)): Path<(String, String, String, String)>) -> Json<Package> {
+    Json(Package { id: 1, name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() })
+}
+
+async fn update_wiki_page(
+    Path((_owner, _repo, _page_name)): Path<(String, String, String)>,
+    Json(_payload): Json<CreateWikiPageOption>
+) -> StatusCode {
+    StatusCode::OK
 }
 
 #[cfg(test)]
@@ -1925,5 +1950,32 @@ mod tests {
             .oneshot(Request::builder().method("DELETE").uri("/api/v1/repos/admin/codeza/issues/1/labels/1").body(Body::empty()).unwrap())
             .await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_search_package_wiki_edit() {
+        let app = app();
+        let response = app.clone()
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/search").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = app.clone()
+            .oneshot(Request::builder().uri("/api/v1/packages/admin/npm/pkg/1.0").body(Body::empty()).unwrap())
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let payload = CreateWikiPageOption { title: "T".to_string(), content: "C".to_string(), message: None };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/repos/admin/codeza/wiki/pages/Home")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap()
+            )
+            .await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
