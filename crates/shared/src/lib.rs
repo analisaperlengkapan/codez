@@ -275,6 +275,22 @@ pub struct CreateHookOption {
     pub active: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Team {
+    pub id: u64,
+    pub name: String,
+    pub description: Option<String>,
+    pub permission: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Project {
+    pub id: u64,
+    pub title: String,
+    pub description: Option<String>,
+    pub is_closed: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,6 +300,15 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_team_project_structs() {
+        let team = Team { id: 1, name: "dev".to_string(), description: None, permission: "write".to_string() };
+        assert_eq!(team.name, "dev");
+
+        let project = Project { id: 1, title: "v1".to_string(), description: None, is_closed: false };
+        assert!(!project.is_closed);
     }
 
     #[test]

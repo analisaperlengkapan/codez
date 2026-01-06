@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -48,6 +48,8 @@ fn app() -> Router {
         .route("/api/v1/notifications", get(list_notifications))
         .route("/api/v1/user/keys", get(list_keys).post(create_key))
         .route("/api/v1/repos/:owner/:repo/hooks", get(list_hooks).post(create_hook))
+        .route("/api/v1/orgs/:org/teams", get(list_teams))
+        .route("/api/v1/repos/:owner/:repo/projects", get(list_projects))
         .layer(CorsLayer::permissive())
 }
 
@@ -488,6 +490,30 @@ async fn create_hook(
         active: payload.active,
     };
     (StatusCode::CREATED, Json(hook))
+}
+
+async fn list_teams(Path(_org): Path<String>) -> Json<Vec<Team>> {
+    let teams = vec![
+        Team {
+            id: 1,
+            name: "Developers".to_string(),
+            description: Some("Dev Team".to_string()),
+            permission: "write".to_string(),
+        }
+    ];
+    Json(teams)
+}
+
+async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Project>> {
+    let projects = vec![
+        Project {
+            id: 1,
+            title: "Kanban Board".to_string(),
+            description: None,
+            is_closed: false,
+        }
+    ];
+    Json(projects)
 }
 
 #[cfg(test)]
@@ -967,5 +993,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_list_teams() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/orgs/codeza-org/teams").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let teams: Vec<Team> = serde_json::from_slice(&body).unwrap();
+        assert!(!teams.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_projects() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/projects").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let projects: Vec<Project> = serde_json::from_slice(&body).unwrap();
+        assert!(!projects.is_empty());
     }
 }

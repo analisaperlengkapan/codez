@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -41,6 +41,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
                     <Route path="/repos/:owner/:repo/labels" view=LabelList/>
                     <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>
+                    <Route path="/repos/:owner/:repo/projects" view=ProjectList/>
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
                     <Route path="/repos/:owner/:repo/settings" view=RepoSettings/>
                 </Routes>
@@ -239,6 +240,7 @@ fn OrgProfile() -> impl IntoView {
                 }.into_view(),
                 None => view! { <p>"Org not found"</p> }.into_view()
             }}
+            <TeamList/>
         </div>
     }
 }
@@ -315,6 +317,7 @@ fn RepoDetail() -> impl IntoView {
     let releases_href = move || format!("/repos/{}/{}/releases", owner(), repo_name());
     let labels_href = move || format!("/repos/{}/{}/labels", owner(), repo_name());
     let milestones_href = move || format!("/repos/{}/{}/milestones", owner(), repo_name());
+    let projects_href = move || format!("/repos/{}/{}/projects", owner(), repo_name());
     let wiki_href = move || format!("/repos/{}/{}/wiki", owner(), repo_name());
     let settings_href = move || format!("/repos/{}/{}/settings", owner(), repo_name());
 
@@ -330,6 +333,7 @@ fn RepoDetail() -> impl IntoView {
                 <a href=releases_href>"Releases"</a> " | "
                 <a href=labels_href>"Labels"</a> " | "
                 <a href=milestones_href>"Milestones"</a> " | "
+                <a href=projects_href>"Projects"</a> " | "
                 <a href=wiki_href>"Wiki"</a> " | "
                 <a href=settings_href>"Settings"</a>
             </p>
@@ -605,6 +609,75 @@ fn MilestoneList() -> impl IntoView {
                         view! {
                             <li>
                                 <strong>{m.title}</strong> " (" {m.state} ")"
+                            </li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn ProjectList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (projects, set_projects) = create_signal(vec![]);
+    create_effect(move |_| {
+         // Mock
+         let mock = vec![
+             Project { id: 1, title: "v1.0".to_string(), description: None, is_closed: false }
+         ];
+         set_projects.set(mock);
+    });
+
+    view! {
+        <div class="project-list">
+            <h3>"Projects for " {owner} " / " {repo_name}</h3>
+            <ul>
+                <For
+                    each=move || projects.get()
+                    key=|p| p.id
+                    children=move |p| {
+                        view! {
+                            <li>
+                                <strong>{p.title}</strong> " (" {if p.is_closed { "Closed" } else { "Open" }} ")"
+                            </li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn TeamList() -> impl IntoView {
+    let params = use_params_map();
+    let org_name = move || params.with(|params| params.get("org").cloned().unwrap_or_default());
+
+    let (teams, set_teams) = create_signal(vec![]);
+    create_effect(move |_| {
+         // Mock
+         let mock = vec![
+             Team { id: 1, name: "devs".to_string(), description: None, permission: "write".to_string() }
+         ];
+         set_teams.set(mock);
+    });
+
+    view! {
+        <div class="team-list">
+            <h3>"Teams for " {org_name}</h3>
+            <ul>
+                <For
+                    each=move || teams.get()
+                    key=|t| t.id
+                    children=move |t| {
+                        view! {
+                            <li>
+                                <strong>{t.name}</strong> " (" {t.permission} ")"
                             </li>
                         }
                     }
@@ -1010,5 +1083,11 @@ mod tests {
     fn test_key_logic() {
         let k = PublicKey { id: 1, title: "t".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
         assert_eq!(k.title, "t");
+    }
+
+    #[test]
+    fn test_team_logic() {
+        let t = Team { id: 1, name: "t".to_string(), description: None, permission: "p".to_string() };
+        assert_eq!(t.name, "t");
     }
 }
