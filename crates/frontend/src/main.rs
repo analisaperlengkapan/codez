@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Comment, Commit, CreateCommentOption, CreateHookOption, CreateKeyOption, CreateRepoOption, CreateSecretOption, DeployKey, FileEntry, Issue, Label, LoginOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoSettingsOption, Repository, Secret, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -892,6 +892,62 @@ fn RepoSettings() -> impl IntoView {
                 on:input=move |ev| set_desc.set(event_target_value(&ev)) />
             <button on:click=on_save>"Save"</button>
             <Webhooks/>
+            <SecretList/>
+            <DeployKeyList/>
+        </div>
+    }
+}
+
+#[component]
+fn SecretList() -> impl IntoView {
+    let (secrets, set_secrets) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_secrets.set(vec![
+            Secret { name: "CI_TOKEN".to_string(), created_at: "now".to_string() }
+        ]);
+    });
+
+    view! {
+        <div class="secrets">
+            <h4>"Secrets"</h4>
+            <ul>
+                <For
+                    each=move || secrets.get()
+                    key=|s| s.name.clone()
+                    children=move |s| {
+                        view! {
+                            <li>{s.name}</li>
+                        }
+                    }
+                />
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+fn DeployKeyList() -> impl IntoView {
+    let (keys, set_keys) = create_signal(vec![]);
+    create_effect(move |_| {
+        set_keys.set(vec![
+            DeployKey { id: 1, title: "Deploy Key".to_string(), key: "ssh...".to_string(), fingerprint: "f".to_string() }
+        ]);
+    });
+
+    view! {
+        <div class="deploy-keys">
+            <h4>"Deploy Keys"</h4>
+            <ul>
+                <For
+                    each=move || keys.get()
+                    key=|k| k.id
+                    children=move |k| {
+                        view! {
+                            <li>{k.title} " - " {k.fingerprint}</li>
+                        }
+                    }
+                />
+            </ul>
         </div>
     }
 }
@@ -1265,5 +1321,13 @@ mod tests {
 
         let p = Package { id: 1, name: "p".to_string(), version: "v".to_string(), package_type: "t".to_string() };
         assert_eq!(p.name, "p");
+    }
+
+    #[test]
+    fn test_secret_logic() {
+        let s = Secret { name: "n".to_string(), created_at: "t".to_string() };
+        assert_eq!(s.name, "n");
+        let k = DeployKey { id: 1, title: "t".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
+        assert_eq!(k.title, "t");
     }
 }

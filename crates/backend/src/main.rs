@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use shared::{ActionWorkflow, Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateWikiPageOption, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
+use shared::{ActionWorkflow, Activity, AdminStats, Commit, Comment, CreateCommentOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, FileEntry, Issue, Label, LoginOption, MergePullRequestOption, Milestone, Notification, Organization, Package, Project, PublicKey, PullRequest, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, Secret, Team, Topic, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -57,6 +57,8 @@ fn app() -> Router {
         .route("/api/v1/user/feeds", get(list_feeds))
         .route("/api/v1/repos/:owner/:repo/actions/workflows", get(list_workflows))
         .route("/api/v1/packages/:owner", get(list_packages))
+        .route("/api/v1/repos/:owner/:repo/secrets", get(list_secrets).post(create_secret))
+        .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))
         .layer(CorsLayer::permissive())
 }
 
@@ -570,6 +572,49 @@ async fn list_packages(Path(_owner): Path<String>) -> Json<Vec<Package>> {
         Package { id: 1, name: "my-lib".to_string(), version: "1.0.0".to_string(), package_type: "cargo".to_string() }
     ];
     Json(pkgs)
+}
+
+async fn list_secrets(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Secret>> {
+    let secrets = vec![
+        Secret { name: "MY_TOKEN".to_string(), created_at: "2023-01-01".to_string() }
+    ];
+    Json(secrets)
+}
+
+async fn create_secret(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateSecretOption>
+) -> (StatusCode, Json<Secret>) {
+    let secret = Secret {
+        name: payload.name,
+        created_at: "2023-01-02".to_string(),
+    };
+    (StatusCode::CREATED, Json(secret))
+}
+
+async fn list_deploy_keys(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<DeployKey>> {
+    let keys = vec![
+        DeployKey {
+            id: 1,
+            title: "CI Key".to_string(),
+            key: "ssh-rsa...".to_string(),
+            fingerprint: "SHA...".to_string(),
+        }
+    ];
+    Json(keys)
+}
+
+async fn create_deploy_key(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateKeyOption>
+) -> (StatusCode, Json<DeployKey>) {
+    let key = DeployKey {
+        id: 2,
+        title: payload.title,
+        key: payload.key,
+        fingerprint: "SHA...".to_string(),
+    };
+    (StatusCode::CREATED, Json(key))
 }
 
 #[cfg(test)]
@@ -1147,5 +1192,41 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let pkgs: Vec<Package> = serde_json::from_slice(&body).unwrap();
         assert!(!pkgs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_secret() {
+        let app = app();
+        let payload = CreateSecretOption { name: "TEST".to_string(), data: "val".to_string() };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/secrets")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_create_deploy_key() {
+        let app = app();
+        let payload = CreateKeyOption { title: "Deploy".to_string(), key: "ssh...".to_string() };
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/keys")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
     }
 }

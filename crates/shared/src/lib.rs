@@ -335,6 +335,26 @@ pub struct Package {
     pub package_type: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Secret {
+    pub name: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateSecretOption {
+    pub name: String,
+    pub data: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DeployKey {
+    pub id: u64,
+    pub title: String,
+    pub key: String,
+    pub fingerprint: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,6 +364,15 @@ mod tests {
         let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
+    }
+
+    #[test]
+    fn test_secret_deploykey() {
+        let s = Secret { name: "TOKEN".to_string(), created_at: "now".to_string() };
+        assert_eq!(s.name, "TOKEN");
+
+        let k = DeployKey { id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
+        assert_eq!(k.title, "deploy");
     }
 
     #[test]
