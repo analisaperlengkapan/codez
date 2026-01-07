@@ -1,7 +1,7 @@
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::{get, post, delete, put, patch},
     Router,
 };
 use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, CodeSearchResult, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsLock, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
@@ -14,6 +14,14 @@ struct AppState {
     repos: Arc<RwLock<Vec<Repository>>>,
     issues: Arc<RwLock<Vec<Issue>>>,
     users: Arc<RwLock<Vec<User>>>,
+    pulls: Arc<RwLock<Vec<PullRequest>>>,
+    releases: Arc<RwLock<Vec<Release>>>,
+    labels: Arc<RwLock<Vec<Label>>>,
+    milestones: Arc<RwLock<Vec<Milestone>>>,
+    comments: Arc<RwLock<Vec<Comment>>>,
+    notifications: Arc<RwLock<Vec<Notification>>>,
+    keys: Arc<RwLock<Vec<PublicKey>>>,
+    hooks: Arc<RwLock<Vec<Webhook>>>,
 }
 
 #[tokio::main]
@@ -27,6 +35,7 @@ async fn main() {
 }
 
 fn app() -> Router {
+    let user = User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string()));
     let state = AppState {
         repos: Arc::new(RwLock::new(vec![
             Repository::new(1, "codeza".to_string(), "admin".to_string()),
@@ -39,13 +48,85 @@ fn app() -> Router {
                 title: "First Issue".to_string(),
                 body: Some("This is a bug".to_string()),
                 state: "open".to_string(),
-                user: User::new(1, "admin".to_string(), None),
+                user: user.clone(),
                 assignees: vec![],
             }
         ])),
         users: Arc::new(RwLock::new(vec![
-            User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string())),
+            user.clone(),
             User::new(2, "user".to_string(), Some("user@example.com".to_string())),
+        ])),
+        pulls: Arc::new(RwLock::new(vec![
+            PullRequest {
+                id: 1,
+                number: 1,
+                title: "First PR".to_string(),
+                body: Some("Description".to_string()),
+                state: "open".to_string(),
+                user: user.clone(),
+                merged: false,
+            }
+        ])),
+        releases: Arc::new(RwLock::new(vec![
+            Release {
+                id: 1,
+                tag_name: "v1.0.0".to_string(),
+                name: "Initial Release".to_string(),
+                body: Some("Description".to_string()),
+                draft: false,
+                prerelease: false,
+                created_at: "2023-01-01".to_string(),
+                author: user.clone(),
+            }
+        ])),
+        labels: Arc::new(RwLock::new(vec![
+            Label {
+                id: 1,
+                name: "bug".to_string(),
+                color: "#ff0000".to_string(),
+                description: None,
+            }
+        ])),
+        milestones: Arc::new(RwLock::new(vec![
+            Milestone {
+                id: 1,
+                title: "v1.0".to_string(),
+                description: None,
+                due_on: None,
+                state: "open".to_string(),
+            }
+        ])),
+        comments: Arc::new(RwLock::new(vec![
+            Comment {
+                id: 1,
+                body: "Great idea!".to_string(),
+                user: user.clone(),
+                created_at: "2023-01-01".to_string(),
+            }
+        ])),
+        notifications: Arc::new(RwLock::new(vec![
+            Notification {
+                id: 1,
+                subject: "Welcome to Codeza".to_string(),
+                unread: true,
+                updated_at: "2023-01-01".to_string(),
+            }
+        ])),
+        keys: Arc::new(RwLock::new(vec![
+            PublicKey {
+                id: 1,
+                title: "Laptop".to_string(),
+                key: "ssh-rsa AAA...".to_string(),
+                fingerprint: "SHA256:...".to_string(),
+            }
+        ])),
+        hooks: Arc::new(RwLock::new(vec![
+            Webhook {
+                id: 1,
+                url: "http://example.com/hook".to_string(),
+                events: vec!["push".to_string()],
+                active: true,
+            }
         ])),
     };
 
@@ -117,18 +198,18 @@ fn app() -> Router {
         .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps))
         .route("/api/v1/repos/migrate", post(migrate_repo))
         .route("/api/v1/repos/:owner/:repo/transfer", post(transfer_repo))
-        .route("/api/v1/user/keys/:id", axum::routing::delete(delete_ssh_key))
-        .route("/api/v1/user/gpg_keys/:id", axum::routing::delete(delete_gpg_key))
+        .route("/api/v1/user/keys/:id", delete(delete_ssh_key))
+        .route("/api/v1/user/gpg_keys/:id", delete(delete_gpg_key))
         .route("/api/v1/repos/:owner/:repo/milestones/:id/stats", get(get_milestone_stats))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/files", get(get_pr_files))
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels", post(add_issue_label))
-        .route("/api/v1/repos/:owner/:repo/issues/:index/labels/:id", axum::routing::delete(remove_issue_label))
+        .route("/api/v1/repos/:owner/:repo/issues/:index/labels/:id", delete(remove_issue_label))
         .route("/api/v1/repos/:owner/:repo/search", get(search_repo_code))
         .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))
         .route("/api/v1/repos/:owner/:repo/git/lfs/locks", get(list_lfs_locks).post(create_lfs_lock))
         .route("/api/v1/user/gpg_keys/:id/verify", post(verify_gpg_key))
-        .route("/api/v1/notifications/threads/:id", axum::routing::patch(mark_notification_read))
+        .route("/api/v1/notifications/threads/:id", patch(mark_notification_read))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -183,36 +264,28 @@ async fn create_issue(
     (StatusCode::CREATED, Json(issue))
 }
 
-async fn list_pulls(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
-    let user = User::new(1, "admin".to_string(), None);
-    let pulls = vec![
-        PullRequest {
-            id: 1,
-            number: 1,
-            title: "First PR".to_string(),
-            body: Some("Description".to_string()),
-            state: "open".to_string(),
-            user,
-            merged: false,
-        }
-    ];
-    Json(pulls)
+async fn list_pulls(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
+    let pulls = state.pulls.read().unwrap();
+    Json(pulls.clone())
 }
 
 async fn create_pull(
+    State(state): State<AppState>,
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreatePullRequestOption>
 ) -> (StatusCode, Json<PullRequest>) {
-    let user = User::new(1, "admin".to_string(), None);
+    let mut pulls = state.pulls.write().unwrap();
+    let id = (pulls.len() as u64) + 1;
     let pr = PullRequest {
-        id: 2,
-        number: 2,
+        id,
+        number: id,
         title: payload.title,
         body: payload.body,
         state: "open".to_string(),
-        user,
+        user: User::new(1, "admin".to_string(), None),
         merged: false,
     };
+    pulls.push(pr.clone());
     (StatusCode::CREATED, Json(pr))
 }
 
@@ -260,38 +333,29 @@ async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec
     Json(commits)
 }
 
-async fn list_releases(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Release>> {
-    let user = User::new(1, "admin".to_string(), None);
-    let releases = vec![
-        Release {
-            id: 1,
-            tag_name: "v1.0.0".to_string(),
-            name: "Initial Release".to_string(),
-            body: Some("Description".to_string()),
-            draft: false,
-            prerelease: false,
-            created_at: "2023-01-01".to_string(),
-            author: user,
-        }
-    ];
-    Json(releases)
+async fn list_releases(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Release>> {
+    let releases = state.releases.read().unwrap();
+    Json(releases.clone())
 }
 
 async fn create_release(
+    State(state): State<AppState>,
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreateReleaseOption>
 ) -> (StatusCode, Json<Release>) {
-    let user = User::new(1, "admin".to_string(), None);
+    let mut releases = state.releases.write().unwrap();
+    let id = (releases.len() as u64) + 1;
     let release = Release {
-        id: 2,
+        id,
         tag_name: payload.tag_name,
         name: payload.name,
         body: payload.body,
         draft: payload.draft,
         prerelease: payload.prerelease,
         created_at: "2023-01-02".to_string(),
-        author: user,
+        author: User::new(1, "admin".to_string(), None),
     };
+    releases.push(release.clone());
     (StatusCode::CREATED, Json(release))
 }
 
@@ -340,30 +404,25 @@ async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index)): 
     Json(issue)
 }
 
-async fn list_comments(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
-    let user = User::new(1, "admin".to_string(), None);
-    let comments = vec![
-        Comment {
-            id: 1,
-            body: "Great idea!".to_string(),
-            user,
-            created_at: "2023-01-01".to_string(),
-        }
-    ];
-    Json(comments)
+async fn list_comments(State(state): State<AppState>, Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
+    let comments = state.comments.read().unwrap();
+    Json(comments.clone())
 }
 
 async fn create_comment(
+    State(state): State<AppState>,
     Path((_owner, _repo, _index)): Path<(String, String, u64)>,
     Json(payload): Json<CreateCommentOption>
 ) -> (StatusCode, Json<Comment>) {
-    let user = User::new(1, "admin".to_string(), None);
+    let mut comments = state.comments.write().unwrap();
+    let id = (comments.len() as u64) + 1;
     let comment = Comment {
-        id: 2,
+        id,
         body: payload.body,
-        user,
+        user: User::new(1, "admin".to_string(), None),
         created_at: "2023-01-02".to_string(),
     };
+    comments.push(comment.clone());
     (StatusCode::CREATED, Json(comment))
 }
 
@@ -374,55 +433,48 @@ async fn merge_pull(
     StatusCode::OK
 }
 
-async fn list_labels(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Label>> {
-    let labels = vec![
-        Label {
-            id: 1,
-            name: "bug".to_string(),
-            color: "#ff0000".to_string(),
-            description: None,
-        }
-    ];
-    Json(labels)
+async fn list_labels(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Label>> {
+    let labels = state.labels.read().unwrap();
+    Json(labels.clone())
 }
 
 async fn create_label(
+    State(state): State<AppState>,
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreateLabelOption>
 ) -> (StatusCode, Json<Label>) {
+    let mut labels = state.labels.write().unwrap();
+    let id = (labels.len() as u64) + 1;
     let label = Label {
-        id: 2,
+        id,
         name: payload.name,
         color: payload.color,
         description: payload.description,
     };
+    labels.push(label.clone());
     (StatusCode::CREATED, Json(label))
 }
 
-async fn list_milestones(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Milestone>> {
-    let milestones = vec![
-        Milestone {
-            id: 1,
-            title: "v1.0".to_string(),
-            description: None,
-            due_on: None,
-            state: "open".to_string(),
-        }
-    ];
-    Json(milestones)
+async fn list_milestones(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Milestone>> {
+    let milestones = state.milestones.read().unwrap();
+    Json(milestones.clone())
 }
 
 async fn create_milestone(
+    State(state): State<AppState>,
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreateMilestoneOption>
 ) -> (StatusCode, Json<Milestone>) {
+    let mut milestones = state.milestones.write().unwrap();
+    let id = (milestones.len() as u64) + 1;
     let milestone = Milestone {
-        id: 2,
+        id,
         title: payload.title,
         description: payload.description,
         due_on: payload.due_on,
         state: "open".to_string(),
     };
+    milestones.push(milestone.clone());
     (StatusCode::CREATED, Json(milestone))
 }
 
@@ -511,62 +563,58 @@ async fn update_user_settings(Json(_payload): Json<UserSettingsOption>) -> Statu
     StatusCode::OK
 }
 
-async fn list_notifications() -> Json<Vec<Notification>> {
-    let notifications = vec![
-        Notification {
-            id: 1,
-            subject: "Welcome to Codeza".to_string(),
-            unread: true,
-            updated_at: "2023-01-01".to_string(),
-        }
-    ];
-    Json(notifications)
+async fn list_notifications(State(state): State<AppState>) -> Json<Vec<Notification>> {
+    let notifications = state.notifications.read().unwrap();
+    Json(notifications.clone())
 }
 
-async fn list_keys() -> Json<Vec<PublicKey>> {
-    let keys = vec![
-        PublicKey {
-            id: 1,
-            title: "Laptop".to_string(),
-            key: "ssh-rsa AAA...".to_string(),
-            fingerprint: "SHA256:...".to_string(),
-        }
-    ];
-    Json(keys)
+async fn mark_notification_read(State(state): State<AppState>, Path(id): Path<u64>) -> StatusCode {
+    let mut notifications = state.notifications.write().unwrap();
+    if let Some(n) = notifications.iter_mut().find(|n| n.id == id) {
+        n.unread = false;
+        StatusCode::RESET_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
-async fn create_key(Json(payload): Json<CreateKeyOption>) -> (StatusCode, Json<PublicKey>) {
+async fn list_keys(State(state): State<AppState>) -> Json<Vec<PublicKey>> {
+    let keys = state.keys.read().unwrap();
+    Json(keys.clone())
+}
+
+async fn create_key(State(state): State<AppState>, Json(payload): Json<CreateKeyOption>) -> (StatusCode, Json<PublicKey>) {
+    let mut keys = state.keys.write().unwrap();
+    let id = (keys.len() as u64) + 1;
     let key = PublicKey {
-        id: 2,
+        id,
         title: payload.title,
         key: payload.key,
         fingerprint: "SHA256:new".to_string(),
     };
+    keys.push(key.clone());
     (StatusCode::CREATED, Json(key))
 }
 
-async fn list_hooks(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Webhook>> {
-    let hooks = vec![
-        Webhook {
-            id: 1,
-            url: "http://example.com/hook".to_string(),
-            events: vec!["push".to_string()],
-            active: true,
-        }
-    ];
-    Json(hooks)
+async fn list_hooks(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Webhook>> {
+    let hooks = state.hooks.read().unwrap();
+    Json(hooks.clone())
 }
 
 async fn create_hook(
+    State(state): State<AppState>,
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreateHookOption>
 ) -> (StatusCode, Json<Webhook>) {
+    let mut hooks = state.hooks.write().unwrap();
+    let id = (hooks.len() as u64) + 1;
     let hook = Webhook {
-        id: 2,
+        id,
         url: payload.url,
         events: payload.events,
         active: payload.active,
     };
+    hooks.push(hook.clone());
     (StatusCode::CREATED, Json(hook))
 }
 
@@ -993,10 +1041,6 @@ async fn verify_gpg_key(Path(_id): Path<u64>) -> StatusCode {
     StatusCode::OK
 }
 
-async fn mark_notification_read(Path(_id): Path<u64>) -> StatusCode {
-    StatusCode::RESET_CONTENT
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1023,58 +1067,6 @@ mod tests {
         // Initial state has 2 repos
         assert_eq!(repos.len(), 2);
         assert_eq!(repos[0].name, "codeza");
-    }
-
-    #[tokio::test]
-    async fn test_star_repo() {
-        let app = app();
-        let response = app
-            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/star").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
-    }
-
-    #[tokio::test]
-    async fn test_fork_repo() {
-        let app = app();
-        let response = app
-            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/fork").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn test_get_user() {
-        let app = app();
-        let response = app
-            .oneshot(Request::builder().uri("/api/v1/users/admin").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let user: Option<User> = serde_json::from_slice(&body).unwrap();
-
-        assert!(user.is_some());
-        assert_eq!(user.unwrap().username, "admin");
-    }
-
-    #[tokio::test]
-    async fn test_get_repo() {
-        let app = app();
-        let response = app
-            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let repo: Option<Repository> = serde_json::from_slice(&body).unwrap();
-
-        assert!(repo.is_some());
-        assert_eq!(repo.unwrap().name, "codeza");
     }
 
     #[tokio::test]
@@ -1198,6 +1190,7 @@ mod tests {
         };
 
         let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1215,6 +1208,319 @@ mod tests {
         let pr: PullRequest = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(pr.title, "New Feature");
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/pulls").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let pulls: Vec<PullRequest> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(pulls.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_releases() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/releases").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let releases: Vec<Release> = serde_json::from_slice(&body).unwrap();
+
+        assert!(!releases.is_empty());
+        assert_eq!(releases[0].tag_name, "v1.0.0");
+    }
+
+    #[tokio::test]
+    async fn test_create_release() {
+        let app = app();
+        let payload = CreateReleaseOption {
+            tag_name: "v1.1.0".to_string(),
+            name: "Next Release".to_string(),
+            body: None,
+            draft: false,
+            prerelease: false,
+        };
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/releases")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let release: Release = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(release.tag_name, "v1.1.0");
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/releases").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let releases: Vec<Release> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(releases.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_create_comment() {
+        let app = app();
+        let payload = CreateCommentOption { body: "Test comment".to_string() };
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues/1/comments")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let comment: Comment = serde_json::from_slice(&body).unwrap();
+        assert_eq!(comment.body, "Test comment");
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/issues/1/comments").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let comments: Vec<Comment> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(comments.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_labels() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/labels").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let labels: Vec<Label> = serde_json::from_slice(&body).unwrap();
+        assert!(!labels.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_create_label() {
+        let app = app();
+        let payload = CreateLabelOption {
+            name: "feature".to_string(),
+            color: "#00ff00".to_string(),
+            description: None,
+        };
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/labels")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/labels").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let labels: Vec<Label> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(labels.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_create_milestone() {
+        let app = app();
+        let payload = CreateMilestoneOption {
+            title: "v1.0".to_string(),
+            description: None,
+            due_on: None,
+        };
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/milestones")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/milestones").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let milestones: Vec<Milestone> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(milestones.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_list_notifications() {
+        let app = app();
+        let response = app
+            .clone()
+            .oneshot(Request::builder().uri("/api/v1/notifications").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let notifs: Vec<Notification> = serde_json::from_slice(&body).unwrap();
+        assert!(!notifs.is_empty());
+        assert!(notifs[0].unread);
+
+        // Mark as read
+        let response = app
+            .oneshot(Request::builder().method("PATCH").uri("/api/v1/notifications/threads/1").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::RESET_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_create_key() {
+        let app = app();
+        let payload = CreateKeyOption {
+            title: "New Key".to_string(),
+            key: "ssh-rsa...".to_string(),
+        };
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/user/keys")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/user/keys").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let keys: Vec<PublicKey> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(keys.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_create_hook() {
+        let app = app();
+        let payload = CreateHookOption {
+            url: "http://test.com".to_string(),
+            events: vec!["push".to_string()],
+            active: true,
+        };
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/hooks")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/hooks").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let hooks: Vec<Webhook> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(hooks.len(), 2);
+    }
+
+    // Keep other tests as they check basic availability even if stateless for now
+    #[tokio::test]
+    async fn test_star_repo() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/star").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
+    async fn test_fork_repo() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().method("POST").uri("/api/v1/repos/admin/codeza/fork").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_get_user() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/users/admin").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let user: Option<User> = serde_json::from_slice(&body).unwrap();
+
+        assert!(user.is_some());
+        assert_eq!(user.unwrap().username, "admin");
+    }
+
+    #[tokio::test]
+    async fn test_get_repo() {
+        let app = app();
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let repo: Option<Repository> = serde_json::from_slice(&body).unwrap();
+
+        assert!(repo.is_some());
+        assert_eq!(repo.unwrap().name, "codeza");
     }
 
     #[tokio::test]
@@ -1247,53 +1553,6 @@ mod tests {
 
         assert!(!commits.is_empty());
         assert_eq!(commits[0].sha, "abc123456789");
-    }
-
-    #[tokio::test]
-    async fn test_list_releases() {
-        let app = app();
-        let response = app
-            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/releases").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let releases: Vec<Release> = serde_json::from_slice(&body).unwrap();
-
-        assert!(!releases.is_empty());
-        assert_eq!(releases[0].tag_name, "v1.0.0");
-    }
-
-    #[tokio::test]
-    async fn test_create_release() {
-        let app = app();
-        let payload = CreateReleaseOption {
-            tag_name: "v1.1.0".to_string(),
-            name: "Next Release".to_string(),
-            body: None,
-            draft: false,
-            prerelease: false,
-        };
-
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v1/repos/admin/codeza/releases")
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::CREATED);
-
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let release: Release = serde_json::from_slice(&body).unwrap();
-
-        assert_eq!(release.tag_name, "v1.1.0");
     }
 
     #[tokio::test]
@@ -1338,59 +1597,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn test_create_comment() {
-        let app = app();
-        let payload = CreateCommentOption { body: "Test comment".to_string() };
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v1/repos/admin/codeza/issues/1/comments")
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
-    }
-
-    #[tokio::test]
-    async fn test_list_labels() {
-        let app = app();
-        let response = app
-            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/labels").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let labels: Vec<Label> = serde_json::from_slice(&body).unwrap();
-        assert!(!labels.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_create_milestone() {
-        let app = app();
-        let payload = CreateMilestoneOption {
-            title: "v1.0".to_string(),
-            description: None,
-            due_on: None,
-        };
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v1/repos/admin/codeza/milestones")
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
@@ -1459,62 +1665,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn test_list_notifications() {
-        let app = app();
-        let response = app
-            .oneshot(Request::builder().uri("/api/v1/notifications").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let notifs: Vec<Notification> = serde_json::from_slice(&body).unwrap();
-        assert!(!notifs.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_create_key() {
-        let app = app();
-        let payload = CreateKeyOption {
-            title: "New Key".to_string(),
-            key: "ssh-rsa...".to_string(),
-        };
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v1/user/keys")
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
-    }
-
-    #[tokio::test]
-    async fn test_create_hook() {
-        let app = app();
-        let payload = CreateHookOption {
-            url: "http://test.com".to_string(),
-            events: vec!["push".to_string()],
-            active: true,
-        };
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v1/repos/admin/codeza/hooks")
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
