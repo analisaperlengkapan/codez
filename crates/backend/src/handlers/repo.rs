@@ -8,9 +8,9 @@ use shared::{
     CreateReleaseOption, Release, CreateCommentOption, Comment, CreateLabelOption, Label,
     CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction,
-    MigrateRepoOption, TransferRepoOption, LfsLock, User
+    MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry
 };
-use crate::AppState;
+use crate::router::AppState;
 
 pub async fn list_repos(State(state): State<AppState>) -> Json<Vec<Repository>> {
     let repos = state.repos.read().unwrap();
@@ -349,4 +349,21 @@ pub async fn get_wiki_page(Path((_owner, _repo, page_name)): Path<(String, Strin
     } else {
         Json(None)
     }
+}
+
+pub async fn get_contents(Path((_owner, _repo, path)): Path<(String, String, String)>) -> Json<Vec<FileEntry>> {
+    let mut files = vec![];
+    if path == "/" || path.is_empty() {
+        files.push(FileEntry { name: "src".to_string(), path: "src".to_string(), kind: "dir".to_string(), size: 0 });
+        files.push(FileEntry { name: "README.md".to_string(), path: "README.md".to_string(), kind: "file".to_string(), size: 1024 });
+        files.push(FileEntry { name: "Cargo.toml".to_string(), path: "Cargo.toml".to_string(), kind: "file".to_string(), size: 256 });
+    } else if path == "src" {
+        files.push(FileEntry { name: "main.rs".to_string(), path: "src/main.rs".to_string(), kind: "file".to_string(), size: 512 });
+        files.push(FileEntry { name: "lib.rs".to_string(), path: "src/lib.rs".to_string(), kind: "file".to_string(), size: 1024 });
+    }
+    Json(files)
+}
+
+pub async fn get_root_contents(Path((owner, repo)): Path<(String, String)>) -> Json<Vec<FileEntry>> {
+    get_contents(Path((owner, repo, "".to_string()))).await
 }

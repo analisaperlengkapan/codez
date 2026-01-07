@@ -6,7 +6,7 @@ use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
     GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application
 };
-use crate::AppState;
+use crate::router::AppState;
 
 pub async fn login_user(State(state): State<AppState>, Json(payload): Json<LoginOption>) -> (StatusCode, Json<Option<User>>) {
     let users = state.users.read().unwrap();

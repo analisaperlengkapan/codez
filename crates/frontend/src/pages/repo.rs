@@ -24,12 +24,66 @@ pub fn RepoDetail() -> impl IntoView {
                     Some(Some(r)) => view! {
                         <p>"Clone URL: https://codeza.com/" {r.owner} "/" {r.name} ".git"</p>
                         <p>
-                            <a href="issues">"Issues"</a> " | " <a href="pulls">"Pull Requests"</a> " | " <a href="commits">"Commits"</a>
+                            <a href="issues">"Issues"</a> " | " <a href="pulls">"Pull Requests"</a> " | " <a href="src">"Code"</a> " | " <a href="commits">"Commits"</a>
                         </p>
                     }.into_view(),
                     _ => view! { <p>"Repo not found"</p> }.into_view()
                 }}
             </Suspense>
+        </div>
+    }
+}
+
+#[component]
+pub fn RepoCode() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    // "path" param handles the *path wildcard in routing
+    let path = move || params.with(|params| params.get("path").cloned().unwrap_or_default());
+
+    let contents = create_resource(
+        move || (owner(), repo_name(), path()),
+        |(o, r, p)| async move {
+            let url = if p.is_empty() {
+                format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/contents", o, r)
+            } else {
+                format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/contents/{}", o, r, p)
+            };
+            Request::get(&url).send().await.unwrap().json::<Vec<FileEntry>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="repo-code">
+            <h3>"Files in " {move || if path().is_empty() { "root".to_string() } else { path() }}</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading files..."</li> }>
+                    {move || contents.get().map(|files| {
+                        if files.is_empty() {
+                             view! { <li>"No files found or empty directory."</li> }.into_view()
+                        } else {
+                            view! {
+                                <For each=move || files.clone() key=|f| f.path.clone() children=move |f| {
+                                    let is_dir = f.kind == "dir";
+                                    // Construct link. If we are already deep, append.
+                                    // Note: In a real router, we might need smarter handling of relative paths.
+                                    // Here we assume /repos/:owner/:repo/src/:path
+                                    let link = format!("/repos/{}/{}/src/{}", owner(), repo_name(), f.path);
+
+                                    view! {
+                                        <li>
+                                            {if is_dir { "📁 " } else { "📄 " }}
+                                            <a href=link>{f.name}</a>
+                                            " (" {f.size} " bytes)"
+                                        </li>
+                                    }
+                                }/>
+                            }.into_view()
+                        }
+                    })}
+                </Suspense>
+            </ul>
         </div>
     }
 }
@@ -111,8 +165,6 @@ pub fn ActionsList() -> impl IntoView { view! { <div>"Actions List Placeholder"<
 pub fn BranchList() -> impl IntoView { view! { <div>"Branch List Placeholder"</div> } }
 #[component]
 pub fn TagList() -> impl IntoView { view! { <div>"Tag List Placeholder"</div> } }
-#[component]
-pub fn RepoCode() -> impl IntoView { view! { <div>"Repo Code Placeholder"</div> } }
 #[component]
 pub fn CommitList() -> impl IntoView { view! { <div>"Commit List Placeholder"</div> } }
 #[component]

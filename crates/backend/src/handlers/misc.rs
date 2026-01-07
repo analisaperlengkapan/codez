@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Json, Path},
+    extract::{Json, Path, State},
     http::StatusCode,
 };
 use shared::{
@@ -7,8 +7,9 @@ use shared::{
     Project, Secret, CreateSecretOption, DeployKey, CreateKeyOption, Collaborator, Branch,
     CreateBranchOption, Commit, Tag, LfsObject, MilestoneStats, DiffFile,
     WikiPage, CreateWikiPageOption, RepoSettingsOption, MigrateRepoOption, TransferRepoOption,
-    FileEntry, CreateReactionOption, Reaction
+    FileEntry, CreateReactionOption, Reaction, User
 };
+use crate::router::AppState;
 
 pub async fn merge_pull(
     Path((_owner, _repo, _index)): Path<(String, String, u64)>,
@@ -89,7 +90,7 @@ pub async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String
 }
 
 pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
-    let user = shared::User::new(1, "admin".to_string(), None);
+    let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
     let branches = vec![
         Branch { name: "main".to_string(), commit, protected: true }
@@ -101,14 +102,14 @@ pub async fn create_branch(
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreateBranchOption>
 ) -> (StatusCode, Json<Branch>) {
-    let user = shared::User::new(1, "admin".to_string(), None);
+    let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "def".to_string(), message: "new branch".to_string(), author: user, date: "now".to_string() };
     let branch = Branch { name: payload.name, commit, protected: false };
     (StatusCode::CREATED, Json(branch))
 }
 
 pub async fn list_tags(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Tag>> {
-    let user = shared::User::new(1, "admin".to_string(), None);
+    let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
     let tags = vec![
         Tag { name: "v1.0".to_string(), id: "1".to_string(), commit }
@@ -145,23 +146,8 @@ pub async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u
     Json(diffs)
 }
 
-pub async fn get_contents(Path((_owner, _repo, path)): Path<(String, String, String)>) -> Json<Vec<FileEntry>> {
-    let mut files = vec![];
-    if path == "/" || path.is_empty() {
-        files.push(FileEntry { name: "src".to_string(), path: "src".to_string(), kind: "dir".to_string(), size: 0 });
-        files.push(FileEntry { name: "README.md".to_string(), path: "README.md".to_string(), kind: "file".to_string(), size: 1024 });
-    } else if path == "src" {
-        files.push(FileEntry { name: "main.rs".to_string(), path: "src/main.rs".to_string(), kind: "file".to_string(), size: 512 });
-    }
-    Json(files)
-}
-
-pub async fn get_root_contents(Path((owner, repo)): Path<(String, String)>) -> Json<Vec<FileEntry>> {
-    get_contents(Path((owner, repo, "".to_string()))).await
-}
-
 pub async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Commit>> {
-    let user = shared::User::new(1, "admin".to_string(), None);
+    let user = User::new(1, "admin".to_string(), None);
     let commits = vec![
         Commit {
             sha: "abc123456789".to_string(),
@@ -279,7 +265,7 @@ pub async fn add_reaction_misc(
     Path((_owner, _repo, _id)): Path<(String, String, u64)>,
     Json(payload): Json<CreateReactionOption>
 ) -> (StatusCode, Json<Reaction>) {
-    let user = shared::User::new(1, "admin".to_string(), None);
+    let user = User::new(1, "admin".to_string(), None);
     let reaction = Reaction {
         id: 1,
         user,
