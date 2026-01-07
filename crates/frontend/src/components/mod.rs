@@ -1,5 +1,12 @@
-pub mod activity;
-pub mod nav;
+use leptos::*;
 
-pub use activity::*;
-pub use nav::*;
+#[component]
+pub fn Nav() -> impl IntoView {
+    view! {
+        <nav>
+            <a href="/">"Home"</a>
+            <a href="/explore">"Explore"</a>
+            <a href="/login">"Login"</a>
+        </nav>
+    }
+}

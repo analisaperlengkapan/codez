@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Organization, Repository, Team, OrgMember, AdminStats, ActionWorkflow, Package, SystemNotice,
     TwoFactor, OAuth2Provider, DiffFile, DiffLine, Contribution, LicenseTemplate, GitignoreTemplate,
-    ReviewRequest, AdminUserEditOption, User, LanguageStat, ProtectedBranch, CodeSearchResult
+    AdminUserEditOption, User, LanguageStat, ProtectedBranch
 };
 
 pub async fn get_org(Path(org): Path<String>) -> Json<Option<Organization>> {
@@ -145,10 +145,6 @@ pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, 
     Json(diffs)
 }
 
-pub async fn get_raw_file(Path((_owner, _repo, _path)): Path<(String, String, String)>) -> String {
-    "fn main() { println!(\"Hello World\"); }".to_string()
-}
-
 pub async fn get_user_heatmap(Path(_username): Path<String>) -> Json<Vec<Contribution>> {
     vec![
         Contribution { date: "2023-01-01".to_string(), count: 5 },
@@ -168,15 +164,6 @@ pub async fn list_gitignores() -> Json<Vec<GitignoreTemplate>> {
     ].into()
 }
 
-pub async fn add_issue_assignee(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {
-    StatusCode::CREATED
-}
-
-pub async fn request_review(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> (StatusCode, Json<ReviewRequest>) {
-    let reviewer = User::new(2, "reviewer".to_string(), None);
-    (StatusCode::CREATED, Json(ReviewRequest { reviewer, status: "requested".to_string() }))
-}
-
 pub async fn get_repo_languages(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<LanguageStat>> {
     vec![
         LanguageStat { language: "Rust".to_string(), percentage: 100, color: "#dea584".to_string() }
@@ -186,17 +173,5 @@ pub async fn get_repo_languages(Path((_owner, _repo)): Path<(String, String)>) -
 pub async fn list_branch_protections(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<ProtectedBranch>> {
     vec![
         ProtectedBranch { name: "main".to_string(), enable_push: false, enable_force_push: false }
-    ].into()
-}
-
-pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<CodeSearchResult>> {
-    vec![
-        CodeSearchResult {
-            name: "main.rs".to_string(),
-            path: "src/main.rs".to_string(),
-            sha: "abc".to_string(),
-            url: "http://...".to_string(),
-            content: Some("fn main() {}".to_string()),
-        }
     ].into()
 }

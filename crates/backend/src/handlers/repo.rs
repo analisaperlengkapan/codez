@@ -8,7 +8,8 @@ use shared::{
     CreateReleaseOption, Release, CreateCommentOption, Comment, CreateLabelOption, Label,
     CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction,
-    MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry
+    MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
+    Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest
 };
 use crate::router::AppState;
 
@@ -25,12 +26,9 @@ pub async fn get_repo(State(state): State<AppState>, Path((owner, repo)): Path<(
 
 pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<CreateRepoOption>) -> impl IntoResponse {
     let mut repos = state.repos.write().unwrap();
-
-    // Check for duplicate repo name for the admin user (mimicking GitHub behavior)
     if repos.iter().any(|r| r.owner == "admin" && r.name == payload.name) {
         return (StatusCode::CONFLICT, Json(Repository::new(0, "".to_string(), "".to_string())));
     }
-
     let id = (repos.len() as u64) + 1;
     let repo = Repository::new(id, payload.name, "admin".to_string());
     repos.push(repo.clone());
@@ -54,7 +52,6 @@ pub async fn create_issue(
             user: User::new(0, "".to_string(), None), assignees: vec![]
         }));
     }
-
     let mut issues = state.issues.write().unwrap();
     let id = (issues.len() as u64) + 1;
     let issue = Issue {
@@ -227,6 +224,13 @@ pub async fn create_secret(
     (StatusCode::CREATED, Json(secret))
 }
 
+pub async fn list_secrets(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Secret>> {
+    let secrets = vec![
+        Secret { name: "MY_TOKEN".to_string(), created_at: "2023-01-01".to_string() }
+    ];
+    Json(secrets)
+}
+
 pub async fn create_deploy_key(
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreateKeyOption>
@@ -238,6 +242,18 @@ pub async fn create_deploy_key(
         fingerprint: "SHA...".to_string(),
     };
     (StatusCode::CREATED, Json(key))
+}
+
+pub async fn list_deploy_keys(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<DeployKey>> {
+    let keys = vec![
+        DeployKey {
+            id: 1,
+            title: "CI Key".to_string(),
+            key: "ssh-rsa...".to_string(),
+            fingerprint: "SHA...".to_string(),
+        }
+    ];
+    Json(keys)
 }
 
 pub async fn list_lfs_locks(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<LfsLock>> {
@@ -270,6 +286,10 @@ pub async fn update_topics(
     Json(_payload): Json<RepoTopicOptions>
 ) -> StatusCode {
     StatusCode::NO_CONTENT
+}
+
+pub async fn list_topics(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Topic>> {
+    Json(vec![Topic { id: 1, name: "rust".to_string(), created: "2023-01-01".to_string() }])
 }
 
 pub async fn star_repo(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
@@ -366,4 +386,132 @@ pub async fn get_contents(Path((_owner, _repo, path)): Path<(String, String, Str
 
 pub async fn get_root_contents(Path((owner, repo)): Path<(String, String)>) -> Json<Vec<FileEntry>> {
     get_contents(Path((owner, repo, "".to_string()))).await
+}
+
+pub async fn merge_pull(
+    Path((_owner, _repo, _index)): Path<(String, String, u64)>,
+    Json(_payload): Json<MergePullRequestOption>
+) -> StatusCode {
+    StatusCode::OK
+}
+
+pub async fn search_repos() -> Json<Vec<Repository>> {
+    let repos = vec![
+        Repository::new(1, "searched-repo".to_string(), "user".to_string())
+    ];
+    Json(repos)
+}
+
+pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Project>> {
+    let projects = vec![
+        Project {
+            id: 1,
+            title: "Kanban Board".to_string(),
+            description: None,
+            is_closed: false,
+        }
+    ];
+    Json(projects)
+}
+
+pub async fn get_collaborator(Path((_owner, _repo, _collaborator)): Path<(String, String, String)>) -> Json<Option<Collaborator>> {
+    Json(None)
+}
+
+pub async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String, String, String)>) -> StatusCode {
+    StatusCode::NO_CONTENT
+}
+
+pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let branches = vec![
+        Branch { name: "main".to_string(), commit, protected: true }
+    ];
+    Json(branches)
+}
+
+pub async fn create_branch(
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateBranchOption>
+) -> (StatusCode, Json<Branch>) {
+    let user = User::new(1, "admin".to_string(), None);
+    let commit = Commit { sha: "def".to_string(), message: "new branch".to_string(), author: user, date: "now".to_string() };
+    let branch = Branch { name: payload.name, commit, protected: false };
+    (StatusCode::CREATED, Json(branch))
+}
+
+pub async fn list_tags(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Tag>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let tags = vec![
+        Tag { name: "v1.0".to_string(), id: "1".to_string(), commit }
+    ];
+    Json(tags)
+}
+
+pub async fn upload_media(Path((_owner, _repo)): Path<(String, String)>) -> (StatusCode, Json<LfsObject>) {
+    let lfs = LfsObject {
+        oid: "abc1234567890".to_string(),
+        size: 1024,
+        created_at: "2023-01-01".to_string(),
+    };
+    (StatusCode::CREATED, Json(lfs))
+}
+
+pub async fn get_milestone_stats(Path((_owner, _repo, _id)): Path<(String, String, u64)>) -> Json<MilestoneStats> {
+    Json(MilestoneStats { open_issues: 10, closed_issues: 5 })
+}
+
+pub async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<DiffFile>> {
+    let diffs = vec![
+        DiffFile {
+            name: "src/lib.rs".to_string(),
+            old_name: None,
+            index: "idx".to_string(),
+            additions: 2,
+            deletions: 1,
+            type_: "modify".to_string(),
+            lines: vec![],
+        }
+    ];
+    Json(diffs)
+}
+
+pub async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Commit>> {
+    let user = User::new(1, "admin".to_string(), None);
+    let commits = vec![
+        Commit {
+            sha: "abc123456789".to_string(),
+            message: "Initial commit".to_string(),
+            author: user,
+            date: "2023-01-01T12:00:00Z".to_string(),
+        }
+    ];
+    Json(commits)
+}
+
+pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<CodeSearchResult>> {
+    vec![
+        CodeSearchResult {
+            name: "main.rs".to_string(),
+            path: "src/main.rs".to_string(),
+            sha: "abc".to_string(),
+            url: "http://...".to_string(),
+            content: Some("fn main() {}".to_string()),
+        }
+    ].into()
+}
+
+pub async fn get_raw_file(Path((_owner, _repo, _path)): Path<(String, String, String)>) -> String {
+    "fn main() { println!(\"Hello World\"); }".to_string()
+}
+
+pub async fn add_issue_assignee(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {
+    StatusCode::CREATED
+}
+
+pub async fn request_review(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> (StatusCode, Json<ReviewRequest>) {
+    let reviewer = User::new(2, "reviewer".to_string(), None);
+    (StatusCode::CREATED, Json(ReviewRequest { reviewer, status: "requested".to_string() }))
 }

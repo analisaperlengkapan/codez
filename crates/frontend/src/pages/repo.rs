@@ -66,9 +66,6 @@ pub fn RepoCode() -> impl IntoView {
                             view! {
                                 <For each=move || files.clone() key=|f| f.path.clone() children=move |f| {
                                     let is_dir = f.kind == "dir";
-                                    // Construct link. If we are already deep, append.
-                                    // Note: In a real router, we might need smarter handling of relative paths.
-                                    // Here we assume /repos/:owner/:repo/src/:path
                                     let link = format!("/repos/{}/{}/src/{}", owner(), repo_name(), f.path);
 
                                     view! {
@@ -156,7 +153,7 @@ pub fn PackageDetail() -> impl IntoView {
     }
 }
 
-// Stub components to allow compilation for now, mirroring original main.rs content structure
+// Stub components to allow compilation
 #[component]
 pub fn RepoCodeSearch() -> impl IntoView { view! { <div>"Repo Search Placeholder"</div> } }
 #[component]
@@ -185,3 +182,13 @@ pub fn Wiki() -> impl IntoView { view! { <div>"Wiki Placeholder"</div> } }
 pub fn WikiEdit() -> impl IntoView { view! { <div>"Wiki Edit Placeholder"</div> } }
 #[component]
 pub fn RepoSettings() -> impl IntoView { view! { <div>"Repo Settings Placeholder"</div> } }
+
+// Missing components that were causing errors
+#[component]
+pub fn IssueList() -> impl IntoView { view! { <div>"Issue List Placeholder"</div> } }
+#[component]
+pub fn IssueDetail() -> impl IntoView { view! { <div>"Issue Detail Placeholder"</div> } }
+#[component]
+pub fn PullRequestList() -> impl IntoView { view! { <div>"Pull Request List Placeholder"</div> } }
+#[component]
+pub fn PullRequestDetail() -> impl IntoView { view! { <div>"Pull Request Detail Placeholder"</div> } }
