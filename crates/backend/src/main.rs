@@ -1,12 +1,20 @@
 use axum::{
-    extract::{Json, Path},
+    extract::{Json, Path, State},
     http::StatusCode,
     routing::{get, post},
     Router,
 };
 use shared::{ActionWorkflow, Activity, AdminStats, AdminUserEditOption, Branch, CodeSearchResult, Collaborator, Commit, Comment, Contribution, CreateBranchOption, CreateCommentOption, CreateGpgKeyOption, CreateHookOption, CreateIssueOption, CreateKeyOption, CreateLabelOption, CreateMilestoneOption, CreatePullRequestOption, CreateReactionOption, CreateReleaseOption, CreateRepoOption, CreateSecretOption, CreateWikiPageOption, DeployKey, DiffFile, DiffLine, EmailAddress, FileEntry, GitignoreTemplate, GpgKey, Issue, LfsLock, LfsObject, Label, LanguageStat, LicenseTemplate, LoginOption, MergePullRequestOption, MigrateRepoOption, Milestone, MilestoneStats, Notification, OAuth2Application, OAuth2Provider, Organization, OrgMember, Package, Project, ProtectedBranch, PublicKey, PullRequest, Reaction, RegisterOption, Release, RepoActionOption, RepoSettingsOption, RepoTopicOptions, Repository, ReviewRequest, Secret, SystemNotice, Tag, Team, Topic, TransferRepoOption, TwoFactor, User, UserSettingsOption, Webhook, WikiPage};
 use std::net::SocketAddr;
+use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
+
+#[derive(Clone, Default)]
+struct AppState {
+    repos: Arc<RwLock<Vec<Repository>>>,
+    issues: Arc<RwLock<Vec<Issue>>>,
+    users: Arc<RwLock<Vec<User>>>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -19,6 +27,28 @@ async fn main() {
 }
 
 fn app() -> Router {
+    let state = AppState {
+        repos: Arc::new(RwLock::new(vec![
+            Repository::new(1, "codeza".to_string(), "admin".to_string()),
+            Repository::new(2, "gitea-clone".to_string(), "user".to_string()),
+        ])),
+        issues: Arc::new(RwLock::new(vec![
+             Issue {
+                id: 1,
+                number: 1,
+                title: "First Issue".to_string(),
+                body: Some("This is a bug".to_string()),
+                state: "open".to_string(),
+                user: User::new(1, "admin".to_string(), None),
+                assignees: vec![],
+            }
+        ])),
+        users: Arc::new(RwLock::new(vec![
+            User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string())),
+            User::new(2, "user".to_string(), Some("user@example.com".to_string())),
+        ])),
+    };
+
     Router::new()
         .route("/api/v1/repos", get(list_repos))
         .route("/api/v1/users/:username", get(get_user))
@@ -100,70 +130,56 @@ fn app() -> Router {
         .route("/api/v1/user/gpg_keys/:id/verify", post(verify_gpg_key))
         .route("/api/v1/notifications/threads/:id", axum::routing::patch(mark_notification_read))
         .layer(CorsLayer::permissive())
+        .with_state(state)
 }
 
-async fn list_repos() -> Json<Vec<Repository>> {
-    let repos = vec![
-        Repository::new(1, "codeza".to_string(), "admin".to_string()),
-        Repository::new(2, "gitea-clone".to_string(), "user".to_string()),
-    ];
-    Json(repos)
+async fn list_repos(State(state): State<AppState>) -> Json<Vec<Repository>> {
+    let repos = state.repos.read().unwrap();
+    Json(repos.clone())
 }
 
-async fn get_user(Path(username): Path<String>) -> Json<Option<User>> {
-    // Mock user lookup
-    if username == "admin" {
-        Json(Some(User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string()))))
-    } else {
-        Json(None)
-    }
+async fn get_user(State(state): State<AppState>, Path(username): Path<String>) -> Json<Option<User>> {
+    let users = state.users.read().unwrap();
+    let user = users.iter().find(|u| u.username == username).cloned();
+    Json(user)
 }
 
-async fn get_repo(Path((owner, repo)): Path<(String, String)>) -> Json<Option<Repository>> {
-    // Mock repo lookup
-    if owner == "admin" && repo == "codeza" {
-        Json(Some(Repository::new(1, "codeza".to_string(), "admin".to_string())))
-    } else {
-        Json(None)
-    }
+async fn get_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> Json<Option<Repository>> {
+    let repos = state.repos.read().unwrap();
+    let r = repos.iter().find(|r| r.owner == owner && r.name == repo).cloned();
+    Json(r)
 }
 
-async fn create_repo(Json(payload): Json<CreateRepoOption>) -> (StatusCode, Json<Repository>) {
-    // Mock creation
-    let repo = Repository::new(3, payload.name, "admin".to_string());
+async fn create_repo(State(state): State<AppState>, Json(payload): Json<CreateRepoOption>) -> (StatusCode, Json<Repository>) {
+    let mut repos = state.repos.write().unwrap();
+    let id = (repos.len() as u64) + 1;
+    let repo = Repository::new(id, payload.name, "admin".to_string());
+    repos.push(repo.clone());
     (StatusCode::CREATED, Json(repo))
 }
 
-async fn list_issues(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Issue>> {
-    let user = User::new(1, "admin".to_string(), None);
-    let issues = vec![
-        Issue {
-            id: 1,
-            number: 1,
-            title: "First Issue".to_string(),
-            body: Some("This is a bug".to_string()),
-            state: "open".to_string(),
-            user,
-            assignees: vec![],
-        }
-    ];
-    Json(issues)
+async fn list_issues(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Issue>> {
+    let issues = state.issues.read().unwrap();
+    Json(issues.clone())
 }
 
 async fn create_issue(
+    State(state): State<AppState>,
     Path((_owner, _repo)): Path<(String, String)>,
     Json(payload): Json<CreateIssueOption>
 ) -> (StatusCode, Json<Issue>) {
-    let user = User::new(1, "admin".to_string(), None);
+    let mut issues = state.issues.write().unwrap();
+    let id = (issues.len() as u64) + 1;
     let issue = Issue {
-        id: 2,
-        number: 2,
+        id,
+        number: id,
         title: payload.title,
         body: payload.body,
         state: "open".to_string(),
-        user,
+        user: User::new(1, "admin".to_string(), None),
         assignees: vec![],
     };
+    issues.push(issue.clone());
     (StatusCode::CREATED, Json(issue))
 }
 
@@ -279,17 +295,22 @@ async fn create_release(
     (StatusCode::CREATED, Json(release))
 }
 
-async fn login_user(Json(payload): Json<LoginOption>) -> (StatusCode, Json<Option<User>>) {
-    if payload.username == "admin" && payload.password == "password" {
-        (StatusCode::OK, Json(Some(User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string())))))
-    } else {
-        (StatusCode::UNAUTHORIZED, Json(None))
+async fn login_user(State(state): State<AppState>, Json(payload): Json<LoginOption>) -> (StatusCode, Json<Option<User>>) {
+    let users = state.users.read().unwrap();
+    if let Some(user) = users.iter().find(|u| u.username == payload.username) {
+        // Password check stub
+        if payload.password == "password" {
+             return (StatusCode::OK, Json(Some(user.clone())));
+        }
     }
+    (StatusCode::UNAUTHORIZED, Json(None))
 }
 
-async fn register_user(Json(payload): Json<RegisterOption>) -> (StatusCode, Json<User>) {
-    // Mock register
-    let user = User::new(2, payload.username, Some(payload.email));
+async fn register_user(State(state): State<AppState>, Json(payload): Json<RegisterOption>) -> (StatusCode, Json<User>) {
+    let mut users = state.users.write().unwrap();
+    let id = (users.len() as u64) + 1;
+    let user = User::new(id, payload.username, Some(payload.email));
+    users.push(user.clone());
     (StatusCode::CREATED, Json(user))
 }
 
@@ -313,17 +334,10 @@ async fn list_org_repos(Path(_org): Path<String>) -> Json<Vec<Repository>> {
     Json(repos)
 }
 
-async fn get_issue(Path((_owner, _repo, index)): Path<(String, String, u64)>) -> Json<Option<Issue>> {
-    let user = User::new(1, "admin".to_string(), None);
-    Json(Some(Issue {
-        id: index,
-        number: index,
-        title: "Mock Issue".to_string(),
-        body: Some("Body".to_string()),
-        state: "open".to_string(),
-        user,
-        assignees: vec![],
-    }))
+async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index)): Path<(String, String, u64)>) -> Json<Option<Issue>> {
+    let issues = state.issues.read().unwrap();
+    let issue = issues.iter().find(|i| i.id == index).cloned();
+    Json(issue)
 }
 
 async fn list_comments(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
@@ -1006,6 +1020,7 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let repos: Vec<Repository> = serde_json::from_slice(&body).unwrap();
 
+        // Initial state has 2 repos
         assert_eq!(repos.len(), 2);
         assert_eq!(repos[0].name, "codeza");
     }
@@ -1073,6 +1088,7 @@ mod tests {
         };
 
         let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1090,6 +1106,15 @@ mod tests {
         let repo: Repository = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(repo.name, "new-project");
+
+        // Verify state persistence
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let repos: Vec<Repository> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(repos.len(), 3); // 2 initial + 1 created
     }
 
     #[tokio::test]
@@ -1117,6 +1142,7 @@ mod tests {
         };
 
         let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1134,6 +1160,15 @@ mod tests {
         let issue: Issue = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(issue.title, "New Bug");
+
+        // Verify state
+        let response = app
+            .oneshot(Request::builder().uri("/api/v1/repos/admin/codeza/issues").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(issues.len(), 2);
     }
 
     #[tokio::test]
