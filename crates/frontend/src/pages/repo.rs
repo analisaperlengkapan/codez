@@ -1,7 +1,7 @@
 use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
-use shared::{Repository, CreateRepoOption, Package, CodeSearchResult, Branch, Tag, FileEntry, Commit, DiffFile, Release, Label, Milestone, Project, WikiPage, RepoSettingsOption, Collaborator, Secret, DeployKey, Webhook};
+use shared::{Repository, CreateRepoOption, Package, FileEntry};
 
 #[component]
 pub fn RepoDetail() -> impl IntoView {

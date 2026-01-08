@@ -61,8 +61,6 @@ fn App() -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_frontend_routes() {
         assert_eq!(1, 1);

@@ -1,5 +1,4 @@
 use leptos::*;
-use leptos_router::*;
 use gloo_net::http::Request;
 use shared::{Repository, Notification};
 
