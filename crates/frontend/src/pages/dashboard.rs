@@ -1,23 +1,48 @@
 use leptos::*;
 use gloo_net::http::Request;
-use shared::{Repository, Notification};
+use shared::{Repository, Notification, Activity};
 
 #[component]
 pub fn UserDashboard() -> impl IntoView {
-    let (repos, _set_repos) = create_signal(vec![
-        Repository::new(1, "my-repo".to_string(), "me".to_string()),
-    ]);
+    let repos = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/repos").send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
+    });
+
+    let feeds = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/user/feeds").send().await.unwrap().json::<Vec<Activity>>().await.unwrap_or_default()
+    });
 
     view! {
-        <div class="dashboard">
-            <h2>"Dashboard"</h2>
-            <ul>
-                <For
-                    each=move || repos.get()
-                    key=|r| r.id
-                    children=move |r| view! { <li>{r.name}</li> }
-                />
-            </ul>
+        <div class="dashboard-container">
+            <div class="dashboard-sidebar">
+                <h3>"Repositories"</h3>
+                <ul>
+                    <Suspense fallback=move || view! { <li>"Loading repos..."</li> }>
+                        {move || repos.get().map(|list| view! {
+                            <For each=move || list.clone() key=|r| r.id children=move |r| {
+                                let href = format!("/repos/{}/{}", r.owner, r.name);
+                                view! { <li><a href=href>{r.owner} "/" {r.name}</a></li> }
+                            }/>
+                        })}
+                    </Suspense>
+                </ul>
+            </div>
+            <div class="dashboard-feed">
+                <h3>"Activity Feed"</h3>
+                <ul>
+                    <Suspense fallback=move || view! { <li>"Loading feed..."</li> }>
+                        {move || feeds.get().map(|list| view! {
+                            <For each=move || list.clone() key=|a| a.id children=move |a| {
+                                view! {
+                                    <li>
+                                        <strong>{a.user_name}</strong> " " {a.op_type} " - " {a.content}
+                                    </li>
+                                }
+                            }/>
+                        })}
+                    </Suspense>
+                </ul>
+            </div>
         </div>
     }
 }
