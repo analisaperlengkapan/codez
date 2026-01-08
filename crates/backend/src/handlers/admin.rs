@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Organization, Repository, Team, OrgMember, AdminStats, ActionWorkflow, SystemNotice,
-    DiffFile, DiffLine, LicenseTemplate, GitignoreTemplate,
+    LicenseTemplate, GitignoreTemplate,
     AdminUserEditOption, User, LanguageStat, ProtectedBranch
 };
 
@@ -94,25 +94,6 @@ pub async fn list_workflows(Path((_owner, _repo)): Path<(String, String)>) -> Js
         ActionWorkflow { id: 1, name: "CI".to_string(), status: "success".to_string() }
     ];
     Json(wfs)
-}
-
-pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, String)>) -> Json<Vec<DiffFile>> {
-    let diffs = vec![
-        DiffFile {
-            name: "src/main.rs".to_string(),
-            old_name: None,
-            index: "123".to_string(),
-            additions: 10,
-            deletions: 5,
-            type_: "modify".to_string(),
-            lines: vec![
-                DiffLine { line_no_old: Some(1), line_no_new: Some(1), content: " fn main() {".to_string(), type_: "context".to_string() },
-                DiffLine { line_no_old: Some(2), line_no_new: None, content: "-    println!(\"old\");".to_string(), type_: "delete".to_string() },
-                DiffLine { line_no_old: None, line_no_new: Some(2), content: "+    println!(\"new\");".to_string(), type_: "add".to_string() },
-            ],
-        }
-    ];
-    Json(diffs)
 }
 
 pub async fn list_licenses() -> Json<Vec<LicenseTemplate>> {

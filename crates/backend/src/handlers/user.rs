@@ -1,7 +1,6 @@
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
-    response::IntoResponse,
 };
 use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,

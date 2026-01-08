@@ -44,7 +44,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/tags" view=TagList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
-                    <Route path="/repos/:owner/:repo/commits/:sha/diff" view=CommitDiff/>
+                    <Route path="/repos/:owner/:repo/commits/:sha" view=CommitDiff/>
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
                     <Route path="/repos/:owner/:repo/labels" view=LabelList/>
                     <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>

@@ -9,7 +9,8 @@ use shared::{
     CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
-    Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest
+    Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
+    DiffLine
 };
 use crate::router::AppState;
 
@@ -484,8 +485,20 @@ pub async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json
         Commit {
             sha: "abc123456789".to_string(),
             message: "Initial commit".to_string(),
-            author: user,
+            author: user.clone(),
             date: "2023-01-01T12:00:00Z".to_string(),
+        },
+        Commit {
+            sha: "def456789012".to_string(),
+            message: "Refactor backend handlers".to_string(),
+            author: user.clone(),
+            date: "2023-01-02T14:30:00Z".to_string(),
+        },
+        Commit {
+            sha: "ghi789012345".to_string(),
+            message: "Add frontend components".to_string(),
+            author: user,
+            date: "2023-01-03T09:15:00Z".to_string(),
         }
     ];
     Json(commits)
@@ -514,4 +527,23 @@ pub async fn add_issue_assignee(Path((_owner, _repo, _index)): Path<(String, Str
 pub async fn request_review(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> (StatusCode, Json<ReviewRequest>) {
     let reviewer = User::new(2, "reviewer".to_string(), None);
     (StatusCode::CREATED, Json(ReviewRequest { reviewer, status: "requested".to_string() }))
+}
+
+pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, String)>) -> Json<Vec<DiffFile>> {
+    let diffs = vec![
+        DiffFile {
+            name: "src/main.rs".to_string(),
+            old_name: None,
+            index: "123".to_string(),
+            additions: 10,
+            deletions: 5,
+            type_: "modify".to_string(),
+            lines: vec![
+                DiffLine { line_no_old: Some(1), line_no_new: Some(1), content: " fn main() {".to_string(), type_: "context".to_string() },
+                DiffLine { line_no_old: Some(2), line_no_new: None, content: "-    println!(\"old\");".to_string(), type_: "delete".to_string() },
+                DiffLine { line_no_old: None, line_no_new: Some(2), content: "+    println!(\"new\");".to_string(), type_: "add".to_string() },
+            ],
+        }
+    ];
+    Json(diffs)
 }

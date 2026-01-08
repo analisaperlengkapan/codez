@@ -1,7 +1,7 @@
 use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
-use shared::{Repository, CreateRepoOption, Package, FileEntry, Issue};
+use shared::{Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile};
 
 #[component]
 pub fn RepoDetail() -> impl IntoView {
@@ -24,7 +24,10 @@ pub fn RepoDetail() -> impl IntoView {
                     Some(Some(r)) => view! {
                         <p>"Clone URL: https://codeza.com/" {r.owner} "/" {r.name} ".git"</p>
                         <p>
-                            <a href="issues">"Issues"</a> " | " <a href="pulls">"Pull Requests"</a> " | " <a href="src">"Code"</a> " | " <a href="commits">"Commits"</a>
+                            <a href="issues">"Issues"</a> " | "
+                            <a href="pulls">"Pull Requests"</a> " | "
+                            <a href="src">"Code"</a> " | "
+                            <a href="commits">"Commits"</a>
                         </p>
                     }.into_view(),
                     _ => view! { <p>"Repo not found"</p> }.into_view()
@@ -184,6 +187,141 @@ pub fn PackageDetail() -> impl IntoView {
     }
 }
 
+#[component]
+pub fn CommitList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let commits = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/commits", o, r))
+                .send().await.unwrap().json::<Vec<Commit>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="commit-list">
+            <h3>"Commit History for " {owner} "/" {repo_name}</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading commits..."</li> }>
+                    {move || commits.get().map(|list| view! {
+                        <For each=move || list.clone() key=|c| c.sha.clone() children=move |c| {
+                            let href = format!("/repos/{}/{}/commits/{}", owner(), repo_name(), c.sha);
+                            view! {
+                                <li>
+                                    <a href=href class="commit-sha">{c.sha.chars().take(7).collect::<String>()}</a>
+                                    " - "
+                                    <span class="commit-message">{c.message}</span>
+                                    " by "
+                                    <span class="commit-author">{c.author.username}</span>
+                                    " on "
+                                    <span class="commit-date">{c.date}</span>
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn CommitDiff() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let sha = move || params.with(|params| params.get("sha").cloned().unwrap_or_default());
+
+    let diffs = create_resource(
+        move || (owner(), repo_name(), sha()),
+        |(o, r, s)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/commits/{}/diff", o, r, s))
+                .send().await.unwrap().json::<Vec<DiffFile>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="commit-diff">
+            <h3>"Commit Diff: " {sha}</h3>
+            <div class="diff-container">
+                <Suspense fallback=move || view! { <p>"Loading diff..."</p> }>
+                    {move || diffs.get().map(|files| view! {
+                        <For each=move || files.clone() key=|f| f.name.clone() children=move |f| {
+                            view! {
+                                <div class="file-diff">
+                                    <div class="file-header">
+                                        <strong>{f.name}</strong>
+                                        <span class="diff-stats">
+                                            " +"{f.additions} " -"{f.deletions}
+                                        </span>
+                                    </div>
+                                    <pre class="diff-content">
+                                        <For each=move || f.lines.clone() key=|l| format!("{}{:?}", l.content, l.line_no_old) children=move |line| {
+                                            let class_name = match line.type_.as_str() {
+                                                "add" => "diff-line-add",
+                                                "delete" => "diff-line-delete",
+                                                _ => "diff-line-context",
+                                            };
+                                            view! { <div class=class_name>{line.content}</div> }
+                                        }/>
+                                    </pre>
+                                </div>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+pub fn PullRequestList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let pulls = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls", o, r))
+                .send().await.unwrap().json::<Vec<PullRequest>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="pull-list">
+            <h3>"Pull Requests for " {owner} "/" {repo_name}</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading pull requests..."</li> }>
+                    {move || pulls.get().map(|list| view! {
+                        <For each=move || list.clone() key=|p| p.id children=move |p| {
+                            let href = format!("/repos/{}/{}/pulls/{}", owner(), repo_name(), p.id);
+                            view! { <li><a href=href>"#" {p.number} " " {p.title}</a> " (" {p.state} ")"</li> }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn PullRequestDetail() -> impl IntoView {
+    let params = use_params_map();
+    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default());
+
+    view! {
+        <div class="pull-detail">
+            <h3>"Pull Request #" {index}</h3>
+            <p>"Details placeholder..."</p>
+        </div>
+    }
+}
+
 // Stub components to allow compilation
 #[component]
 pub fn RepoCodeSearch() -> impl IntoView { view! { <div>"Repo Search Placeholder"</div> } }
@@ -193,10 +331,6 @@ pub fn ActionsList() -> impl IntoView { view! { <div>"Actions List Placeholder"<
 pub fn BranchList() -> impl IntoView { view! { <div>"Branch List Placeholder"</div> } }
 #[component]
 pub fn TagList() -> impl IntoView { view! { <div>"Tag List Placeholder"</div> } }
-#[component]
-pub fn CommitList() -> impl IntoView { view! { <div>"Commit List Placeholder"</div> } }
-#[component]
-pub fn CommitDiff() -> impl IntoView { view! { <div>"Commit Diff Placeholder"</div> } }
 #[component]
 pub fn ReleaseList() -> impl IntoView { view! { <div>"Release List Placeholder"</div> } }
 #[component]
@@ -215,7 +349,3 @@ pub fn WikiEdit() -> impl IntoView { view! { <div>"Wiki Edit Placeholder"</div> 
 pub fn RepoSettings() -> impl IntoView { view! { <div>"Repo Settings Placeholder"</div> } }
 #[component]
 pub fn IssueDetail() -> impl IntoView { view! { <div>"Issue Detail Placeholder"</div> } }
-#[component]
-pub fn PullRequestList() -> impl IntoView { view! { <div>"Pull Request List Placeholder"</div> } }
-#[component]
-pub fn PullRequestDetail() -> impl IntoView { view! { <div>"Pull Request Detail Placeholder"</div> } }
