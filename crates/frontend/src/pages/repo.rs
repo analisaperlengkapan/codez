@@ -1,7 +1,7 @@
 use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
-use shared::{Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile};
+use shared::{Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release};
 
 #[component]
 pub fn RepoDetail() -> impl IntoView {
@@ -27,7 +27,10 @@ pub fn RepoDetail() -> impl IntoView {
                             <a href="issues">"Issues"</a> " | "
                             <a href="pulls">"Pull Requests"</a> " | "
                             <a href="src">"Code"</a> " | "
-                            <a href="commits">"Commits"</a>
+                            <a href="commits">"Commits"</a> " | "
+                            <a href="releases">"Releases"</a> " | "
+                            <a href="branches">"Branches"</a> " | "
+                            <a href="tags">"Tags"</a>
                         </p>
                     }.into_view(),
                     _ => view! { <p>"Repo not found"</p> }.into_view()
@@ -322,17 +325,119 @@ pub fn PullRequestDetail() -> impl IntoView {
     }
 }
 
+#[component]
+pub fn BranchList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let branches = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/branches", o, r))
+                .send().await.unwrap().json::<Vec<Branch>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="branch-list">
+            <h3>"Branches for " {owner} "/" {repo_name}</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading branches..."</li> }>
+                    {move || branches.get().map(|list| view! {
+                        <For each=move || list.clone() key=|b| b.name.clone() children=move |b| {
+                            view! {
+                                <li>
+                                    <strong>{b.name}</strong>
+                                    {if b.protected { " (Protected)" } else { "" }}
+                                    " - " {b.commit.sha.chars().take(7).collect::<String>()}
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn TagList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let tags = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/tags", o, r))
+                .send().await.unwrap().json::<Vec<Tag>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="tag-list">
+            <h3>"Tags for " {owner} "/" {repo_name}</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading tags..."</li> }>
+                    {move || tags.get().map(|list| view! {
+                        <For each=move || list.clone() key=|t| t.name.clone() children=move |t| {
+                            view! {
+                                <li>
+                                    <strong>{t.name}</strong>
+                                    " - " {t.commit.sha.chars().take(7).collect::<String>()}
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn ReleaseList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let releases = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/releases", o, r))
+                .send().await.unwrap().json::<Vec<Release>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="release-list">
+            <h3>"Releases for " {owner} "/" {repo_name}</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading releases..."</li> }>
+                    {move || releases.get().map(|list| view! {
+                        <For each=move || list.clone() key=|r| r.id children=move |r| {
+                            view! {
+                                <li>
+                                    <strong>{r.name}</strong> " (" {r.tag_name} ")"
+                                    {if r.draft { " [Draft]" } else { "" }}
+                                    {if r.prerelease { " [Pre-release]" } else { "" }}
+                                    <p>{r.body.unwrap_or_default()}</p>
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
 // Stub components to allow compilation
 #[component]
 pub fn RepoCodeSearch() -> impl IntoView { view! { <div>"Repo Search Placeholder"</div> } }
 #[component]
 pub fn ActionsList() -> impl IntoView { view! { <div>"Actions List Placeholder"</div> } }
-#[component]
-pub fn BranchList() -> impl IntoView { view! { <div>"Branch List Placeholder"</div> } }
-#[component]
-pub fn TagList() -> impl IntoView { view! { <div>"Tag List Placeholder"</div> } }
-#[component]
-pub fn ReleaseList() -> impl IntoView { view! { <div>"Release List Placeholder"</div> } }
 #[component]
 pub fn LabelList() -> impl IntoView { view! { <div>"Label List Placeholder"</div> } }
 #[component]
