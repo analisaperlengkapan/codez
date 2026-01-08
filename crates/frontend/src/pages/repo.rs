@@ -4,7 +4,7 @@ use gloo_net::http::Request;
 use shared::{
     Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
-    Milestone, CreateMilestoneOption, MilestoneStats
+    Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project
 };
 
 #[component]
@@ -37,6 +37,8 @@ pub fn RepoDetail() -> impl IntoView {
                             <a href="tags">"Tags"</a> " | "
                             <a href="labels">"Labels"</a> " | "
                             <a href="milestones">"Milestones"</a> " | "
+                            <a href="wiki">"Wiki"</a> " | "
+                            <a href="projects">"Projects"</a> " | "
                             <a href="settings">"Settings"</a>
                         </p>
                     }.into_view(),
@@ -52,7 +54,6 @@ pub fn RepoCode() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-    // "path" param handles the *path wildcard in routing
     let path = move || params.with(|params| params.get("path").cloned().unwrap_or_default());
 
     let contents = create_resource(
@@ -772,14 +773,133 @@ pub fn MilestoneDetail() -> impl IntoView {
     }
 }
 
-// Stub components to allow compilation
 #[component]
-pub fn RepoCodeSearch() -> impl IntoView { view! { <div>"Repo Search Placeholder"</div> } }
+pub fn Wiki() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    // We default to Home for now as we don't have a catch-all route for wiki pages yet
+    let page_name = "Home";
+
+    let wiki_page = create_resource(
+        move || (owner(), repo_name()),
+        move |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/wiki/pages/{}", o, r, page_name))
+                .send().await.unwrap().json::<Option<WikiPage>>().await.unwrap_or(None)
+        }
+    );
+
+    view! {
+        <div class="wiki-view">
+            <Suspense fallback=move || view! { <p>"Loading wiki..."</p> }>
+                {move || match wiki_page.get() {
+                    Some(Some(page)) => view! {
+                        <div class="wiki-header">
+                            <h3>{page.title}</h3>
+                            <a href=format!("wiki/pages/{}/edit", page_name) class="btn">"Edit"</a>
+                        </div>
+                        <div class="wiki-content">
+                            <pre>{page.content}</pre>
+                        </div>
+                    }.into_view(),
+                    _ => view! {
+                        <div>
+                            <p>"Wiki page 'Home' not found."</p>
+                            <a href="wiki/pages/Home/edit">"Create Home Page"</a>
+                        </div>
+                    }.into_view()
+                }}
+            </Suspense>
+        </div>
+    }
+}
+
+#[component]
+pub fn WikiEdit() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let page_name = move || params.with(|params| params.get("page_name").cloned().unwrap_or("Home".to_string()));
+
+    let (content, set_content) = create_signal("".to_string());
+    let (message, set_message) = create_signal("".to_string());
+
+    // Load existing content if available
+    let _ = create_resource(
+        move || (owner(), repo_name(), page_name()),
+        move |(o, r, p)| async move {
+             if let Ok(resp) = Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p)).send().await {
+                 if let Ok(Some(page)) = resp.json::<Option<WikiPage>>().await {
+                     set_content.set(page.content);
+                 }
+             }
+        }
+    );
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateWikiPageOption {
+            title: page_name(),
+            content: content.get(),
+            message: Some(message.get()),
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/wiki/pages", o, r))
+                .json(&payload).unwrap().send().await;
+            // Redirect or notify would happen here
+        });
+    };
+
+    view! {
+        <div class="wiki-edit">
+            <h3>"Editing " {page_name}</h3>
+            <form on:submit=on_submit>
+                <textarea prop:value=content on:input=move |ev| set_content.set(event_target_value(&ev)) rows="10"></textarea>
+                <input type="text" placeholder="Commit Message" prop:value=message on:input=move |ev| set_message.set(event_target_value(&ev)) />
+                <button type="submit">"Save Page"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+pub fn ProjectList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let projects = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects", o, r))
+                .send().await.unwrap().json::<Vec<Project>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="project-list">
+            <h3>"Projects"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading projects..."</li> }>
+                    {move || projects.get().map(|list| view! {
+                        <For each=move || list.clone() key=|p| p.id children=move |p| {
+                            view! {
+                                <li>
+                                    <strong>{p.title}</strong>
+                                    <p>{p.description.unwrap_or_default()}</p>
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
 #[component]
 pub fn ActionsList() -> impl IntoView { view! { <div>"Actions List Placeholder"</div> } }
 #[component]
-pub fn ProjectList() -> impl IntoView { view! { <div>"Project List Placeholder"</div> } }
-#[component]
-pub fn Wiki() -> impl IntoView { view! { <div>"Wiki Placeholder"</div> } }
-#[component]
-pub fn WikiEdit() -> impl IntoView { view! { <div>"Wiki Edit Placeholder"</div> } }
+pub fn RepoCodeSearch() -> impl IntoView { view! { <div>"Repo Search Placeholder"</div> } }
