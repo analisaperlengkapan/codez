@@ -3,8 +3,8 @@ use axum::{
     http::StatusCode,
 };
 use shared::{
-    Organization, Repository, Team, OrgMember, AdminStats, ActionWorkflow, Package, SystemNotice,
-    TwoFactor, OAuth2Provider, DiffFile, DiffLine, Contribution, LicenseTemplate, GitignoreTemplate,
+    Organization, Repository, Team, OrgMember, AdminStats, ActionWorkflow, SystemNotice,
+    DiffFile, DiffLine, LicenseTemplate, GitignoreTemplate,
     AdminUserEditOption, User, LanguageStat, ProtectedBranch
 };
 
@@ -96,36 +96,6 @@ pub async fn list_workflows(Path((_owner, _repo)): Path<(String, String)>) -> Js
     Json(wfs)
 }
 
-pub async fn list_packages(Path(_owner): Path<String>) -> Json<Vec<Package>> {
-    let pkgs = vec![
-        Package { id: 1, name: "my-lib".to_string(), version: "1.0.0".to_string(), package_type: "cargo".to_string() }
-    ];
-    Json(pkgs)
-}
-
-pub async fn get_package_detail(Path((_owner, _type, _name, _version)): Path<(String, String, String, String)>) -> Json<Package> {
-    Json(Package { id: 1, name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() })
-}
-
-pub async fn get_2fa() -> Json<TwoFactor> {
-    Json(TwoFactor { enabled: false, method: "totp".to_string() })
-}
-
-pub async fn update_2fa(Json(_payload): Json<TwoFactor>) -> StatusCode {
-    StatusCode::OK
-}
-
-pub async fn list_oauth2_providers() -> Json<Vec<OAuth2Provider>> {
-    let providers = vec![
-        OAuth2Provider {
-            name: "github".to_string(),
-            display_name: "GitHub".to_string(),
-            url: "http://github.com/login".to_string(),
-        }
-    ];
-    Json(providers)
-}
-
 pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, String)>) -> Json<Vec<DiffFile>> {
     let diffs = vec![
         DiffFile {
@@ -143,13 +113,6 @@ pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, 
         }
     ];
     Json(diffs)
-}
-
-pub async fn get_user_heatmap(Path(_username): Path<String>) -> Json<Vec<Contribution>> {
-    vec![
-        Contribution { date: "2023-01-01".to_string(), count: 5 },
-        Contribution { date: "2023-01-02".to_string(), count: 2 },
-    ].into()
 }
 
 pub async fn list_licenses() -> Json<Vec<LicenseTemplate>> {
