@@ -4,7 +4,8 @@ use gloo_net::http::Request;
 use shared::{
     Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
-    Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project
+    Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
+    ActionWorkflow, CodeSearchResult
 };
 
 #[component]
@@ -39,6 +40,7 @@ pub fn RepoDetail() -> impl IntoView {
                             <a href="milestones">"Milestones"</a> " | "
                             <a href="wiki">"Wiki"</a> " | "
                             <a href="projects">"Projects"</a> " | "
+                            <a href="actions">"Actions"</a> " | "
                             <a href="settings">"Settings"</a>
                         </p>
                     }.into_view(),
@@ -71,6 +73,9 @@ pub fn RepoCode() -> impl IntoView {
     view! {
         <div class="repo-code">
             <h3>"Files in " {move || if path().is_empty() { "root".to_string() } else { path() }}</h3>
+            <div class="code-search-link">
+                <a href="search">"Search Code"</a>
+            </div>
             <ul>
                 <Suspense fallback=move || view! { <li>"Loading files..."</li> }>
                     {move || contents.get().map(|files| {
@@ -900,6 +905,84 @@ pub fn ProjectList() -> impl IntoView {
 }
 
 #[component]
-pub fn ActionsList() -> impl IntoView { view! { <div>"Actions List Placeholder"</div> } }
+pub fn ActionsList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let actions = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows", o, r))
+                .send().await.unwrap().json::<Vec<ActionWorkflow>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="actions-list">
+            <h3>"Actions Workflows"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading workflows..."</li> }>
+                    {move || actions.get().map(|list| view! {
+                        <For each=move || list.clone() key=|w| w.id children=move |w| {
+                            view! {
+                                <li>
+                                    <strong>{w.name}</strong> " - " {w.status}
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
 #[component]
-pub fn RepoCodeSearch() -> impl IntoView { view! { <div>"Repo Search Placeholder"</div> } }
+pub fn RepoCodeSearch() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let (query, set_query) = create_signal("".to_string());
+
+    // Trigger resource when query changes (and is not empty)
+    let search_results = create_resource(
+        move || (owner(), repo_name(), query.get()),
+        |(o, r, q)| async move {
+            if q.is_empty() { return vec![]; }
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/search?q={}", o, r, q))
+                .send().await.unwrap().json::<Vec<CodeSearchResult>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_search = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        // search_results resource will auto-update because it depends on `query()`
+    };
+
+    view! {
+        <div class="repo-search">
+            <h3>"Search Code"</h3>
+            <form on:submit=on_search>
+                <input type="text" prop:value=query on:input=move |ev| set_query.set(event_target_value(&ev)) placeholder="Search..."/>
+                <button type="submit">"Search"</button>
+            </form>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Searching..."</li> }>
+                    {move || search_results.get().map(|list| view! {
+                        <For each=move || list.clone() key=|r| r.path.clone() children=move |r| {
+                            let path_clone = r.path.clone();
+                            view! {
+                                <li>
+                                    <strong>{r.path}</strong>
+                                    // Link to line number or file
+                                    <a href=format!("src/{}", path_clone)>"View"</a>
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
