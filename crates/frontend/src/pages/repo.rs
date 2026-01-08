@@ -1,7 +1,7 @@
 use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
-use shared::{Repository, CreateRepoOption, Package, FileEntry};
+use shared::{Repository, CreateRepoOption, Package, FileEntry, Issue};
 
 #[component]
 pub fn RepoDetail() -> impl IntoView {
@@ -78,6 +78,37 @@ pub fn RepoCode() -> impl IntoView {
                                 }/>
                             }.into_view()
                         }
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn IssueList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let issues = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues", o, r))
+                .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="issue-list">
+            <h3>"Issues for " {owner} "/" {repo_name}</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading issues..."</li> }>
+                    {move || issues.get().map(|list| view! {
+                        <For each=move || list.clone() key=|i| i.id children=move |i| {
+                            let href = format!("/repos/{}/{}/issues/{}", owner(), repo_name(), i.id);
+                            view! { <li><a href=href>"#" {i.number} " " {i.title}</a> " (" {i.state} ")"</li> }
+                        }/>
                     })}
                 </Suspense>
             </ul>
@@ -182,10 +213,6 @@ pub fn Wiki() -> impl IntoView { view! { <div>"Wiki Placeholder"</div> } }
 pub fn WikiEdit() -> impl IntoView { view! { <div>"Wiki Edit Placeholder"</div> } }
 #[component]
 pub fn RepoSettings() -> impl IntoView { view! { <div>"Repo Settings Placeholder"</div> } }
-
-// Missing components that were causing errors
-#[component]
-pub fn IssueList() -> impl IntoView { view! { <div>"Issue List Placeholder"</div> } }
 #[component]
 pub fn IssueDetail() -> impl IntoView { view! { <div>"Issue Detail Placeholder"</div> } }
 #[component]
