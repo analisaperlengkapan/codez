@@ -1,7 +1,10 @@
 use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
-use shared::{Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release};
+use shared::{
+    Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
+    Comment, CreateCommentOption, MergePullRequestOption
+};
 
 #[component]
 pub fn RepoDetail() -> impl IntoView {
@@ -118,6 +121,94 @@ pub fn IssueList() -> impl IntoView {
                     })}
                 </Suspense>
             </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn IssueDetail() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
+
+    let (new_comment, set_new_comment) = create_signal("".to_string());
+
+    let issue = create_resource(
+        move || (owner(), repo_name(), index()),
+        |(o, r, i)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, i))
+                .send().await.unwrap().json::<Option<Issue>>().await.unwrap_or(None)
+        }
+    );
+
+    let comments = create_resource(
+        move || (owner(), repo_name(), index()),
+        |(o, r, i)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
+                .send().await.unwrap().json::<Vec<Comment>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_submit_comment = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateCommentOption { body: new_comment.get() };
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
+                .json(&payload).unwrap().send().await;
+            set_new_comment.set("".to_string());
+            // In a real app we would refetch comments here
+        });
+    };
+
+    view! {
+        <div class="issue-detail">
+            <Suspense fallback=move || view! { <p>"Loading issue..."</p> }>
+                {move || match issue.get() {
+                    Some(Some(i)) => view! {
+                        <div class="issue-header">
+                            <h2>{i.title} " #" {i.number}</h2>
+                            <span class="state">{i.state}</span>
+                            <span class="meta">" opened by " {i.user.username}</span>
+                        </div>
+                        <div class="issue-body">
+                            <p>{i.body.unwrap_or_default()}</p>
+                        </div>
+                    }.into_view(),
+                    _ => view! { <p>"Issue not found"</p> }.into_view()
+                }}
+            </Suspense>
+
+            <div class="comments-section">
+                <h3>"Comments"</h3>
+                <Suspense fallback=move || view! { <p>"Loading comments..."</p> }>
+                    {move || comments.get().map(|list| view! {
+                        <For each=move || list.clone() key=|c| c.id children=move |c| {
+                            view! {
+                                <div class="comment">
+                                    <div class="comment-header">
+                                        <strong>{c.user.username}</strong> " commented on " {c.created_at}
+                                    </div>
+                                    <div class="comment-body">{c.body}</div>
+                                </div>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+
+                <form on:submit=on_submit_comment class="comment-form">
+                    <textarea
+                        prop:value=new_comment
+                        on:input=move |ev| set_new_comment.set(event_target_value(&ev))
+                        placeholder="Leave a comment"
+                    ></textarea>
+                    <button type="submit">"Comment"</button>
+                </form>
+            </div>
         </div>
     }
 }
@@ -315,12 +406,59 @@ pub fn PullRequestList() -> impl IntoView {
 #[component]
 pub fn PullRequestDetail() -> impl IntoView {
     let params = use_params_map();
-    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default());
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
+
+    let pr_files = create_resource(
+        move || (owner(), repo_name(), index()),
+        |(o, r, i)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/files", o, r, i))
+                .send().await.unwrap().json::<Vec<DiffFile>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_merge = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        spawn_local(async move {
+            let payload = MergePullRequestOption {
+                merge_action: "merge".to_string(),
+                merge_title_field: None,
+                merge_message_field: None,
+            };
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/merge", o, r, i))
+                .json(&payload).unwrap().send().await;
+            // Refresh logic would go here
+        });
+    };
 
     view! {
         <div class="pull-detail">
             <h3>"Pull Request #" {index}</h3>
-            <p>"Details placeholder..."</p>
+            <div class="pr-actions">
+                <button on:click=on_merge class="btn-merge">"Merge Pull Request"</button>
+            </div>
+            <div class="pr-files">
+                <h4>"Files Changed"</h4>
+                <Suspense fallback=move || view! { <p>"Loading files..."</p> }>
+                    {move || pr_files.get().map(|files| view! {
+                        <For each=move || files.clone() key=|f| f.name.clone() children=move |f| {
+                             view! {
+                                <div class="file-diff">
+                                    <div class="file-header">
+                                        <strong>{f.name}</strong>
+                                        <span class="diff-stats">" +"{f.additions} " -"{f.deletions}</span>
+                                    </div>
+                                    // Reuse DiffLine logic if extracted, or simplified view here
+                                    <p>"Binary or large file diff suppressed"</p>
+                                </div>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </div>
         </div>
     }
 }
@@ -452,5 +590,3 @@ pub fn Wiki() -> impl IntoView { view! { <div>"Wiki Placeholder"</div> } }
 pub fn WikiEdit() -> impl IntoView { view! { <div>"Wiki Edit Placeholder"</div> } }
 #[component]
 pub fn RepoSettings() -> impl IntoView { view! { <div>"Repo Settings Placeholder"</div> } }
-#[component]
-pub fn IssueDetail() -> impl IntoView { view! { <div>"Issue Detail Placeholder"</div> } }
