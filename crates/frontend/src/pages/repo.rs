@@ -3,7 +3,8 @@ use leptos_router::*;
 use gloo_net::http::Request;
 use shared::{
     Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
-    Comment, CreateCommentOption, MergePullRequestOption
+    Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
+    Milestone, CreateMilestoneOption, MilestoneStats
 };
 
 #[component]
@@ -33,7 +34,10 @@ pub fn RepoDetail() -> impl IntoView {
                             <a href="commits">"Commits"</a> " | "
                             <a href="releases">"Releases"</a> " | "
                             <a href="branches">"Branches"</a> " | "
-                            <a href="tags">"Tags"</a>
+                            <a href="tags">"Tags"</a> " | "
+                            <a href="labels">"Labels"</a> " | "
+                            <a href="milestones">"Milestones"</a> " | "
+                            <a href="settings">"Settings"</a>
                         </p>
                     }.into_view(),
                     _ => view! { <p>"Repo not found"</p> }.into_view()
@@ -161,7 +165,6 @@ pub fn IssueDetail() -> impl IntoView {
             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
                 .json(&payload).unwrap().send().await;
             set_new_comment.set("".to_string());
-            // In a real app we would refetch comments here
         });
     };
 
@@ -430,7 +433,6 @@ pub fn PullRequestDetail() -> impl IntoView {
             };
             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/merge", o, r, i))
                 .json(&payload).unwrap().send().await;
-            // Refresh logic would go here
         });
     };
 
@@ -451,7 +453,6 @@ pub fn PullRequestDetail() -> impl IntoView {
                                         <strong>{f.name}</strong>
                                         <span class="diff-stats">" +"{f.additions} " -"{f.deletions}</span>
                                     </div>
-                                    // Reuse DiffLine logic if extracted, or simplified view here
                                     <p>"Binary or large file diff suppressed"</p>
                                 </div>
                             }
@@ -571,22 +572,214 @@ pub fn ReleaseList() -> impl IntoView {
     }
 }
 
+#[component]
+pub fn RepoSettings() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (desc, set_desc) = create_signal("".to_string());
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = RepoSettingsOption {
+            description: Some(desc.get()),
+            private: None,
+            website: None,
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/settings", o, r))
+                .json(&payload).unwrap().send().await;
+        });
+    };
+
+    view! {
+        <div class="repo-settings">
+            <h3>"Repository Settings"</h3>
+            <form on:submit=on_submit>
+                <label>"Description"</label>
+                <input type="text" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) />
+                <button type="submit">"Update Settings"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+pub fn LabelList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (name, set_name) = create_signal("".to_string());
+    let (color, set_color) = create_signal("#000000".to_string());
+
+    let labels = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/labels", o, r))
+                .send().await.unwrap().json::<Vec<Label>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_create = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateLabelOption {
+            name: name.get(),
+            color: color.get(),
+            description: None,
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/labels", o, r))
+                .json(&payload).unwrap().send().await;
+            set_name.set("".to_string());
+        });
+    };
+
+    view! {
+        <div class="label-list">
+            <h3>"Labels"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || labels.get().map(|list| view! {
+                        <For each=move || list.clone() key=|l| l.id children=move |l| {
+                            view! {
+                                <li style=format!("border-left: 5px solid {}", l.color)>
+                                    {l.name}
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+            <h4>"Create Label"</h4>
+            <form on:submit=on_create>
+                <input type="text" placeholder="Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
+                <input type="color" prop:value=color on:input=move |ev| set_color.set(event_target_value(&ev)) />
+                <button type="submit">"Create"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+pub fn MilestoneList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (title, set_title) = create_signal("".to_string());
+
+    let milestones = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/milestones", o, r))
+                .send().await.unwrap().json::<Vec<Milestone>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_create = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateMilestoneOption {
+            title: title.get(),
+            description: None,
+            due_on: None,
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/milestones", o, r))
+                .json(&payload).unwrap().send().await;
+            set_title.set("".to_string());
+        });
+    };
+
+    view! {
+        <div class="milestone-list">
+            <h3>"Milestones"</h3>
+             <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || milestones.get().map(|list| view! {
+                        <For each=move || list.clone() key=|m| m.id children=move |m| {
+                             let href = format!("/repos/{}/{}/milestones/{}", owner(), repo_name(), m.id);
+                            view! {
+                                <li>
+                                    <a href=href>{m.title}</a> " (" {m.state} ")"
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+             <h4>"Create Milestone"</h4>
+            <form on:submit=on_create>
+                <input type="text" placeholder="Title" prop:value=title on:input=move |ev| set_title.set(event_target_value(&ev)) />
+                <button type="submit">"Create"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+pub fn MilestoneDetail() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
+
+    let milestone = create_resource(
+         move || (owner(), repo_name(), index()),
+        |(o, r, i)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/milestones/{}", o, r, i))
+                .send().await.unwrap().json::<Option<Milestone>>().await.unwrap_or(None)
+        }
+    );
+
+    let stats = create_resource(
+         move || (owner(), repo_name(), index()),
+        |(o, r, i)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/milestones/{}/stats", o, r, i))
+                .send().await.unwrap().json::<MilestoneStats>().await.unwrap_or(MilestoneStats { open_issues: 0, closed_issues: 0 })
+        }
+    );
+
+    view! {
+        <div class="milestone-detail">
+             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
+                {move || match milestone.get() {
+                    Some(Some(m)) => view! {
+                        <h3>"Milestone: " {m.title}</h3>
+                        <p>{m.description.unwrap_or_default()}</p>
+                        <p>"State: " {m.state}</p>
+                    }.into_view(),
+                    _ => view! { <p>"Milestone not found"</p> }.into_view()
+                }}
+            </Suspense>
+             <Suspense fallback=move || view! { <p>"Loading stats..."</p> }>
+                {move || stats.get().map(|s| view! {
+                    <div class="stats">
+                        <span>"Open Issues: " {s.open_issues}</span>
+                        " | "
+                        <span>"Closed Issues: " {s.closed_issues}</span>
+                    </div>
+                })}
+            </Suspense>
+        </div>
+    }
+}
+
 // Stub components to allow compilation
 #[component]
 pub fn RepoCodeSearch() -> impl IntoView { view! { <div>"Repo Search Placeholder"</div> } }
 #[component]
 pub fn ActionsList() -> impl IntoView { view! { <div>"Actions List Placeholder"</div> } }
 #[component]
-pub fn LabelList() -> impl IntoView { view! { <div>"Label List Placeholder"</div> } }
-#[component]
-pub fn MilestoneList() -> impl IntoView { view! { <div>"Milestone List Placeholder"</div> } }
-#[component]
-pub fn MilestoneDetail() -> impl IntoView { view! { <div>"Milestone Detail Placeholder"</div> } }
-#[component]
 pub fn ProjectList() -> impl IntoView { view! { <div>"Project List Placeholder"</div> } }
 #[component]
 pub fn Wiki() -> impl IntoView { view! { <div>"Wiki Placeholder"</div> } }
 #[component]
 pub fn WikiEdit() -> impl IntoView { view! { <div>"Wiki Edit Placeholder"</div> } }
-#[component]
-pub fn RepoSettings() -> impl IntoView { view! { <div>"Repo Settings Placeholder"</div> } }

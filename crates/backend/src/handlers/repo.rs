@@ -192,6 +192,12 @@ pub async fn create_milestone(
     (StatusCode::CREATED, Json(milestone))
 }
 
+pub async fn get_milestone(State(state): State<AppState>, Path((_owner, _repo, id)): Path<(String, String, u64)>) -> Json<Option<Milestone>> {
+    let milestones = state.milestones.read().unwrap();
+    let m = milestones.iter().find(|m| m.id == id).cloned();
+    Json(m)
+}
+
 pub async fn list_hooks(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Webhook>> {
     let hooks = state.hooks.read().unwrap();
     Json(hooks.clone())

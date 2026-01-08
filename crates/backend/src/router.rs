@@ -141,6 +141,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/pulls/:index/merge", post(merge_pull))
         .route("/api/v1/repos/:owner/:repo/labels", get(list_labels).post(create_label))
         .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))
+        .route("/api/v1/repos/:owner/:repo/milestones/:id", get(get_milestone))
         .route("/api/v1/repos/:owner/:repo/topics", get(list_topics).put(update_topics))
         .route("/api/v1/repos/:owner/:repo/star", post(star_repo))
         .route("/api/v1/repos/:owner/:repo/watch", post(watch_repo))
