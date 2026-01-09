@@ -21,8 +21,37 @@ pub fn RepoDetail() -> impl IntoView {
         }
     );
 
+    let on_star = move |_| {
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/star", o, r)).send().await;
+        });
+    };
+
+    let on_watch = move |_| {
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/watch", o, r)).send().await;
+        });
+    };
+
+    let on_fork = move |_| {
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/fork", o, r)).send().await;
+        });
+    };
+
     view! {
         <div class="repo-detail">
+            <div class="repo-actions" style="float: right; display: flex; gap: 5px;">
+                <button on:click=on_star>"Star"</button>
+                <button on:click=on_watch>"Watch"</button>
+                <button on:click=on_fork>"Fork"</button>
+            </div>
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                 {move || match repo.get() {

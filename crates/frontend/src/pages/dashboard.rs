@@ -95,6 +95,12 @@ pub fn NotificationList() -> impl IntoView {
         Request::get("http://127.0.0.1:3000/api/v1/notifications").send().await.unwrap().json::<Vec<Notification>>().await.unwrap_or_default()
     });
 
+    let on_mark_read = move |id: u64| {
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/notifications/threads/{}", id)).send().await;
+        });
+    };
+
     view! {
         <div class="notifications">
             <h2>"Notifications"</h2>
@@ -105,6 +111,11 @@ pub fn NotificationList() -> impl IntoView {
                             view! {
                                 <li>
                                     <strong>{n.subject}</strong> " (" {if n.unread { "Unread" } else { "Read" }} ")"
+                                    {if n.unread {
+                                        view! { <button on:click=move |_| on_mark_read(n.id)>"Mark Read"</button> }.into_view()
+                                    } else {
+                                        view! { <span></span> }.into_view()
+                                    }}
                                 </li>
                             }
                         }/>
