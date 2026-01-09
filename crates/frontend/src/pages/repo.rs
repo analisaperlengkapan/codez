@@ -7,7 +7,7 @@ use shared::{
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
     ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
-    LanguageStat, ProtectedBranch, LfsLock
+    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions
 };
 
 #[component]
@@ -89,6 +89,11 @@ pub fn RepoDetail() -> impl IntoView {
             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                 {move || match repo.get() {
                     Some(Some(r)) => view! {
+                        <div class="repo-stats" style="margin-bottom: 10px;">
+                            <span title="Stars">"⭐ " {r.stars_count}</span> " | "
+                            <span title="Forks">"🍴 " {r.forks_count}</span> " | "
+                            <span title="Watchers">"👁️ " {r.watchers_count}</span>
+                        </div>
                         <p>"Clone URL: https://codeza.com/" {r.owner} "/" {r.name} ".git"</p>
                         <p>
                             <a href="issues">"Issues"</a> " | "
@@ -675,6 +680,7 @@ pub fn RepoSettings() -> impl IntoView {
 
     let (desc, set_desc) = create_signal("".to_string());
     let (transfer_to, set_transfer_to) = create_signal("".to_string());
+    let (topics, set_topics) = create_signal("".to_string());
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -702,6 +708,26 @@ pub fn RepoSettings() -> impl IntoView {
         });
     };
 
+    let on_update_topics = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let topic_list: Vec<String> = topics.get().split(',').map(|s| s.trim().to_string()).collect();
+        let payload = RepoTopicOptions { topics: topic_list };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::put(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/topics", o, r))
+                .json(&payload).unwrap().send().await;
+        });
+    };
+
+    let on_sync = move |_| {
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/mirror-sync", o, r)).send().await;
+        });
+    };
+
     view! {
         <div class="repo-settings">
             <h3>"Repository Settings"</h3>
@@ -710,6 +736,15 @@ pub fn RepoSettings() -> impl IntoView {
                 <input type="text" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) />
                 <button type="submit">"Update Settings"</button>
             </form>
+
+            <h4>"Topics"</h4>
+            <form on:submit=on_update_topics>
+                <input type="text" placeholder="rust, gitea, clone" prop:value=topics on:input=move |ev| set_topics.set(event_target_value(&ev)) />
+                <button type="submit">"Update Topics"</button>
+            </form>
+
+            <h4>"Mirror Settings"</h4>
+            <button on:click=on_sync>"Sync Now"</button>
 
             <h4>"Transfer Ownership"</h4>
             <form on:submit=on_transfer>

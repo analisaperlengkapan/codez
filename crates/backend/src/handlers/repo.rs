@@ -1,12 +1,12 @@
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Path, State, Query},
     http::StatusCode,
     response::IntoResponse,
 };
 use shared::{
     CreateRepoOption, Repository, CreateIssueOption, Issue, CreatePullRequestOption, PullRequest,
     CreateReleaseOption, Release, CreateCommentOption, Comment, CreateLabelOption, Label,
-    CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
+    CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSearchOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
@@ -519,16 +519,31 @@ pub async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json
     Json(commits)
 }
 
-pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<CodeSearchResult>> {
-    vec![
+pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>, Query(params): Query<RepoSearchOptions>) -> Json<Vec<CodeSearchResult>> {
+    let q = params.q.to_lowercase();
+    let all_files = vec![
         CodeSearchResult {
             name: "main.rs".to_string(),
             path: "src/main.rs".to_string(),
             sha: "abc".to_string(),
             url: "http://...".to_string(),
             content: Some("fn main() {}".to_string()),
+        },
+        CodeSearchResult {
+            name: "lib.rs".to_string(),
+            path: "src/lib.rs".to_string(),
+            sha: "def".to_string(),
+            url: "http://...".to_string(),
+            content: Some("pub fn add() {}".to_string()),
         }
-    ].into()
+    ];
+
+    if q.is_empty() {
+        Json(all_files)
+    } else {
+        let filtered: Vec<CodeSearchResult> = all_files.into_iter().filter(|f| f.name.to_lowercase().contains(&q) || f.path.to_lowercase().contains(&q)).collect();
+        Json(filtered)
+    }
 }
 
 pub async fn get_raw_file(Path((_owner, _repo, _path)): Path<(String, String, String)>) -> String {
