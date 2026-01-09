@@ -7,7 +7,7 @@ use shared::{
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
     ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
-    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions
+    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate
 };
 
 #[component]
@@ -318,14 +318,28 @@ pub fn IssueDetail() -> impl IntoView {
 #[component]
 pub fn CreateRepo() -> impl IntoView {
     let (name, set_name) = create_signal("".to_string());
+    let (desc, set_desc) = create_signal("".to_string());
+    let (gitignore, set_gitignore) = create_signal("".to_string());
+    let (license, set_license) = create_signal("".to_string());
+
+    let licenses = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/licenses").send().await.unwrap().json::<Vec<LicenseTemplate>>().await.unwrap_or_default()
+    });
+
+    let gitignores = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/gitignore/templates").send().await.unwrap().json::<Vec<GitignoreTemplate>>().await.unwrap_or_default()
+    });
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let payload = CreateRepoOption {
             name: name.get(),
-            description: None,
+            description: if desc.get().is_empty() { None } else { Some(desc.get()) },
             private: false,
             auto_init: true,
+            gitignores: if gitignore.get().is_empty() { None } else { Some(gitignore.get()) },
+            license: if license.get().is_empty() { None } else { Some(license.get()) },
+            readme: Some("Default".to_string()),
         };
         spawn_local(async move {
             let _ = Request::post("http://127.0.0.1:3000/api/v1/user/repos").json(&payload).unwrap().send().await;
@@ -337,6 +351,30 @@ pub fn CreateRepo() -> impl IntoView {
             <h3>"Create New Repository"</h3>
             <form on:submit=on_submit>
                 <input type="text" placeholder="Repository Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
+                <input type="text" placeholder="Description" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) />
+
+                <Suspense fallback=move || view! { <select disabled><option>"Loading licenses..."</option></select> }>
+                    {move || licenses.get().map(|list| view! {
+                        <select on:change=move |ev| set_license.set(event_target_value(&ev))>
+                            <option value="">"Select License"</option>
+                            <For each=move || list.clone() key=|l| l.key.clone() children=move |l| {
+                                view! { <option value={l.key}>{l.name}</option> }
+                            }/>
+                        </select>
+                    })}
+                </Suspense>
+
+                <Suspense fallback=move || view! { <select disabled><option>"Loading gitignores..."</option></select> }>
+                    {move || gitignores.get().map(|list| view! {
+                        <select on:change=move |ev| set_gitignore.set(event_target_value(&ev))>
+                            <option value="">"Select .gitignore"</option>
+                            <For each=move || list.clone() key=|g| g.name.clone() children=move |g| {
+                                view! { <option value={g.name.clone()}>{g.name}</option> }
+                            }/>
+                        </select>
+                    })}
+                </Suspense>
+
                 <button type="submit">"Create"</button>
             </form>
             <p><a href="/repo/migrate">"Or Migrate Repository"</a></p>
@@ -513,6 +551,8 @@ pub fn PullRequestDetail() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
     let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
 
+    let (merge_action, set_merge_action) = create_signal("merge".to_string());
+
     let pr_files = create_resource(
         move || (owner(), repo_name(), index()),
         |(o, r, i)| async move {
@@ -525,9 +565,10 @@ pub fn PullRequestDetail() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         let i = index();
+        let action = merge_action.get();
         spawn_local(async move {
             let payload = MergePullRequestOption {
-                merge_action: "merge".to_string(),
+                merge_action: action,
                 merge_title_field: None,
                 merge_message_field: None,
             };
@@ -540,6 +581,11 @@ pub fn PullRequestDetail() -> impl IntoView {
         <div class="pull-detail">
             <h3>"Pull Request #" {index}</h3>
             <div class="pr-actions">
+                <select on:change=move |ev| set_merge_action.set(event_target_value(&ev))>
+                    <option value="merge">"Merge Commit"</option>
+                    <option value="rebase">"Rebase and Merge"</option>
+                    <option value="squash">"Squash and Merge"</option>
+                </select>
                 <button on:click=on_merge class="btn-merge">"Merge Pull Request"</button>
             </div>
             <div class="pr-files">

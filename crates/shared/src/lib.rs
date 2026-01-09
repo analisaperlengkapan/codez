@@ -79,6 +79,9 @@ pub struct CreateRepoOption {
     pub description: Option<String>,
     pub private: bool,
     pub auto_init: bool,
+    pub gitignores: Option<String>,
+    pub license: Option<String>,
+    pub readme: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -923,9 +926,13 @@ mod tests {
             description: Some("desc".to_string()),
             private: true,
             auto_init: false,
+            gitignores: Some("Rust".to_string()),
+            license: Some("MIT".to_string()),
+            readme: Some("Default".to_string()),
         };
         assert_eq!(opts.name, "new-repo");
         assert!(opts.private);
+        assert_eq!(opts.license, Some("MIT".to_string()));
     }
 
     #[test]
