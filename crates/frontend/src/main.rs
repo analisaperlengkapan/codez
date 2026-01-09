@@ -29,6 +29,7 @@ fn App() -> impl IntoView {
                     <Route path="/login" view=Login/>
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
+                    <Route path="/repo/migrate" view=MigrateRepo/>
                     <Route path="/users/:username" view=UserProfile/>
                     <Route path="/users/:username/followers" view=UserFollowers/>
                     <Route path="/users/:username/following" view=UserFollowing/>
@@ -53,6 +54,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
                     <Route path="/repos/:owner/:repo/wiki/pages/:page_name/edit" view=WikiEdit/>
                     <Route path="/repos/:owner/:repo/settings" view=RepoSettings/>
+                    <Route path="/repos/:owner/:repo/collaborators" view=CollaboratorList/>
                 </Routes>
             </main>
         </Router>

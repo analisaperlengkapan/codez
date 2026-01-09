@@ -5,7 +5,7 @@ use shared::{
     Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
-    ActionWorkflow, CodeSearchResult
+    ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption
 };
 
 #[component]
@@ -274,6 +274,37 @@ pub fn CreateRepo() -> impl IntoView {
             <form on:submit=on_submit>
                 <input type="text" placeholder="Repository Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
                 <button type="submit">"Create"</button>
+            </form>
+            <p><a href="/repo/migrate">"Or Migrate Repository"</a></p>
+        </div>
+    }
+}
+
+#[component]
+pub fn MigrateRepo() -> impl IntoView {
+    let (clone_addr, set_clone_addr) = create_signal("".to_string());
+    let (repo_name, set_repo_name) = create_signal("".to_string());
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = MigrateRepoOption {
+            clone_addr: clone_addr.get(),
+            repo_name: repo_name.get(),
+            service: "git".to_string(),
+            mirror: false,
+        };
+        spawn_local(async move {
+            let _ = Request::post("http://127.0.0.1:3000/api/v1/repos/migrate").json(&payload).unwrap().send().await;
+        });
+    };
+
+    view! {
+        <div class="migrate-repo">
+            <h3>"Migrate Repository"</h3>
+            <form on:submit=on_submit>
+                <input type="text" placeholder="Clone URL" prop:value=clone_addr on:input=move |ev| set_clone_addr.set(event_target_value(&ev)) />
+                <input type="text" placeholder="Repository Name" prop:value=repo_name on:input=move |ev| set_repo_name.set(event_target_value(&ev)) />
+                <button type="submit">"Migrate"</button>
             </form>
         </div>
     }
@@ -614,6 +645,7 @@ pub fn RepoSettings() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
     let (desc, set_desc) = create_signal("".to_string());
+    let (transfer_to, set_transfer_to) = create_signal("".to_string());
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -630,6 +662,17 @@ pub fn RepoSettings() -> impl IntoView {
         });
     };
 
+    let on_transfer = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = TransferRepoOption { new_owner: transfer_to.get() };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/transfer", o, r))
+                .json(&payload).unwrap().send().await;
+        });
+    };
+
     view! {
         <div class="repo-settings">
             <h3>"Repository Settings"</h3>
@@ -637,6 +680,61 @@ pub fn RepoSettings() -> impl IntoView {
                 <label>"Description"</label>
                 <input type="text" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) />
                 <button type="submit">"Update Settings"</button>
+            </form>
+
+            <h4>"Transfer Ownership"</h4>
+            <form on:submit=on_transfer>
+                <input type="text" placeholder="New Owner Username" prop:value=transfer_to on:input=move |ev| set_transfer_to.set(event_target_value(&ev)) />
+                <button type="submit">"Transfer"</button>
+            </form>
+
+            <p><a href="collaborators">"Manage Collaborators"</a></p>
+        </div>
+    }
+}
+
+#[component]
+pub fn CollaboratorList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let (new_collab, set_new_collab) = create_signal("".to_string());
+
+    let collabs = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/collaborators", o, r))
+                .send().await.unwrap().json::<Vec<Collaborator>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_add = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let o = owner();
+        let r = repo_name();
+        let c = new_collab.get();
+        spawn_local(async move {
+            let _ = Request::put(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/collaborators/{}", o, r, c))
+                .send().await;
+            set_new_collab.set("".to_string());
+        });
+    };
+
+    view! {
+        <div class="collaborators">
+            <h3>"Collaborators"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || collabs.get().map(|list| view! {
+                        <For each=move || list.clone() key=|c| c.user.id children=move |c| {
+                            view! { <li>{c.user.username} " (" {c.permissions} ")"</li> }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+            <form on:submit=on_add>
+                <input type="text" placeholder="Username" prop:value=new_collab on:input=move |ev| set_new_collab.set(event_target_value(&ev)) />
+                <button type="submit">"Add Collaborator"</button>
             </form>
         </div>
     }

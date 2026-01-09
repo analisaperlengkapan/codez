@@ -165,6 +165,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/user/2fa", get(get_2fa).post(update_2fa))
         .route("/api/v1/user/gpg_keys", get(list_gpg_keys).post(create_gpg_key))
         .route("/api/v1/repos/:owner/:repo/mirror-sync", post(mirror_sync))
+        .route("/api/v1/repos/:owner/:repo/collaborators", get(list_collaborators))
         .route("/api/v1/repos/:owner/:repo/collaborators/:collaborator", get(get_collaborator).put(add_collaborator))
         .route("/api/v1/repos/:owner/:repo/branches", get(list_branches).post(create_branch))
         .route("/api/v1/repos/:owner/:repo/tags", get(list_tags))

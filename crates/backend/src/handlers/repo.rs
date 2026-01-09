@@ -421,6 +421,13 @@ pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Jso
     Json(projects)
 }
 
+pub async fn list_collaborators(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Collaborator>> {
+    let user = User::new(2, "collab_user".to_string(), None);
+    vec![
+        Collaborator { user, permissions: "write".to_string() }
+    ].into()
+}
+
 pub async fn get_collaborator(Path((_owner, _repo, _collaborator)): Path<(String, String, String)>) -> Json<Option<Collaborator>> {
     Json(None)
 }
