@@ -90,6 +90,8 @@ pub struct Issue {
     pub state: String,
     pub user: User,
     pub assignees: Vec<User>,
+    pub labels: Vec<Label>,
+    pub milestone: Option<Milestone>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -902,6 +904,8 @@ mod tests {
             state: "open".to_string(),
             user,
             assignees: vec![],
+            labels: vec![],
+            milestone: None,
         };
         assert_eq!(issue.title, "Bug");
 

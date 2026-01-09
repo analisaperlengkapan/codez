@@ -246,8 +246,34 @@ pub fn IssueDetail() -> impl IntoView {
                             <span class="state">{i.state}</span>
                             <span class="meta">" opened by " {i.user.username}</span>
                         </div>
-                        <div class="issue-body">
-                            <p>{i.body.unwrap_or_default()}</p>
+                        <div class="issue-container" style="display: flex;">
+                            <div class="issue-main" style="flex: 3;">
+                                <div class="issue-body">
+                                    <p>{i.body.unwrap_or_default()}</p>
+                                </div>
+                            </div>
+                            <div class="issue-sidebar" style="flex: 1; padding-left: 20px; border-left: 1px solid #eee;">
+                                <div class="sidebar-item">
+                                    <strong>"Assignees"</strong>
+                                    <div class="assignees-list">
+                                        <For each=move || i.assignees.clone() key=|u| u.id children=move |u| {
+                                            view! { <div>{u.username}</div> }
+                                        }/>
+                                    </div>
+                                </div>
+                                <div class="sidebar-item">
+                                    <strong>"Labels"</strong>
+                                    <div class="labels-list">
+                                        <For each=move || i.labels.clone() key=|l| l.id children=move |l| {
+                                            view! { <div style=format!("background-color: {}; color: #fff; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-right: 5px;", l.color)>{l.name}</div> }
+                                        }/>
+                                    </div>
+                                </div>
+                                <div class="sidebar-item">
+                                    <strong>"Milestone"</strong>
+                                    <p>{i.milestone.clone().map(|m| m.title).unwrap_or("No milestone".to_string())}</p>
+                                </div>
+                            </div>
                         </div>
                     }.into_view(),
                     _ => view! { <p>"Issue not found"</p> }.into_view()

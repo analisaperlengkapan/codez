@@ -41,6 +41,8 @@ pub fn api_router() -> Router {
                 state: "open".to_string(),
                 user: user.clone(),
                 assignees: vec![],
+                labels: vec![],
+                milestone: None,
             }
         ])),
         users: Arc::new(RwLock::new(vec![

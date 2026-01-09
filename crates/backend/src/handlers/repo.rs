@@ -50,7 +50,7 @@ pub async fn create_issue(
     if !repos.iter().any(|r| r.owner == owner && r.name == repo_name) {
         return (StatusCode::NOT_FOUND, Json(Issue {
             id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
-            user: User::new(0, "".to_string(), None), assignees: vec![]
+            user: User::new(0, "".to_string(), None), assignees: vec![], labels: vec![], milestone: None
         }));
     }
     let mut issues = state.issues.write().unwrap();
@@ -63,6 +63,8 @@ pub async fn create_issue(
         state: "open".to_string(),
         user: User::new(1, "admin".to_string(), None),
         assignees: vec![],
+        labels: vec![],
+        milestone: None,
     };
     issues.push(issue.clone());
     (StatusCode::CREATED, Json(issue))
