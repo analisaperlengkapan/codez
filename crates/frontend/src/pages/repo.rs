@@ -5,7 +5,8 @@ use shared::{
     Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
-    ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption
+    ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
+    Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption
 };
 
 #[component]
@@ -280,35 +281,6 @@ pub fn CreateRepo() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn MigrateRepo() -> impl IntoView {
-    let (clone_addr, set_clone_addr) = create_signal("".to_string());
-    let (repo_name, set_repo_name) = create_signal("".to_string());
-
-    let on_submit = move |ev: leptos::ev::SubmitEvent| {
-        ev.prevent_default();
-        let payload = MigrateRepoOption {
-            clone_addr: clone_addr.get(),
-            repo_name: repo_name.get(),
-            service: "git".to_string(),
-            mirror: false,
-        };
-        spawn_local(async move {
-            let _ = Request::post("http://127.0.0.1:3000/api/v1/repos/migrate").json(&payload).unwrap().send().await;
-        });
-    };
-
-    view! {
-        <div class="migrate-repo">
-            <h3>"Migrate Repository"</h3>
-            <form on:submit=on_submit>
-                <input type="text" placeholder="Clone URL" prop:value=clone_addr on:input=move |ev| set_clone_addr.set(event_target_value(&ev)) />
-                <input type="text" placeholder="Repository Name" prop:value=repo_name on:input=move |ev| set_repo_name.set(event_target_value(&ev)) />
-                <button type="submit">"Migrate"</button>
-            </form>
-        </div>
-    }
-}
 
 #[component]
 pub fn PackageList() -> impl IntoView {
@@ -688,7 +660,183 @@ pub fn RepoSettings() -> impl IntoView {
                 <button type="submit">"Transfer"</button>
             </form>
 
-            <p><a href="collaborators">"Manage Collaborators"</a></p>
+            <div class="settings-sections">
+                <p><a href="collaborators">"Collaborators"</a></p>
+                <p><a href="webhooks">"Webhooks"</a></p>
+                <p><a href="secrets">"Secrets"</a></p>
+                <p><a href="keys">"Deploy Keys"</a></p>
+            </div>
+
+            // Embed lists here or keep as separate pages. I'll embed for simplicity in this file structure or route separately.
+            // Given the links above, they imply sub-routes.
+            // But since I don't have sub-routes in main.rs yet for these, I'll display them here below.
+
+            <WebhookList/>
+            <SecretList/>
+            <DeployKeyList/>
+        </div>
+    }
+}
+
+#[component]
+pub fn WebhookList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (url, set_url) = create_signal("".to_string());
+
+    let hooks = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/hooks", o, r))
+                .send().await.unwrap().json::<Vec<Webhook>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_create = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateHookOption {
+            url: url.get(),
+            events: vec!["push".to_string()],
+            active: true,
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/hooks", o, r))
+                .json(&payload).unwrap().send().await;
+            set_url.set("".to_string());
+        });
+    };
+
+    view! {
+        <div class="webhook-list">
+            <h3>"Webhooks"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || hooks.get().map(|list| view! {
+                        <For each=move || list.clone() key=|h| h.id children=move |h| {
+                            view! { <li>{h.url} " (" {if h.active { "Active" } else { "Inactive" }} ")"</li> }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+            <h4>"Add Webhook"</h4>
+            <form on:submit=on_create>
+                <input type="text" placeholder="Payload URL" prop:value=url on:input=move |ev| set_url.set(event_target_value(&ev)) />
+                <button type="submit">"Add Webhook"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+pub fn SecretList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (name, set_name) = create_signal("".to_string());
+    let (data, set_data) = create_signal("".to_string());
+
+    let secrets = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/secrets", o, r))
+                .send().await.unwrap().json::<Vec<Secret>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_create = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateSecretOption {
+            name: name.get(),
+            data: data.get(),
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/secrets", o, r))
+                .json(&payload).unwrap().send().await;
+            set_name.set("".to_string());
+            set_data.set("".to_string());
+        });
+    };
+
+    view! {
+        <div class="secret-list">
+            <h3>"Secrets"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || secrets.get().map(|list| view! {
+                        <For each=move || list.clone() key=|s| s.name.clone() children=move |s| {
+                            view! { <li>{s.name}</li> }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+            <h4>"Add Secret"</h4>
+            <form on:submit=on_create>
+                <input type="text" placeholder="Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
+                <input type="text" placeholder="Value" prop:value=data on:input=move |ev| set_data.set(event_target_value(&ev)) />
+                <button type="submit">"Add Secret"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
+pub fn DeployKeyList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (title, set_title) = create_signal("".to_string());
+    let (key, set_key) = create_signal("".to_string());
+
+    let keys = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/keys", o, r))
+                .send().await.unwrap().json::<Vec<DeployKey>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_create = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateKeyOption {
+            title: title.get(),
+            key: key.get(),
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/keys", o, r))
+                .json(&payload).unwrap().send().await;
+            set_title.set("".to_string());
+            set_key.set("".to_string());
+        });
+    };
+
+    view! {
+        <div class="deploy-key-list">
+            <h3>"Deploy Keys"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || keys.get().map(|list| view! {
+                        <For each=move || list.clone() key=|k| k.id children=move |k| {
+                            view! { <li>{k.title} " - " {k.fingerprint}</li> }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+            <h4>"Add Deploy Key"</h4>
+            <form on:submit=on_create>
+                <input type="text" placeholder="Title" prop:value=title on:input=move |ev| set_title.set(event_target_value(&ev)) />
+                <textarea placeholder="Key" prop:value=key on:input=move |ev| set_key.set(event_target_value(&ev))></textarea>
+                <button type="submit">"Add Key"</button>
+            </form>
         </div>
     }
 }
@@ -1110,6 +1258,36 @@ pub fn RepoCodeSearch() -> impl IntoView {
                     })}
                 </Suspense>
             </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn MigrateRepo() -> impl IntoView {
+    let (clone_addr, set_clone_addr) = create_signal("".to_string());
+    let (repo_name, set_repo_name) = create_signal("".to_string());
+
+    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = MigrateRepoOption {
+            clone_addr: clone_addr.get(),
+            repo_name: repo_name.get(),
+            service: "git".to_string(),
+            mirror: false,
+        };
+        spawn_local(async move {
+            let _ = Request::post("http://127.0.0.1:3000/api/v1/repos/migrate").json(&payload).unwrap().send().await;
+        });
+    };
+
+    view! {
+        <div class="migrate-repo">
+            <h3>"Migrate Repository"</h3>
+            <form on:submit=on_submit>
+                <input type="text" placeholder="Clone URL" prop:value=clone_addr on:input=move |ev| set_clone_addr.set(event_target_value(&ev)) />
+                <input type="text" placeholder="Repository Name" prop:value=repo_name on:input=move |ev| set_repo_name.set(event_target_value(&ev)) />
+                <button type="submit">"Migrate"</button>
+            </form>
         </div>
     }
 }
