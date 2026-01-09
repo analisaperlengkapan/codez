@@ -6,7 +6,8 @@ use shared::{
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
     ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
-    Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption
+    Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
+    LanguageStat, ProtectedBranch, LfsLock
 };
 
 #[component]
@@ -19,6 +20,14 @@ pub fn RepoDetail() -> impl IntoView {
         move || (owner(), repo_name()),
         |(o, r)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}", o, r)).send().await.unwrap().json::<Option<Repository>>().await.unwrap_or(None)
+        }
+    );
+
+    let languages = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/languages", o, r))
+                .send().await.unwrap().json::<Vec<LanguageStat>>().await.unwrap_or_default()
         }
     );
 
@@ -54,6 +63,29 @@ pub fn RepoDetail() -> impl IntoView {
                 <button on:click=on_fork>"Fork"</button>
             </div>
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
+
+            <div class="repo-languages" style="margin: 10px 0;">
+                <Suspense fallback=move || view! { <span></span> }>
+                    {move || languages.get().map(|list| {
+                        let list2 = list.clone();
+                        view! {
+                            <div style="display: flex; height: 10px; width: 100%; background-color: #eee; border-radius: 5px; overflow: hidden;">
+                                <For each=move || list.clone() key=|l| l.language.clone() children=move |l| {
+                                    view! {
+                                        <div style=format!("width: {}%; background-color: {};", l.percentage, l.color) title=format!("{} {}%", l.language, l.percentage)></div>
+                                    }
+                                }/>
+                            </div>
+                            <div style="font-size: small; margin-top: 5px;">
+                                <For each=move || list2.clone() key=|l| l.language.clone() children=move |l| {
+                                    view! { <span style="margin-right: 10px;"><span style=format!("color: {}", l.color)>"● "</span> {l.language} " " {l.percentage} "%"</span> }
+                                }/>
+                            </div>
+                        }
+                    })}
+                </Suspense>
+            </div>
+
             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                 {move || match repo.get() {
                     Some(Some(r)) => view! {
@@ -280,7 +312,6 @@ pub fn CreateRepo() -> impl IntoView {
         </div>
     }
 }
-
 
 #[component]
 pub fn PackageList() -> impl IntoView {
@@ -665,15 +696,75 @@ pub fn RepoSettings() -> impl IntoView {
                 <p><a href="webhooks">"Webhooks"</a></p>
                 <p><a href="secrets">"Secrets"</a></p>
                 <p><a href="keys">"Deploy Keys"</a></p>
+                <p>"Protected Branches"</p>
+                <p>"Git LFS Locks"</p>
             </div>
-
-            // Embed lists here or keep as separate pages. I'll embed for simplicity in this file structure or route separately.
-            // Given the links above, they imply sub-routes.
-            // But since I don't have sub-routes in main.rs yet for these, I'll display them here below.
 
             <WebhookList/>
             <SecretList/>
             <DeployKeyList/>
+            <ProtectedBranchList/>
+            <LfsLockList/>
+        </div>
+    }
+}
+
+#[component]
+pub fn ProtectedBranchList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let branches = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/branch_protections", o, r))
+                .send().await.unwrap().json::<Vec<ProtectedBranch>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="protected-branches">
+            <h3>"Protected Branches"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || branches.get().map(|list| view! {
+                        <For each=move || list.clone() key=|b| b.name.clone() children=move |b| {
+                            view! { <li>{b.name} " (Push: " {b.enable_push} ", Force: " {b.enable_force_push} ")"</li> }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn LfsLockList() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let locks = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/git/lfs/locks", o, r))
+                .send().await.unwrap().json::<Vec<LfsLock>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="lfs-locks">
+            <h3>"Git LFS Locks"</h3>
+            <ul>
+                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                    {move || locks.get().map(|list| view! {
+                        <For each=move || list.clone() key=|l| l.id.clone() children=move |l| {
+                            view! { <li>{l.path} " locked by " {l.owner.username}</li> }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
         </div>
     }
 }
