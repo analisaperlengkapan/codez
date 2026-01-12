@@ -28,16 +28,10 @@ pub async fn list_org_repos(Path(_org): Path<String>) -> Json<Vec<Repository>> {
     Json(repos)
 }
 
-pub async fn list_teams(Path(_org): Path<String>) -> Json<Vec<Team>> {
-    let teams = vec![
-        Team {
-            id: 1,
-            name: "Developers".to_string(),
-            description: Some("Dev Team".to_string()),
-            permission: "write".to_string(),
-        }
-    ];
-    Json(teams)
+pub async fn list_teams(State(state): State<AppState>, Path(org): Path<String>) -> Json<Vec<Team>> {
+    let teams = state.teams.read().unwrap();
+    let filtered_teams: Vec<Team> = teams.iter().filter(|t| t.org_name == org).cloned().collect();
+    Json(filtered_teams)
 }
 
 pub async fn list_org_members(Path(_org): Path<String>) -> Json<Vec<OrgMember>> {

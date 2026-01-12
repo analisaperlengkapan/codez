@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
-    Repository, User, Activity, Commit, LfsLock
+    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -26,6 +26,9 @@ pub struct AppState {
     pub activities: Arc<RwLock<Vec<Activity>>>,
     pub commits: Arc<RwLock<Vec<Commit>>>,
     pub lfs_locks: Arc<RwLock<Vec<LfsLock>>>,
+    pub topics: Arc<RwLock<Vec<Topic>>>,
+    pub packages: Arc<RwLock<Vec<Package>>>,
+    pub teams: Arc<RwLock<Vec<Team>>>,
 }
 
 pub fn api_router() -> Router {
@@ -152,6 +155,32 @@ pub fn api_router() -> Router {
             }
         ])),
         lfs_locks: Arc::new(RwLock::new(vec![])),
+        topics: Arc::new(RwLock::new(vec![
+            Topic {
+                id: 1,
+                repo_id: 1,
+                name: "rust".to_string(),
+                created: "2023-01-01".to_string(),
+            }
+        ])),
+        packages: Arc::new(RwLock::new(vec![
+            Package {
+                id: 1,
+                owner: "admin".to_string(),
+                name: "my-lib".to_string(),
+                version: "1.0.0".to_string(),
+                package_type: "cargo".to_string(),
+            }
+        ])),
+        teams: Arc::new(RwLock::new(vec![
+            Team {
+                id: 1,
+                org_name: "codeza-org".to_string(),
+                name: "Developers".to_string(),
+                description: Some("Dev Team".to_string()),
+                permission: "write".to_string(),
+            }
+        ])),
     };
 
     Router::new()

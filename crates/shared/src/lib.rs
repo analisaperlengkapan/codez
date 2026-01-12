@@ -256,6 +256,7 @@ pub struct CreateMilestoneOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Topic {
     pub id: u64,
+    pub repo_id: u64,
     pub name: String,
     pub created: String,
 }
@@ -339,6 +340,7 @@ pub struct CreateHookOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Team {
     pub id: u64,
+    pub org_name: String,
     pub name: String,
     pub description: Option<String>,
     pub permission: String,
@@ -411,6 +413,7 @@ pub struct ActionWorkflow {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Package {
     pub id: u64,
+    pub owner: String,
     pub name: String,
     pub version: String,
     pub package_type: String,
@@ -699,7 +702,7 @@ mod tests {
         let wf = ActionWorkflow { id: 1, name: "build".to_string(), status: "success".to_string() };
         assert_eq!(wf.name, "build");
 
-        let pkg = Package { id: 1, name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() };
+        let pkg = Package { id: 1, owner: "admin".to_string(), name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() };
         assert_eq!(pkg.package_type, "npm");
     }
 
@@ -717,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_team_project_structs() {
-        let team = Team { id: 1, name: "dev".to_string(), description: None, permission: "write".to_string() };
+        let team = Team { id: 1, org_name: "org".to_string(), name: "dev".to_string(), description: None, permission: "write".to_string() };
         assert_eq!(team.name, "dev");
 
         let project = Project { id: 1, repo_id: 1, title: "v1".to_string(), description: None, is_closed: false };
@@ -763,7 +766,7 @@ mod tests {
 
     #[test]
     fn test_topic_structs() {
-        let topic = Topic { id: 1, name: "rust".to_string(), created: "date".to_string() };
+        let topic = Topic { id: 1, repo_id: 1, name: "rust".to_string(), created: "date".to_string() };
         assert_eq!(topic.name, "rust");
 
         let opts = RepoTopicOptions { topics: vec!["rust".to_string(), "gitea".to_string()] };

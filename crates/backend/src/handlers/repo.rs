@@ -555,14 +555,43 @@ pub async fn add_reaction(
 }
 
 pub async fn update_topics(
-    Path((_owner, _repo)): Path<(String, String)>,
-    Json(_payload): Json<RepoTopicOptions>
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
+    Json(payload): Json<RepoTopicOptions>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+        return StatusCode::NOT_FOUND;
+    }
+    let repo_id = repo.unwrap().id;
+
+    let mut topics = state.topics.write().unwrap();
+    // Remove old topics
+    topics.retain(|t| t.repo_id != repo_id);
+
+    // Add new topics
+    for topic_name in payload.topics {
+        let id = (topics.len() as u64) + 1; // Simple ID generation, might collide if we delete, but ok for mock
+        topics.push(Topic {
+            id,
+            repo_id,
+            name: topic_name,
+            created: "now".to_string(),
+        });
+    }
+
     StatusCode::NO_CONTENT
 }
 
-pub async fn list_topics(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Topic>> {
-    Json(vec![Topic { id: 1, name: "rust".to_string(), created: "2023-01-01".to_string() }])
+pub async fn list_topics(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Topic>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let topics = state.topics.read().unwrap();
+    let filtered_topics: Vec<Topic> = topics.iter().filter(|t| t.repo_id == repo_id).cloned().collect();
+    Json(filtered_topics)
 }
 
 pub async fn star_repo(
