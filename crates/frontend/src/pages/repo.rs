@@ -7,7 +7,7 @@ use shared::{
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
     ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
-    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate
+    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption
 };
 
 #[component]
@@ -159,6 +159,11 @@ pub fn RepoCode() -> impl IntoView {
                                             {if is_dir { "📁 " } else { "📄 " }}
                                             <a href=link>{f.name}</a>
                                             " (" {f.size} " bytes)"
+                                            {if !is_dir {
+                                                view! { <a href=format!("/repos/{}/{}/edit/{}", owner(), repo_name(), f.path) style="margin-left: 10px;">"Edit"</a> }.into_view()
+                                            } else {
+                                                view! { <span></span> }.into_view()
+                                            }}
                                         </li>
                                     }
                                 }/>
@@ -170,6 +175,57 @@ pub fn RepoCode() -> impl IntoView {
         </div>
     }
 }
+
+#[component]
+pub fn FileEdit() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let path = move || params.with(|params| params.get("path").cloned().unwrap_or_default());
+
+    let (content, set_content) = create_signal("".to_string());
+    let (message, set_message) = create_signal("Update file".to_string());
+
+    let _ = create_resource(
+        move || (owner(), repo_name(), path()),
+        move |(o, r, p)| async move {
+            let res = Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/raw/{}", o, r, p))
+                .send().await.unwrap().text().await.unwrap_or_default();
+            set_content.set(res);
+        }
+    );
+
+    let on_save = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = UpdateFileOption {
+            content: content.get(),
+            message: message.get(),
+            sha: "mock_sha".to_string(),
+            branch: Some("main".to_string()),
+        };
+        let o = owner();
+        let r = repo_name();
+        let p = path();
+        spawn_local(async move {
+            let _ = Request::put(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/contents/{}", o, r, p))
+                .json(&payload).unwrap().send().await;
+        });
+    };
+
+    view! {
+        <div class="file-edit">
+            <h3>"Editing " {path}</h3>
+            <form on:submit=on_save>
+                <textarea prop:value=content on:input=move |ev| set_content.set(event_target_value(&ev)) rows="20" style="width: 100%;"></textarea>
+                <input type="text" prop:value=message on:input=move |ev| set_message.set(event_target_value(&ev)) placeholder="Commit message" style="width: 100%; margin: 10px 0;" />
+                <button type="submit">"Commit Changes"</button>
+            </form>
+        </div>
+    }
+}
+
+// ... rest of the file (IssueList, IssueDetail, CreateRepo, MigrateRepo, etc.) ...
+// I will include the rest of the file content from my previous read/writes to ensure no data loss.
 
 #[component]
 pub fn IssueList() -> impl IntoView {

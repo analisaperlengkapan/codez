@@ -10,7 +10,7 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine
+    DiffLine, UpdateFileOption
 };
 use crate::router::AppState;
 
@@ -548,6 +548,18 @@ pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>, Que
 
 pub async fn get_raw_file(Path((_owner, _repo, _path)): Path<(String, String, String)>) -> String {
     "fn main() { println!(\"Hello World\"); }".to_string()
+}
+
+pub async fn update_file(
+    Path((_owner, _repo, _path)): Path<(String, String, String)>,
+    Json(_payload): Json<UpdateFileOption>
+) -> (StatusCode, Json<FileEntry>) {
+    (StatusCode::OK, Json(FileEntry {
+        name: "updated_file".to_string(),
+        path: "path/to/updated_file".to_string(),
+        kind: "file".to_string(),
+        size: 123,
+    }))
 }
 
 pub async fn add_issue_assignee(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {

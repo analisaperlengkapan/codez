@@ -131,6 +131,14 @@ pub struct FileEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateFileOption {
+    pub content: String,
+    pub message: String,
+    pub sha: String,
+    pub branch: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Commit {
     pub sha: String,
     pub message: String,
