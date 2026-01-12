@@ -859,15 +859,9 @@ pub fn RepoSettings() -> impl IntoView {
                 <p><a href="webhooks">"Webhooks"</a></p>
                 <p><a href="secrets">"Secrets"</a></p>
                 <p><a href="keys">"Deploy Keys"</a></p>
-                <p>"Protected Branches"</p>
-                <p>"Git LFS Locks"</p>
+                <p><a href="branches">"Protected Branches"</a></p>
+                <p><a href="lfs">"Git LFS Locks"</a></p>
             </div>
-
-            <WebhookList/>
-            <SecretList/>
-            <DeployKeyList/>
-            <ProtectedBranchList/>
-            <LfsLockList/>
         </div>
     }
 }

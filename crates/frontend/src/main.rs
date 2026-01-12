@@ -53,8 +53,14 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/projects" view=ProjectList/>
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
                     <Route path="/repos/:owner/:repo/wiki/pages/:page_name/edit" view=WikiEdit/>
+                    <Route path="/repos/:owner/:repo/edit/*path" view=FileEdit/>
                     <Route path="/repos/:owner/:repo/settings" view=RepoSettings/>
                     <Route path="/repos/:owner/:repo/collaborators" view=CollaboratorList/>
+                    <Route path="/repos/:owner/:repo/settings/webhooks" view=WebhookList/>
+                    <Route path="/repos/:owner/:repo/settings/secrets" view=SecretList/>
+                    <Route path="/repos/:owner/:repo/settings/keys" view=DeployKeyList/>
+                    <Route path="/repos/:owner/:repo/settings/branches" view=ProtectedBranchList/>
+                    <Route path="/repos/:owner/:repo/settings/lfs" view=LfsLockList/>
                 </Routes>
             </main>
         </Router>
