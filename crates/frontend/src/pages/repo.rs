@@ -1362,14 +1362,17 @@ pub fn Wiki() -> impl IntoView {
                             </div>
                         }.into_view()
                     },
-                    _ => view! {
-                        <div>
-                            <p>"Wiki page '" {page_name} "' not found."</p>
-                            <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), page_name())>
-                                "Create " {page_name} " Page"
-                            </a>
-                        </div>
-                    }.into_view()
+                    _ => {
+                        let p = page_name();
+                        view! {
+                            <div>
+                                <p>"Wiki page '" {p.clone()} "' not found."</p>
+                                <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), p)>
+                                    "Create " {p} " Page"
+                                </a>
+                            </div>
+                        }.into_view()
+                    }
                 }}
             </Suspense>
         </div>
