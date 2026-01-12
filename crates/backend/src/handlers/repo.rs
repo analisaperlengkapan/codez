@@ -217,20 +217,35 @@ pub async fn create_pull(
     (StatusCode::CREATED, Json(pr))
 }
 
-pub async fn list_releases(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Release>> {
+pub async fn list_releases(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Release>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let releases = state.releases.read().unwrap();
-    Json(releases.clone())
+    let filtered_releases: Vec<Release> = releases.iter().filter(|r| r.repo_id == repo_id).cloned().collect();
+    Json(filtered_releases)
 }
 
 pub async fn create_release(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateReleaseOption>
 ) -> (StatusCode, Json<Release>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Release {
+            id: 0, repo_id: 0, tag_name: "".to_string(), name: "".to_string(), body: None, draft: false, prerelease: false, created_at: "".to_string(), author: User::new(0, "".to_string(), None)
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut releases = state.releases.write().unwrap();
     let id = (releases.len() as u64) + 1;
     let release = Release {
         id,
+        repo_id,
         tag_name: payload.tag_name,
         name: payload.name,
         body: payload.body,
@@ -346,20 +361,35 @@ pub async fn get_milestone(State(state): State<AppState>, Path((_owner, _repo, i
     Json(m)
 }
 
-pub async fn list_hooks(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Webhook>> {
+pub async fn list_hooks(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Webhook>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let hooks = state.hooks.read().unwrap();
-    Json(hooks.clone())
+    let filtered_hooks: Vec<Webhook> = hooks.iter().filter(|h| h.repo_id == repo_id).cloned().collect();
+    Json(filtered_hooks)
 }
 
 pub async fn create_hook(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateHookOption>
 ) -> (StatusCode, Json<Webhook>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Webhook {
+            id: 0, repo_id: 0, url: "".to_string(), events: vec![], active: false
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut hooks = state.hooks.write().unwrap();
     let id = (hooks.len() as u64) + 1;
     let hook = Webhook {
         id,
+        repo_id,
         url: payload.url,
         events: payload.events,
         active: payload.active,

@@ -157,6 +157,7 @@ pub struct Commit {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Release {
     pub id: u64,
+    pub repo_id: u64,
     pub tag_name: String,
     pub name: String,
     pub body: Option<String>,
@@ -320,6 +321,7 @@ pub struct CreateKeyOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Webhook {
     pub id: u64,
+    pub repo_id: u64,
     pub url: String,
     pub events: Vec<String>,
     pub active: bool,
@@ -717,7 +719,7 @@ mod tests {
         let key = PublicKey { id: 1, title: "Laptop".to_string(), key: "ssh-rsa...".to_string(), fingerprint: "sha256...".to_string() };
         assert_eq!(key.title, "Laptop");
 
-        let hook = Webhook { id: 1, url: "http://example.com".to_string(), events: vec!["push".to_string()], active: true };
+        let hook = Webhook { id: 1, repo_id: 1, url: "http://example.com".to_string(), events: vec!["push".to_string()], active: true };
         assert!(hook.active);
     }
 
@@ -854,6 +856,7 @@ mod tests {
         let user = User::new(1, "u".to_string(), None);
         let rel = Release {
             id: 1,
+            repo_id: 1,
             tag_name: "v1.0".to_string(),
             name: "Release 1.0".to_string(),
             body: None,

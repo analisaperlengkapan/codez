@@ -68,6 +68,7 @@ pub fn api_router() -> Router {
         releases: Arc::new(RwLock::new(vec![
             Release {
                 id: 1,
+                repo_id: 1,
                 tag_name: "v1.0.0".to_string(),
                 name: "Initial Release".to_string(),
                 body: Some("Description".to_string()),
@@ -123,6 +124,7 @@ pub fn api_router() -> Router {
         hooks: Arc::new(RwLock::new(vec![
             Webhook {
                 id: 1,
+                repo_id: 1,
                 url: "http://example.com/hook".to_string(),
                 events: vec!["push".to_string()],
                 active: true,
