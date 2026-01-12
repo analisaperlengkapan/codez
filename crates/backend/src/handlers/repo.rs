@@ -10,7 +10,7 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption, Activity
+    DiffLine, UpdateFileOption, Activity, Notification
 };
 use crate::router::AppState;
 
@@ -117,6 +117,16 @@ pub async fn create_issue(
         created: "now".to_string(),
     });
 
+    // Notify repository owner (mock logic)
+    let mut notifications = state.notifications.write().unwrap();
+    let notification_id = (notifications.len() as u64) + 1;
+    notifications.push(Notification {
+        id: notification_id,
+        subject: format!("New issue in {}: {}", repo_name, payload.title),
+        unread: true,
+        updated_at: "now".to_string(),
+    });
+
     (StatusCode::CREATED, Json(issue))
 }
 
@@ -159,6 +169,16 @@ pub async fn create_pull(
         op_type: "create_pull_request".to_string(),
         content: format!("opened pull request #{} in {}/{}", id, owner, repo),
         created: "now".to_string(),
+    });
+
+    // Notify repository owner (mock logic)
+    let mut notifications = state.notifications.write().unwrap();
+    let notification_id = (notifications.len() as u64) + 1;
+    notifications.push(Notification {
+        id: notification_id,
+        subject: format!("New pull request in {}: {}", repo, payload.title),
+        unread: true,
+        updated_at: "now".to_string(),
     });
 
     (StatusCode::CREATED, Json(pr))
@@ -719,6 +739,16 @@ pub async fn add_issue_assignee(
     if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
         if !issue.assignees.iter().any(|u| u.username == payload.username) {
             issue.assignees.push(payload);
+
+            // Notify assignee
+            let mut notifications = state.notifications.write().unwrap();
+            let notification_id = (notifications.len() as u64) + 1;
+            notifications.push(Notification {
+                id: notification_id,
+                subject: format!("You were assigned to issue #{}", issue.number),
+                unread: true,
+                updated_at: "now".to_string(),
+            });
         }
         StatusCode::CREATED
     } else {
