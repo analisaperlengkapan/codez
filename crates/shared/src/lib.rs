@@ -93,6 +93,7 @@ pub struct CreateRepoOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Issue {
     pub id: u64,
+    pub repo_id: u64,
     pub number: u64,
     pub title: String,
     pub body: Option<String>,
@@ -112,6 +113,7 @@ pub struct CreateIssueOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PullRequest {
     pub id: u64,
+    pub repo_id: u64,
     pub number: u64,
     pub title: String,
     pub body: Option<String>,
@@ -897,6 +899,7 @@ mod tests {
         let user = User::new(1, "user".to_string(), None);
         let pr = PullRequest {
             id: 1,
+            repo_id: 1,
             number: 1,
             title: "PR Title".to_string(),
             body: None,
@@ -921,6 +924,7 @@ mod tests {
         let user = User::new(1, "user".to_string(), None);
         let issue = Issue {
             id: 1,
+            repo_id: 1,
             number: 1,
             title: "Bug".to_string(),
             body: None,

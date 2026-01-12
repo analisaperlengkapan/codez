@@ -71,12 +71,12 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     (StatusCode::CREATED, Json(repo))
 }
 
-pub async fn list_issues(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>, Query(filter): Query<IssueFilterOptions>) -> Json<Vec<Issue>> {
+pub async fn list_issues(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>, Query(filter): Query<IssueFilterOptions>) -> Json<Vec<Issue>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let issues = state.issues.read().unwrap();
-    // Ideally we filter by repo here, but Issue struct doesn't have repo_id yet.
-    // For now, we return all issues, but filtering by state/q.
-    // TODO: Add repo_id to Issue struct and filter here.
-    let mut filtered_issues = issues.clone();
+    let mut filtered_issues: Vec<Issue> = issues.iter().filter(|i| i.repo_id == repo_id).cloned().collect();
 
     if let Some(state_filter) = filter.state {
         if state_filter != "all" {
@@ -97,16 +97,21 @@ pub async fn create_issue(
     Json(payload): Json<CreateIssueOption>
 ) -> impl IntoResponse {
     let repos = state.repos.read().unwrap();
-    if !repos.iter().any(|r| r.owner == owner && r.name == repo_name) {
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
         return (StatusCode::NOT_FOUND, Json(Issue {
-            id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
+            id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
             user: User::new(0, "".to_string(), None), assignees: vec![], labels: vec![], milestone: None
         }));
     }
+    let repo_id = repo.unwrap().id;
+
     let mut issues = state.issues.write().unwrap();
     let id = (issues.len() as u64) + 1;
     let issue = Issue {
         id,
+        repo_id,
         number: id,
         title: payload.title.clone(),
         body: payload.body,
@@ -149,20 +154,35 @@ pub async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index
     Json(issue)
 }
 
-pub async fn list_pulls(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
+pub async fn list_pulls(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let pulls = state.pulls.read().unwrap();
-    Json(pulls.clone())
+    let filtered_pulls: Vec<PullRequest> = pulls.iter().filter(|p| p.repo_id == repo_id).cloned().collect();
+    Json(filtered_pulls)
 }
 
 pub async fn create_pull(
     State(state): State<AppState>,
-    Path((owner, repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreatePullRequestOption>
 ) -> (StatusCode, Json<PullRequest>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+         return (StatusCode::NOT_FOUND, Json(PullRequest {
+            id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
+            user: User::new(0, "".to_string(), None), merged: false
+        }));
+    }
+
     let mut pulls = state.pulls.write().unwrap();
     let id = (pulls.len() as u64) + 1;
     let pr = PullRequest {
         id,
+        repo_id,
         number: id,
         title: payload.title.clone(),
         body: payload.body,
@@ -180,7 +200,7 @@ pub async fn create_pull(
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_pull_request".to_string(),
-        content: format!("opened pull request #{} in {}/{}", id, owner, repo),
+        content: format!("opened pull request #{} in {}/{}", id, owner, repo_name),
         created: "now".to_string(),
     });
 
@@ -189,7 +209,7 @@ pub async fn create_pull(
     let notification_id = (notifications.len() as u64) + 1;
     notifications.push(Notification {
         id: notification_id,
-        subject: format!("New pull request in {}: {}", repo, payload.title),
+        subject: format!("New pull request in {}: {}", repo_name, payload.title),
         unread: true,
         updated_at: "now".to_string(),
     });

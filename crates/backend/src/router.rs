@@ -38,6 +38,7 @@ pub fn api_router() -> Router {
         issues: Arc::new(RwLock::new(vec![
              Issue {
                 id: 1,
+                repo_id: 1,
                 number: 1,
                 title: "First Issue".to_string(),
                 body: Some("This is a bug".to_string()),
@@ -55,6 +56,7 @@ pub fn api_router() -> Router {
         pulls: Arc::new(RwLock::new(vec![
             PullRequest {
                 id: 1,
+                repo_id: 1,
                 number: 1,
                 title: "First PR".to_string(),
                 body: Some("Description".to_string()),
