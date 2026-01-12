@@ -397,12 +397,30 @@ pub async fn list_topics(Path((_owner, _repo)): Path<(String, String)>) -> Json<
     Json(vec![Topic { id: 1, name: "rust".to_string(), created: "2023-01-01".to_string() }])
 }
 
-pub async fn star_repo(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn star_repo(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>
+) -> StatusCode {
+    let mut repos = state.repos.write().unwrap();
+    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
+        repo.stars_count += 1;
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
-pub async fn watch_repo(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn watch_repo(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>
+) -> StatusCode {
+    let mut repos = state.repos.write().unwrap();
+    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
+        repo.watchers_count += 1;
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> Json<Repository> {
@@ -448,10 +466,24 @@ pub async fn get_repo_settings(Path((_owner, _repo)): Path<(String, String)>) ->
 }
 
 pub async fn update_repo_settings(
-    Path((_owner, _repo)): Path<(String, String)>,
-    Json(_payload): Json<RepoSettingsOption>
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
+    Json(payload): Json<RepoSettingsOption>
 ) -> StatusCode {
-    StatusCode::OK
+    let mut repos = state.repos.write().unwrap();
+    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
+        if let Some(desc) = payload.description {
+            repo.description = Some(desc);
+        }
+        if let Some(private) = payload.private {
+            repo.private = private;
+        }
+        // Handle website update if Repo struct supported it, currently it doesn't in shared definition
+        // but we can at least return OK after modifying what we can.
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn mirror_sync(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {

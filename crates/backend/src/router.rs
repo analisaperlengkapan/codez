@@ -182,7 +182,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/admin/stats", get(get_admin_stats))
         .route("/api/v1/user/feeds", get(list_feeds))
         .route("/api/v1/repos/:owner/:repo/actions/workflows", get(list_workflows))
-        .route("/api/v1/packages/:owner", get(list_packages))
+        .route("/api/v1/packages/:owner", get(list_packages).post(upload_package))
         .route("/api/v1/repos/:owner/:repo/secrets", get(list_secrets).post(create_secret))
         .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))
         .route("/api/v1/admin/notices", get(list_notices))
