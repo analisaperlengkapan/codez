@@ -434,12 +434,40 @@ pub async fn transfer_repo(Path((_owner, _repo)): Path<(String, String)>, Json(_
     StatusCode::ACCEPTED
 }
 
-pub async fn add_issue_label(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {
-    StatusCode::CREATED
+pub async fn add_issue_label(
+    State(state): State<AppState>,
+    Path((_owner, _repo, index)): Path<(String, String, u64)>,
+    Json(payload): Json<shared::CreateLabelOption>
+) -> StatusCode {
+    let mut issues = state.issues.write().unwrap();
+    if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
+        issue.labels.push(Label {
+            id: 100, // mock ID
+            name: payload.name,
+            color: payload.color,
+            description: payload.description,
+        });
+        StatusCode::CREATED
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
-pub async fn remove_issue_label(Path((_owner, _repo, _index, _id)): Path<(String, String, u64, u64)>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn remove_issue_label(
+    State(state): State<AppState>,
+    Path((_owner, _repo, index, id)): Path<(String, String, u64, u64)>
+) -> StatusCode {
+    let mut issues = state.issues.write().unwrap();
+    if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
+        if let Some(pos) = issue.labels.iter().position(|l| l.id == id) {
+            issue.labels.remove(pos);
+            StatusCode::NO_CONTENT
+        } else {
+            StatusCode::NOT_FOUND
+        }
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn update_wiki_page(
@@ -682,8 +710,20 @@ pub async fn update_file(
     }))
 }
 
-pub async fn add_issue_assignee(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> StatusCode {
-    StatusCode::CREATED
+pub async fn add_issue_assignee(
+    State(state): State<AppState>,
+    Path((_owner, _repo, index)): Path<(String, String, u64)>,
+    Json(payload): Json<User>
+) -> StatusCode {
+    let mut issues = state.issues.write().unwrap();
+    if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
+        if !issue.assignees.iter().any(|u| u.username == payload.username) {
+            issue.assignees.push(payload);
+        }
+        StatusCode::CREATED
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn request_review(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> (StatusCode, Json<ReviewRequest>) {

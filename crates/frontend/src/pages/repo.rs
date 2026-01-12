@@ -306,6 +306,23 @@ pub fn IssueDetail() -> impl IntoView {
         });
     };
 
+    // Label management
+    let (new_label_name, set_new_label_name) = create_signal("".to_string());
+    let on_add_label = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        let name = new_label_name.get();
+        if !name.is_empty() {
+            spawn_local(async move {
+                let payload = CreateLabelOption { name, color: "#cccccc".to_string(), description: None };
+                let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/labels", o, r, i))
+                    .json(&payload).unwrap().send().await;
+                set_new_label_name.set("".to_string());
+            });
+        }
+    };
+
     view! {
         <div class="issue-detail">
             <Suspense fallback=move || view! { <p>"Loading issue..."</p> }>
@@ -337,6 +354,10 @@ pub fn IssueDetail() -> impl IntoView {
                                         <For each=move || i.labels.clone() key=|l| l.id children=move |l| {
                                             view! { <div style=format!("background-color: {}; color: #fff; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-right: 5px;", l.color)>{l.name}</div> }
                                         }/>
+                                    </div>
+                                    <div class="add-label" style="margin-top: 5px;">
+                                        <input type="text" prop:value=new_label_name on:input=move |ev| set_new_label_name.set(event_target_value(&ev)) placeholder="New Label" style="width: 100px;"/>
+                                        <button on:click=on_add_label>"+"</button>
                                     </div>
                                 </div>
                                 <div class="sidebar-item">
