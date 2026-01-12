@@ -353,12 +353,14 @@ pub struct Project {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Collaborator {
+    pub repo_id: u64,
     pub user: User,
     pub permissions: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Branch {
+    pub repo_id: u64,
     pub name: String,
     pub commit: Commit,
     pub protected: bool,
@@ -372,6 +374,7 @@ pub struct CreateBranchOption {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Tag {
+    pub repo_id: u64,
     pub name: String,
     pub id: String,
     pub commit: Commit,
@@ -611,13 +614,13 @@ mod tests {
         let user = User::new(1, "u".to_string(), None);
         let commit = Commit { sha: "s".to_string(), message: "m".to_string(), author: user.clone(), date: "d".to_string() };
 
-        let c = Collaborator { user: user.clone(), permissions: "read".to_string() };
+        let c = Collaborator { user: user.clone(), repo_id: 1, permissions: "read".to_string() };
         assert_eq!(c.permissions, "read");
 
-        let b = Branch { name: "main".to_string(), commit: commit.clone(), protected: true };
+        let b = Branch { name: "main".to_string(), repo_id: 1, commit: commit.clone(), protected: true };
         assert!(b.protected);
 
-        let t = Tag { name: "v1".to_string(), id: "1".to_string(), commit: commit.clone() };
+        let t = Tag { name: "v1".to_string(), repo_id: 1, id: "1".to_string(), commit: commit.clone() };
         assert_eq!(t.name, "v1");
     }
 

@@ -767,7 +767,7 @@ pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Jso
 pub async fn list_collaborators(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Collaborator>> {
     let user = User::new(2, "collab_user".to_string(), None);
     vec![
-        Collaborator { user, permissions: "write".to_string() }
+        Collaborator { user, repo_id: 1, permissions: "write".to_string() }
     ].into()
 }
 
@@ -783,18 +783,29 @@ pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Jso
     let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
     let branches = vec![
-        Branch { name: "main".to_string(), commit, protected: true }
+        Branch { name: "main".to_string(), repo_id: 1, commit, protected: true }
     ];
     Json(branches)
 }
 
 pub async fn create_branch(
-    Path((_owner, _repo)): Path<(String, String)>,
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateBranchOption>
 ) -> (StatusCode, Json<Branch>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Branch {
+            repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "def".to_string(), message: "new branch".to_string(), author: user, date: "now".to_string() };
-    let branch = Branch { name: payload.name, commit, protected: false };
+    let branch = Branch { name: payload.name, repo_id, commit, protected: false };
     (StatusCode::CREATED, Json(branch))
 }
 
@@ -802,7 +813,7 @@ pub async fn list_tags(Path((_owner, _repo)): Path<(String, String)>) -> Json<Ve
     let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
     let tags = vec![
-        Tag { name: "v1.0".to_string(), id: "1".to_string(), commit }
+        Tag { name: "v1.0".to_string(), repo_id: 1, id: "1".to_string(), commit }
     ];
     Json(tags)
 }
