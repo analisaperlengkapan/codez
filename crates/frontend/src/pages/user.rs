@@ -1,6 +1,8 @@
 use leptos::*;
 use gloo_net::http::Request;
-use shared::{User, LoginOption, RegisterOption, Contribution};
+use shared::{
+    User, LoginOption, RegisterOption, Contribution, UserSettingsOption, PublicKey, GpgKey
+};
 use leptos_router::*;
 
 #[component]
@@ -76,6 +78,9 @@ pub fn UserProfile() -> impl IntoView {
     view! {
         <div class="user-profile">
             <h2>"User Profile: " {username}</h2>
+            <div class="user-links">
+                <a href="followers">"Followers"</a> " | " <a href="following">"Following"</a>
+            </div>
             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                 {move || match user.get() {
                     Some(Some(u)) => view! {
@@ -164,4 +169,77 @@ pub fn UserFollowing() -> impl IntoView {
 }
 
 #[component]
-pub fn UserSettings() -> impl IntoView { view! { <div>"User Settings Placeholder"</div> } }
+pub fn UserSettings() -> impl IntoView {
+    let settings = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/user/settings").send().await.unwrap().json::<UserSettingsOption>().await.unwrap_or(UserSettingsOption {
+            full_name: None, website: None, description: None, location: None
+        })
+    });
+
+    let keys = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/user/keys").send().await.unwrap().json::<Vec<PublicKey>>().await.unwrap_or_default()
+    });
+
+    let gpg_keys = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/user/gpg_keys").send().await.unwrap().json::<Vec<GpgKey>>().await.unwrap_or_default()
+    });
+
+    let (full_name, set_full_name) = create_signal("".to_string());
+
+    let on_update_profile = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = UserSettingsOption {
+            full_name: Some(full_name.get()),
+            website: None,
+            description: None,
+            location: None,
+        };
+        spawn_local(async move {
+            let _ = Request::patch("http://127.0.0.1:3000/api/v1/user/settings").json(&payload).unwrap().send().await;
+        });
+    };
+
+    view! {
+        <div class="user-settings">
+            <h2>"Settings"</h2>
+            <div class="profile-settings">
+                <h3>"Profile"</h3>
+                <Suspense fallback=move || view! { <p>"Loading profile..."</p> }>
+                    {move || settings.get().map(|s| view! {
+                        <p>"Current Name: " {s.full_name.unwrap_or_default()}</p>
+                    })}
+                </Suspense>
+                <form on:submit=on_update_profile>
+                    <input type="text" placeholder="Full Name" prop:value=full_name on:input=move |ev| set_full_name.set(event_target_value(&ev)) />
+                    <button type="submit">"Update Profile"</button>
+                </form>
+            </div>
+
+            <div class="ssh-keys">
+                <h3>"SSH Keys"</h3>
+                <ul>
+                    <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                        {move || keys.get().map(|list| view! {
+                            <For each=move || list.clone() key=|k| k.id children=move |k| {
+                                view! { <li>{k.title} " - " {k.fingerprint}</li> }
+                            }/>
+                        })}
+                    </Suspense>
+                </ul>
+            </div>
+
+            <div class="gpg-keys">
+                <h3>"GPG Keys"</h3>
+                <ul>
+                    <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                        {move || gpg_keys.get().map(|list| view! {
+                            <For each=move || list.clone() key=|k| k.id children=move |k| {
+                                view! { <li>{k.key_id} " - " {k.primary_key_id}</li> }
+                            }/>
+                        })}
+                    </Suspense>
+                </ul>
+            </div>
+        </div>
+    }
+}

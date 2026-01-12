@@ -36,6 +36,13 @@ pub fn AdminUsers() -> impl IntoView {
         Request::get("http://127.0.0.1:3000/api/v1/admin/users").send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
     });
 
+    let on_delete = move |username: String| {
+        spawn_local(async move {
+            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/admin/users/{}", username)).send().await;
+            // ideally refetch users here
+        });
+    };
+
     view! {
         <div class="admin-users">
             <h3>"User Management"</h3>
@@ -45,12 +52,18 @@ pub fn AdminUsers() -> impl IntoView {
                     <Suspense fallback=move || view! { <tr><td colspan="4">"Loading..."</td></tr> }>
                         {move || users.get().map(|list| view! {
                             <For each=move || list.clone() key=|u| u.id children=move |u| {
+                                let uname = u.username.clone();
                                 view! {
                                     <tr>
                                         <td>{u.id}</td>
                                         <td>{u.username}</td>
                                         <td>{u.email}</td>
-                                        <td><button>"Edit"</button></td>
+                                        <td>
+                                            <button on:click=move |_| {
+                                                let u = uname.clone();
+                                                on_delete(u);
+                                            }>"Delete"</button>
+                                        </td>
                                     </tr>
                                 }
                             }/>

@@ -29,6 +29,7 @@ fn App() -> impl IntoView {
                     <Route path="/login" view=Login/>
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
+                    <Route path="/repo/migrate" view=MigrateRepo/>
                     <Route path="/users/:username" view=UserProfile/>
                     <Route path="/users/:username/followers" view=UserFollowers/>
                     <Route path="/users/:username/following" view=UserFollowing/>
@@ -44,15 +45,23 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/tags" view=TagList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
                     <Route path="/repos/:owner/:repo/commits" view=CommitList/>
-                    <Route path="/repos/:owner/:repo/commits/:sha/diff" view=CommitDiff/>
+                    <Route path="/repos/:owner/:repo/commits/:sha" view=CommitDiff/>
                     <Route path="/repos/:owner/:repo/releases" view=ReleaseList/>
                     <Route path="/repos/:owner/:repo/labels" view=LabelList/>
                     <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>
                     <Route path="/repos/:owner/:repo/milestones/:index" view=MilestoneDetail/>
                     <Route path="/repos/:owner/:repo/projects" view=ProjectList/>
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
+                    <Route path="/repos/:owner/:repo/wiki/pages/:page_name" view=Wiki/>
                     <Route path="/repos/:owner/:repo/wiki/pages/:page_name/edit" view=WikiEdit/>
+                    <Route path="/repos/:owner/:repo/edit/*path" view=FileEdit/>
                     <Route path="/repos/:owner/:repo/settings" view=RepoSettings/>
+                    <Route path="/repos/:owner/:repo/collaborators" view=CollaboratorList/>
+                    <Route path="/repos/:owner/:repo/settings/webhooks" view=WebhookList/>
+                    <Route path="/repos/:owner/:repo/settings/secrets" view=SecretList/>
+                    <Route path="/repos/:owner/:repo/settings/keys" view=DeployKeyList/>
+                    <Route path="/repos/:owner/:repo/settings/branches" view=ProtectedBranchList/>
+                    <Route path="/repos/:owner/:repo/settings/lfs" view=LfsLockList/>
                 </Routes>
             </main>
         </Router>
@@ -61,8 +70,6 @@ fn App() -> impl IntoView {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_frontend_routes() {
         assert_eq!(1, 1);

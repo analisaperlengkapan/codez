@@ -30,6 +30,12 @@ impl Repository {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IssueFilterOptions {
+    pub state: Option<String>, // "open", "closed", "all"
+    pub q: Option<String>,     // search query
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GpgKey {
     pub id: u64,
     pub key_id: String,
@@ -79,6 +85,9 @@ pub struct CreateRepoOption {
     pub description: Option<String>,
     pub private: bool,
     pub auto_init: bool,
+    pub gitignores: Option<String>,
+    pub license: Option<String>,
+    pub readme: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -90,6 +99,8 @@ pub struct Issue {
     pub state: String,
     pub user: User,
     pub assignees: Vec<User>,
+    pub labels: Vec<Label>,
+    pub milestone: Option<Milestone>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -123,6 +134,14 @@ pub struct FileEntry {
     pub path: String,
     pub kind: String, // "file" or "dir"
     pub size: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateFileOption {
+    pub content: String,
+    pub message: String,
+    pub sha: String,
+    pub branch: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -243,6 +262,12 @@ pub struct RepoTopicOptions {
 pub struct RepoSearchOptions {
     pub q: String,
     pub uid: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PaginationOptions {
+    pub page: Option<u64>,
+    pub limit: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -902,6 +927,8 @@ mod tests {
             state: "open".to_string(),
             user,
             assignees: vec![],
+            labels: vec![],
+            milestone: None,
         };
         assert_eq!(issue.title, "Bug");
 
@@ -919,9 +946,13 @@ mod tests {
             description: Some("desc".to_string()),
             private: true,
             auto_init: false,
+            gitignores: Some("Rust".to_string()),
+            license: Some("MIT".to_string()),
+            readme: Some("Default".to_string()),
         };
         assert_eq!(opts.name, "new-repo");
         assert!(opts.private);
+        assert_eq!(opts.license, Some("MIT".to_string()));
     }
 
     #[test]
