@@ -265,20 +265,35 @@ pub async fn create_comment(
     (StatusCode::CREATED, Json(comment))
 }
 
-pub async fn list_labels(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Label>> {
+pub async fn list_labels(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Label>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let labels = state.labels.read().unwrap();
-    Json(labels.clone())
+    let filtered_labels: Vec<Label> = labels.iter().filter(|l| l.repo_id == repo_id).cloned().collect();
+    Json(filtered_labels)
 }
 
 pub async fn create_label(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateLabelOption>
 ) -> (StatusCode, Json<Label>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Label {
+            id: 0, repo_id: 0, name: "".to_string(), color: "".to_string(), description: None
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut labels = state.labels.write().unwrap();
     let id = (labels.len() as u64) + 1;
     let label = Label {
         id,
+        repo_id,
         name: payload.name,
         color: payload.color,
         description: payload.description,
@@ -287,20 +302,35 @@ pub async fn create_label(
     (StatusCode::CREATED, Json(label))
 }
 
-pub async fn list_milestones(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Milestone>> {
+pub async fn list_milestones(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Milestone>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let milestones = state.milestones.read().unwrap();
-    Json(milestones.clone())
+    let filtered_milestones: Vec<Milestone> = milestones.iter().filter(|m| m.repo_id == repo_id).cloned().collect();
+    Json(filtered_milestones)
 }
 
 pub async fn create_milestone(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateMilestoneOption>
 ) -> (StatusCode, Json<Milestone>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Milestone {
+            id: 0, repo_id: 0, title: "".to_string(), description: None, due_on: None, state: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut milestones = state.milestones.write().unwrap();
     let id = (milestones.len() as u64) + 1;
     let milestone = Milestone {
         id,
+        repo_id,
         title: payload.title,
         description: payload.description,
         due_on: payload.due_on,
@@ -541,6 +571,7 @@ pub async fn add_issue_label(
     if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
         issue.labels.push(Label {
             id: 100, // mock ID
+            repo_id: issue.repo_id,
             name: payload.name,
             color: payload.color,
             description: payload.description,

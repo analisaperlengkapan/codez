@@ -220,6 +220,7 @@ pub struct MergePullRequestOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Label {
     pub id: u64,
+    pub repo_id: u64,
     pub name: String,
     pub color: String,
     pub description: Option<String>,
@@ -235,6 +236,7 @@ pub struct CreateLabelOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Milestone {
     pub id: u64,
+    pub repo_id: u64,
     pub title: String,
     pub description: Option<String>,
     pub due_on: Option<String>,
@@ -766,6 +768,7 @@ mod tests {
     fn test_label_structs() {
         let label = Label {
             id: 1,
+            repo_id: 1,
             name: "bug".to_string(),
             color: "#ff0000".to_string(),
             description: None,
@@ -784,6 +787,7 @@ mod tests {
     fn test_milestone_structs() {
         let milestone = Milestone {
             id: 1,
+            repo_id: 1,
             title: "v1.0".to_string(),
             description: None,
             due_on: None,

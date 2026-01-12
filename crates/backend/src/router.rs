@@ -80,6 +80,7 @@ pub fn api_router() -> Router {
         labels: Arc::new(RwLock::new(vec![
             Label {
                 id: 1,
+                repo_id: 1,
                 name: "bug".to_string(),
                 color: "#ff0000".to_string(),
                 description: None,
@@ -88,6 +89,7 @@ pub fn api_router() -> Router {
         milestones: Arc::new(RwLock::new(vec![
             Milestone {
                 id: 1,
+                repo_id: 1,
                 title: "v1.0".to_string(),
                 description: None,
                 due_on: None,
