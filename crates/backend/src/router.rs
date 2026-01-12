@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
-    Repository, User, Activity, Commit
+    Repository, User, Activity, Commit, LfsLock
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -25,6 +25,7 @@ pub struct AppState {
     pub hooks: Arc<RwLock<Vec<Webhook>>>,
     pub activities: Arc<RwLock<Vec<Activity>>>,
     pub commits: Arc<RwLock<Vec<Commit>>>,
+    pub lfs_locks: Arc<RwLock<Vec<LfsLock>>>,
 }
 
 pub fn api_router() -> Router {
@@ -141,6 +142,7 @@ pub fn api_router() -> Router {
                 date: "2023-01-01T12:00:00Z".to_string(),
             }
         ])),
+        lfs_locks: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()

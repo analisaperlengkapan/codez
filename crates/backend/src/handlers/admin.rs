@@ -54,12 +54,18 @@ pub async fn remove_org_member(Path((_org, _username)): Path<(String, String)>) 
     StatusCode::NO_CONTENT
 }
 
-pub async fn get_admin_stats() -> Json<AdminStats> {
+pub async fn get_admin_stats(State(state): State<AppState>) -> Json<AdminStats> {
+    let users_count = state.users.read().unwrap().len() as u64;
+    let repos_count = state.repos.read().unwrap().len() as u64;
+    let issues_count = state.issues.read().unwrap().len() as u64;
+    // Orgs are not fully stateful yet, assuming mock or future implementation
+    let orgs_count = 5;
+
     Json(AdminStats {
-        users: 10,
-        repos: 20,
-        orgs: 5,
-        issues: 100,
+        users: users_count,
+        repos: repos_count,
+        orgs: orgs_count,
+        issues: issues_count,
     })
 }
 

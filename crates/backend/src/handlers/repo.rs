@@ -348,14 +348,27 @@ pub async fn list_deploy_keys(Path((_owner, _repo)): Path<(String, String)>) -> 
     Json(keys)
 }
 
-pub async fn list_lfs_locks(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<LfsLock>> {
-    let user = User::new(1, "admin".to_string(), None);
-    vec![
-        LfsLock { id: "1".to_string(), path: "file.bin".to_string(), owner: user, locked_at: "now".to_string() }
-    ].into()
+pub async fn list_lfs_locks(
+    State(state): State<AppState>,
+    Path((_owner, _repo)): Path<(String, String)>
+) -> Json<Vec<LfsLock>> {
+    let locks = state.lfs_locks.read().unwrap();
+    Json(locks.clone())
 }
 
-pub async fn create_lfs_lock(Path((_owner, _repo)): Path<(String, String)>) -> StatusCode {
+pub async fn create_lfs_lock(
+    State(state): State<AppState>,
+    Path((_owner, _repo)): Path<(String, String)>
+) -> StatusCode {
+    let mut locks = state.lfs_locks.write().unwrap();
+    let id = (locks.len() as u64) + 1;
+    let user = User::new(1, "admin".to_string(), None);
+    locks.push(LfsLock {
+        id: id.to_string(),
+        path: format!("file{}.bin", id),
+        owner: user,
+        locked_at: "now".to_string(),
+    });
     StatusCode::CREATED
 }
 
@@ -563,11 +576,22 @@ pub async fn merge_pull(
     }
 }
 
-pub async fn search_repos() -> Json<Vec<Repository>> {
-    let repos = vec![
-        Repository::new(1, "searched-repo".to_string(), "user".to_string())
-    ];
-    Json(repos)
+pub async fn search_repos(
+    State(state): State<AppState>,
+    Query(params): Query<RepoSearchOptions>
+) -> Json<Vec<Repository>> {
+    let repos = state.repos.read().unwrap();
+    let q = params.q.to_lowercase();
+
+    if q.is_empty() {
+        Json(repos.clone())
+    } else {
+        let filtered: Vec<Repository> = repos.iter()
+            .filter(|r| r.name.to_lowercase().contains(&q) || r.description.clone().unwrap_or_default().to_lowercase().contains(&q))
+            .cloned()
+            .collect();
+        Json(filtered)
+    }
 }
 
 pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Project>> {
