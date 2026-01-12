@@ -10,7 +10,7 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions
+    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption
 };
 use crate::router::AppState;
 
@@ -155,6 +155,43 @@ pub async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index
     let issues = state.issues.read().unwrap();
     let issue = issues.iter().find(|i| i.id == index).cloned();
     Json(issue)
+}
+
+pub async fn update_issue(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateIssueOption>
+) -> (StatusCode, Json<Option<Issue>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(None));
+    }
+
+    let mut issues = state.issues.write().unwrap();
+    let issue = issues.iter_mut().find(|i| i.id == index && i.repo_id == repo_id);
+
+    if let Some(i) = issue {
+        if let Some(title) = payload.title {
+            i.title = title;
+        }
+        if let Some(body) = payload.body {
+            i.body = Some(body);
+        }
+        if let Some(state_val) = payload.state {
+            i.state = state_val;
+        }
+        if let Some(milestone_id) = payload.milestone_id {
+            // Validate milestone existence
+            let milestones = state.milestones.read().unwrap();
+            if let Some(m) = milestones.iter().find(|m| m.id == milestone_id) {
+                i.milestone = Some(m.clone());
+            }
+        }
+        return (StatusCode::OK, Json(Some(i.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
 }
 
 pub async fn list_pulls(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<PullRequest>> {

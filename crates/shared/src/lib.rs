@@ -111,6 +111,14 @@ pub struct CreateIssueOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateIssueOption {
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub state: Option<String>, // "open" or "closed"
+    pub milestone_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PullRequest {
     pub id: u64,
     pub repo_id: u64,
@@ -963,6 +971,14 @@ mod tests {
             body: Some("Description".to_string()),
         };
         assert_eq!(opts.title, "New Bug");
+
+        let update = UpdateIssueOption {
+            title: Some("Updated".to_string()),
+            body: None,
+            state: Some("closed".to_string()),
+            milestone_id: None,
+        };
+        assert_eq!(update.title, Some("Updated".to_string()));
     }
 
     #[test]

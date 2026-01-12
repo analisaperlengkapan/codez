@@ -7,7 +7,8 @@ use shared::{
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
     ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
-    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption
+    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
+    UpdateIssueOption
 };
 
 #[component]
@@ -275,10 +276,11 @@ pub fn IssueDetail() -> impl IntoView {
     let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
 
     let (new_comment, set_new_comment) = create_signal("".to_string());
+    let (trigger_refresh, set_trigger_refresh) = create_signal(0);
 
     let issue = create_resource(
-        move || (owner(), repo_name(), index()),
-        |(o, r, i)| async move {
+        move || (owner(), repo_name(), index(), trigger_refresh.get()),
+        |(o, r, i, _)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, i))
                 .send().await.unwrap().json::<Option<Issue>>().await.unwrap_or(None)
         }
@@ -306,6 +308,24 @@ pub fn IssueDetail() -> impl IntoView {
         });
     };
 
+    let on_toggle_state = move |current_state: String| {
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+        let new_state = if current_state == "open" { "closed" } else { "open" };
+        let payload = UpdateIssueOption {
+            title: None,
+            body: None,
+            state: Some(new_state.to_string()),
+            milestone_id: None,
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
     // Label management
     let (new_label_name, set_new_label_name) = create_signal("".to_string());
     let on_add_label = move |_| {
@@ -323,23 +343,84 @@ pub fn IssueDetail() -> impl IntoView {
         }
     };
 
+    let (is_editing, set_is_editing) = create_signal(false);
+    let (edit_title, set_edit_title) = create_signal("".to_string());
+    let (edit_body, set_edit_body) = create_signal("".to_string());
+
+    let on_start_edit = move |t: String, b: String| {
+        set_edit_title.set(t);
+        set_edit_body.set(b);
+        set_is_editing.set(true);
+    };
+
+    let on_cancel_edit = move |_| {
+        set_is_editing.set(false);
+    };
+
+    let on_save_edit = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+        let payload = UpdateIssueOption {
+            title: Some(edit_title.get()),
+            body: Some(edit_body.get()),
+            state: None,
+            milestone_id: None,
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_is_editing.set(false);
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
     view! {
         <div class="issue-detail">
             <Suspense fallback=move || view! { <p>"Loading issue..."</p> }>
                 {move || match issue.get() {
-                    Some(Some(i)) => view! {
-                        <div class="issue-header">
-                            <h2>{i.title} " #" {i.number}</h2>
-                            <span class="state">{i.state}</span>
-                            <span class="meta">" opened by " {i.user.username}</span>
-                        </div>
-                        <div class="issue-container" style="display: flex;">
-                            <div class="issue-main" style="flex: 3;">
-                                <div class="issue-body">
-                                    <p>{i.body.unwrap_or_default()}</p>
-                                </div>
+                    Some(Some(i)) => {
+                        let state_clone = i.state.clone();
+                        let state_for_toggle = state_clone.clone();
+                        let title_clone = i.title.clone();
+                        let body_clone = i.body.clone().unwrap_or_default();
+                        view! {
+                            <div class="issue-header">
+                                {if is_editing.get() {
+                                    view! {
+                                        <input type="text" prop:value=edit_title on:input=move |ev| set_edit_title.set(event_target_value(&ev)) style="font-size: 1.5em; width: 80%;" />
+                                    }.into_view()
+                                } else {
+                                    view! { <h2>{i.title.clone()} " #" {i.number}</h2> }.into_view()
+                                }}
+                                <span class="state">{i.state.clone()}</span>
+                                <span class="meta">" opened by " {i.user.username}</span>
+                                <button on:click=move |_| on_toggle_state(state_for_toggle.clone()) style="margin-left: 10px;">
+                                    {if state_clone == "open" { "Close Issue" } else { "Reopen Issue" }}
+                                </button>
+                                {if !is_editing.get() {
+                                    view! { <button on:click=move |_| on_start_edit(title_clone.clone(), body_clone.clone()) style="margin-left: 5px;">"Edit"</button> }.into_view()
+                                } else {
+                                     view! { <span></span> }.into_view()
+                                }}
                             </div>
-                            <div class="issue-sidebar" style="flex: 1; padding-left: 20px; border-left: 1px solid #eee;">
+                            <div class="issue-container" style="display: flex;">
+                                <div class="issue-main" style="flex: 3;">
+                                    <div class="issue-body">
+                                        {if is_editing.get() {
+                                            view! {
+                                                <div>
+                                                    <textarea prop:value=edit_body on:input=move |ev| set_edit_body.set(event_target_value(&ev)) rows="10" style="width: 100%;"></textarea>
+                                                    <button on:click=on_save_edit>"Save"</button>
+                                                    <button on:click=on_cancel_edit style="margin-left: 5px;">"Cancel"</button>
+                                                </div>
+                                            }.into_view()
+                                        } else {
+                                            view! { <p>{i.body.clone().unwrap_or_default()}</p> }.into_view()
+                                        }}
+                                    </div>
+                                </div>
+                                <div class="issue-sidebar" style="flex: 1; padding-left: 20px; border-left: 1px solid #eee;">
                                 <div class="sidebar-item">
                                     <strong>"Assignees"</strong>
                                     <div class="assignees-list">
@@ -366,7 +447,7 @@ pub fn IssueDetail() -> impl IntoView {
                                 </div>
                             </div>
                         </div>
-                    }.into_view(),
+                    }.into_view() },
                     _ => view! { <p>"Issue not found"</p> }.into_view()
                 }}
             </Suspense>

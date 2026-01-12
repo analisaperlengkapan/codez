@@ -6,7 +6,7 @@ mod tests {
         http::{Request, StatusCode},
     };
     use tower::ServiceExt; // for `oneshot`
-    use shared::{CreateRepoOption, Repository, Activity, CreateIssueOption, Issue, UpdateFileOption, FileEntry};
+    use shared::{CreateRepoOption, Repository, Activity, CreateIssueOption, Issue, UpdateFileOption, FileEntry, UpdateIssueOption};
 
     #[tokio::test]
     async fn test_create_repo_flow() {
@@ -103,6 +103,38 @@ mod tests {
         let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
         let found = activities.iter().any(|a| a.op_type == "create_issue" && a.content.contains("opened issue"));
         assert!(found);
+    }
+
+    #[tokio::test]
+    async fn test_update_issue_flow() {
+        let app = api_router();
+
+        // Update Issue 1 (default mock issue)
+        let payload = UpdateIssueOption {
+            title: Some("Updated Title".to_string()),
+            body: Some("Updated Body".to_string()),
+            state: Some("closed".to_string()),
+            milestone_id: None,
+        };
+
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/v1/repos/admin/codeza/issues/1")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issue: Option<Issue> = serde_json::from_slice(&body).unwrap();
+        let issue = issue.unwrap();
+        assert_eq!(issue.title, "Updated Title");
+        assert_eq!(issue.state, "closed");
     }
 
     #[tokio::test]
