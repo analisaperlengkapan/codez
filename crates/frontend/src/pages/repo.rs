@@ -1315,13 +1315,12 @@ pub fn Wiki() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-    // We default to Home for now as we don't have a catch-all route for wiki pages yet
-    let page_name = "Home";
+    let page_name = move || params.with(|params| params.get("page_name").cloned().unwrap_or("Home".to_string()));
 
     let wiki_page = create_resource(
-        move || (owner(), repo_name()),
-        move |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/wiki/pages/{}", o, r, page_name))
+        move || (owner(), repo_name(), page_name()),
+        move |(o, r, p)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p))
                 .send().await.unwrap().json::<Option<WikiPage>>().await.unwrap_or(None)
         }
     );
@@ -1330,19 +1329,24 @@ pub fn Wiki() -> impl IntoView {
         <div class="wiki-view">
             <Suspense fallback=move || view! { <p>"Loading wiki..."</p> }>
                 {move || match wiki_page.get() {
-                    Some(Some(page)) => view! {
-                        <div class="wiki-header">
-                            <h3>{page.title}</h3>
-                            <a href=format!("wiki/pages/{}/edit", page_name) class="btn">"Edit"</a>
-                        </div>
-                        <div class="wiki-content">
-                            <pre>{page.content}</pre>
-                        </div>
-                    }.into_view(),
+                    Some(Some(page)) => {
+                        let title = page.title.clone();
+                        view! {
+                            <div class="wiki-header">
+                                <h3>{page.title}</h3>
+                                <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), title) class="btn">"Edit"</a>
+                            </div>
+                            <div class="wiki-content">
+                                <pre>{page.content}</pre>
+                            </div>
+                        }.into_view()
+                    },
                     _ => view! {
                         <div>
-                            <p>"Wiki page 'Home' not found."</p>
-                            <a href="wiki/pages/Home/edit">"Create Home Page"</a>
+                            <p>"Wiki page '" {page_name} "' not found."</p>
+                            <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), page_name())>
+                                "Create " {page_name} " Page"
+                            </a>
                         </div>
                     }.into_view()
                 }}

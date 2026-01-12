@@ -645,9 +645,16 @@ pub async fn update_file(
 ) -> (StatusCode, Json<FileEntry>) {
     // Create a commit for the file update
     let mut commits = state.commits.write().unwrap();
+    let commit_message = if payload.message.is_empty() {
+        format!("Update {}", path)
+    } else {
+        payload.message.clone()
+    };
+
+    let commit_id = commits.len() + 1;
     commits.push(Commit {
-        sha: format!("update{}", commits.len() + 1),
-        message: payload.message.clone().unwrap_or(format!("Update {}", path)),
+        sha: format!("update{}", commit_id),
+        message: commit_message,
         author: User::new(1, "admin".to_string(), None),
         date: "now".to_string(),
     });
