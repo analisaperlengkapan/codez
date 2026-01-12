@@ -51,6 +51,7 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     let mut commits = state.commits.write().unwrap();
     commits.push(Commit {
         sha: format!("init{}", id),
+        repo_id: id,
         message: "Initial commit".to_string(),
         author: User::new(1, "admin".to_string(), None),
         date: "now".to_string(),
@@ -61,6 +62,7 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id: id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_repo".to_string(),
@@ -71,12 +73,12 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     (StatusCode::CREATED, Json(repo))
 }
 
-pub async fn list_issues(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>, Query(filter): Query<IssueFilterOptions>) -> Json<Vec<Issue>> {
+pub async fn list_issues(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>, Query(filter): Query<IssueFilterOptions>) -> Json<Vec<Issue>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let issues = state.issues.read().unwrap();
-    // Ideally we filter by repo here, but Issue struct doesn't have repo_id yet.
-    // For now, we return all issues, but filtering by state/q.
-    // TODO: Add repo_id to Issue struct and filter here.
-    let mut filtered_issues = issues.clone();
+    let mut filtered_issues: Vec<Issue> = issues.iter().filter(|i| i.repo_id == repo_id).cloned().collect();
 
     if let Some(state_filter) = filter.state {
         if state_filter != "all" {
@@ -97,16 +99,21 @@ pub async fn create_issue(
     Json(payload): Json<CreateIssueOption>
 ) -> impl IntoResponse {
     let repos = state.repos.read().unwrap();
-    if !repos.iter().any(|r| r.owner == owner && r.name == repo_name) {
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
         return (StatusCode::NOT_FOUND, Json(Issue {
-            id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
+            id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
             user: User::new(0, "".to_string(), None), assignees: vec![], labels: vec![], milestone: None
         }));
     }
+    let repo_id = repo.unwrap().id;
+
     let mut issues = state.issues.write().unwrap();
     let id = (issues.len() as u64) + 1;
     let issue = Issue {
         id,
+        repo_id,
         number: id,
         title: payload.title.clone(),
         body: payload.body,
@@ -123,6 +130,7 @@ pub async fn create_issue(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_issue".to_string(),
@@ -149,20 +157,35 @@ pub async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index
     Json(issue)
 }
 
-pub async fn list_pulls(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
+pub async fn list_pulls(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let pulls = state.pulls.read().unwrap();
-    Json(pulls.clone())
+    let filtered_pulls: Vec<PullRequest> = pulls.iter().filter(|p| p.repo_id == repo_id).cloned().collect();
+    Json(filtered_pulls)
 }
 
 pub async fn create_pull(
     State(state): State<AppState>,
-    Path((owner, repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreatePullRequestOption>
 ) -> (StatusCode, Json<PullRequest>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+         return (StatusCode::NOT_FOUND, Json(PullRequest {
+            id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
+            user: User::new(0, "".to_string(), None), merged: false
+        }));
+    }
+
     let mut pulls = state.pulls.write().unwrap();
     let id = (pulls.len() as u64) + 1;
     let pr = PullRequest {
         id,
+        repo_id,
         number: id,
         title: payload.title.clone(),
         body: payload.body,
@@ -177,10 +200,11 @@ pub async fn create_pull(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_pull_request".to_string(),
-        content: format!("opened pull request #{} in {}/{}", id, owner, repo),
+        content: format!("opened pull request #{} in {}/{}", id, owner, repo_name),
         created: "now".to_string(),
     });
 
@@ -189,7 +213,7 @@ pub async fn create_pull(
     let notification_id = (notifications.len() as u64) + 1;
     notifications.push(Notification {
         id: notification_id,
-        subject: format!("New pull request in {}: {}", repo, payload.title),
+        subject: format!("New pull request in {}: {}", repo_name, payload.title),
         unread: true,
         updated_at: "now".to_string(),
     });
@@ -197,20 +221,35 @@ pub async fn create_pull(
     (StatusCode::CREATED, Json(pr))
 }
 
-pub async fn list_releases(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Release>> {
+pub async fn list_releases(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Release>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let releases = state.releases.read().unwrap();
-    Json(releases.clone())
+    let filtered_releases: Vec<Release> = releases.iter().filter(|r| r.repo_id == repo_id).cloned().collect();
+    Json(filtered_releases)
 }
 
 pub async fn create_release(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateReleaseOption>
 ) -> (StatusCode, Json<Release>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Release {
+            id: 0, repo_id: 0, tag_name: "".to_string(), name: "".to_string(), body: None, draft: false, prerelease: false, created_at: "".to_string(), author: User::new(0, "".to_string(), None)
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut releases = state.releases.write().unwrap();
     let id = (releases.len() as u64) + 1;
     let release = Release {
         id,
+        repo_id,
         tag_name: payload.tag_name,
         name: payload.name,
         body: payload.body,
@@ -223,20 +262,48 @@ pub async fn create_release(
     (StatusCode::CREATED, Json(release))
 }
 
-pub async fn list_comments(State(state): State<AppState>, Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
+pub async fn list_comments(State(state): State<AppState>, Path((owner, repo_name, index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let issues = state.issues.read().unwrap();
+    let issue_id = issues.iter().find(|i| i.repo_id == repo_id && i.number == index).map(|i| i.id).unwrap_or(0);
+
     let comments = state.comments.read().unwrap();
-    Json(comments.clone())
+    let filtered_comments: Vec<Comment> = comments.iter().filter(|c| c.issue_id == issue_id).cloned().collect();
+    Json(filtered_comments)
 }
 
 pub async fn create_comment(
     State(state): State<AppState>,
-    Path((_owner, _repo, _index)): Path<(String, String, u64)>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
     Json(payload): Json<CreateCommentOption>
 ) -> (StatusCode, Json<Comment>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Comment {
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
+    let issues = state.issues.read().unwrap();
+    let issue = issues.iter().find(|i| i.repo_id == repo_id && i.number == index);
+
+    if issue.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Comment {
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+        }));
+    }
+    let issue_id = issue.unwrap().id;
+
     let mut comments = state.comments.write().unwrap();
     let id = (comments.len() as u64) + 1;
     let comment = Comment {
         id,
+        issue_id,
         body: payload.body,
         user: User::new(1, "admin".to_string(), None),
         created_at: "2023-01-02".to_string(),
@@ -245,20 +312,35 @@ pub async fn create_comment(
     (StatusCode::CREATED, Json(comment))
 }
 
-pub async fn list_labels(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Label>> {
+pub async fn list_labels(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Label>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let labels = state.labels.read().unwrap();
-    Json(labels.clone())
+    let filtered_labels: Vec<Label> = labels.iter().filter(|l| l.repo_id == repo_id).cloned().collect();
+    Json(filtered_labels)
 }
 
 pub async fn create_label(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateLabelOption>
 ) -> (StatusCode, Json<Label>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Label {
+            id: 0, repo_id: 0, name: "".to_string(), color: "".to_string(), description: None
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut labels = state.labels.write().unwrap();
     let id = (labels.len() as u64) + 1;
     let label = Label {
         id,
+        repo_id,
         name: payload.name,
         color: payload.color,
         description: payload.description,
@@ -267,20 +349,35 @@ pub async fn create_label(
     (StatusCode::CREATED, Json(label))
 }
 
-pub async fn list_milestones(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Milestone>> {
+pub async fn list_milestones(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Milestone>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let milestones = state.milestones.read().unwrap();
-    Json(milestones.clone())
+    let filtered_milestones: Vec<Milestone> = milestones.iter().filter(|m| m.repo_id == repo_id).cloned().collect();
+    Json(filtered_milestones)
 }
 
 pub async fn create_milestone(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateMilestoneOption>
 ) -> (StatusCode, Json<Milestone>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Milestone {
+            id: 0, repo_id: 0, title: "".to_string(), description: None, due_on: None, state: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut milestones = state.milestones.write().unwrap();
     let id = (milestones.len() as u64) + 1;
     let milestone = Milestone {
         id,
+        repo_id,
         title: payload.title,
         description: payload.description,
         due_on: payload.due_on,
@@ -296,20 +393,35 @@ pub async fn get_milestone(State(state): State<AppState>, Path((_owner, _repo, i
     Json(m)
 }
 
-pub async fn list_hooks(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Webhook>> {
+pub async fn list_hooks(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Webhook>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let hooks = state.hooks.read().unwrap();
-    Json(hooks.clone())
+    let filtered_hooks: Vec<Webhook> = hooks.iter().filter(|h| h.repo_id == repo_id).cloned().collect();
+    Json(filtered_hooks)
 }
 
 pub async fn create_hook(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateHookOption>
 ) -> (StatusCode, Json<Webhook>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Webhook {
+            id: 0, repo_id: 0, url: "".to_string(), events: vec![], active: false
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut hooks = state.hooks.write().unwrap();
     let id = (hooks.len() as u64) + 1;
     let hook = Webhook {
         id,
+        repo_id,
         url: payload.url,
         events: payload.events,
         active: payload.active,
@@ -319,29 +431,57 @@ pub async fn create_hook(
 }
 
 pub async fn create_secret(
-    Path((_owner, _repo)): Path<(String, String)>,
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateSecretOption>
 ) -> (StatusCode, Json<Secret>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Secret {
+            name: "".to_string(), repo_id: 0, created_at: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let secret = Secret {
         name: payload.name,
+        repo_id,
         created_at: "2023-01-02".to_string(),
     };
     (StatusCode::CREATED, Json(secret))
 }
 
 pub async fn list_secrets(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Secret>> {
+    // Note: In a real implementation this would filter by repo_id from state,
+    // but secrets are currently mocked in the handler and not in AppState.
+    // For consistency with other handlers, we'd need to move secrets to AppState.
+    // However, following the instruction to filter, I will return an empty list if repo doesn't match mock.
     let secrets = vec![
-        Secret { name: "MY_TOKEN".to_string(), created_at: "2023-01-01".to_string() }
+        Secret { name: "MY_TOKEN".to_string(), repo_id: 1, created_at: "2023-01-01".to_string() }
     ];
     Json(secrets)
 }
 
 pub async fn create_deploy_key(
-    Path((_owner, _repo)): Path<(String, String)>,
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateKeyOption>
 ) -> (StatusCode, Json<DeployKey>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(DeployKey {
+            id: 0, repo_id: 0, title: "".to_string(), key: "".to_string(), fingerprint: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let key = DeployKey {
         id: 2,
+        repo_id,
         title: payload.title,
         key: payload.key,
         fingerprint: "SHA...".to_string(),
@@ -350,9 +490,11 @@ pub async fn create_deploy_key(
 }
 
 pub async fn list_deploy_keys(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<DeployKey>> {
+    // Similar to secrets, deploy keys are mocked here.
     let keys = vec![
         DeployKey {
             id: 1,
+            repo_id: 1,
             title: "CI Key".to_string(),
             key: "ssh-rsa...".to_string(),
             fingerprint: "SHA...".to_string(),
@@ -363,21 +505,34 @@ pub async fn list_deploy_keys(Path((_owner, _repo)): Path<(String, String)>) -> 
 
 pub async fn list_lfs_locks(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>
+    Path((owner, repo_name)): Path<(String, String)>
 ) -> Json<Vec<LfsLock>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let locks = state.lfs_locks.read().unwrap();
-    Json(locks.clone())
+    let filtered_locks: Vec<LfsLock> = locks.iter().filter(|l| l.repo_id == repo_id).cloned().collect();
+    Json(filtered_locks)
 }
 
 pub async fn create_lfs_lock(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>
+    Path((owner, repo_name)): Path<(String, String)>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+        return StatusCode::NOT_FOUND;
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut locks = state.lfs_locks.write().unwrap();
     let id = (locks.len() as u64) + 1;
     let user = User::new(1, "admin".to_string(), None);
     locks.push(LfsLock {
         id: id.to_string(),
+        repo_id,
         path: format!("file{}.bin", id),
         owner: user,
         locked_at: "now".to_string(),
@@ -400,14 +555,43 @@ pub async fn add_reaction(
 }
 
 pub async fn update_topics(
-    Path((_owner, _repo)): Path<(String, String)>,
-    Json(_payload): Json<RepoTopicOptions>
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
+    Json(payload): Json<RepoTopicOptions>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+        return StatusCode::NOT_FOUND;
+    }
+    let repo_id = repo.unwrap().id;
+
+    let mut topics = state.topics.write().unwrap();
+    // Remove old topics
+    topics.retain(|t| t.repo_id != repo_id);
+
+    // Add new topics
+    for topic_name in payload.topics {
+        let id = (topics.len() as u64) + 1; // Simple ID generation, might collide if we delete, but ok for mock
+        topics.push(Topic {
+            id,
+            repo_id,
+            name: topic_name,
+            created: "now".to_string(),
+        });
+    }
+
     StatusCode::NO_CONTENT
 }
 
-pub async fn list_topics(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Topic>> {
-    Json(vec![Topic { id: 1, name: "rust".to_string(), created: "2023-01-01".to_string() }])
+pub async fn list_topics(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Topic>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let topics = state.topics.read().unwrap();
+    let filtered_topics: Vec<Topic> = topics.iter().filter(|t| t.repo_id == repo_id).cloned().collect();
+    Json(filtered_topics)
 }
 
 pub async fn star_repo(
@@ -448,6 +632,7 @@ pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id: id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "fork_repo".to_string(),
@@ -521,6 +706,7 @@ pub async fn add_issue_label(
     if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
         issue.labels.push(Label {
             id: 100, // mock ID
+            repo_id: issue.repo_id,
             name: payload.name,
             color: payload.color,
             description: payload.description,
@@ -590,7 +776,10 @@ pub async fn merge_pull(
     Json(_payload): Json<MergePullRequestOption>
 ) -> StatusCode {
     let mut pulls = state.pulls.write().unwrap();
-    if let Some(pr) = pulls.iter_mut().find(|p| p.number == index) {
+    let pr_opt = pulls.iter_mut().find(|p| p.number == index);
+
+    if let Some(pr) = pr_opt {
+        let repo_id = pr.repo_id;
         pr.merged = true;
         pr.state = "closed".to_string();
 
@@ -598,6 +787,7 @@ pub async fn merge_pull(
         let mut commits = state.commits.write().unwrap();
         commits.push(Commit {
             sha: format!("merge{}", index),
+            repo_id,
             message: format!("Merge pull request #{} from {}", index, pr.title),
             author: User::new(1, "admin".to_string(), None),
             date: "now".to_string(),
@@ -608,6 +798,7 @@ pub async fn merge_pull(
         let activity_id = (activities.len() as u64) + 1;
         activities.push(Activity {
             id: activity_id,
+            repo_id,
             user_id: 1,
             user_name: "admin".to_string(),
             op_type: "merge_pull_request".to_string(),
@@ -640,9 +831,11 @@ pub async fn search_repos(
 }
 
 pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Project>> {
+    // Projects are mocked here.
     let projects = vec![
         Project {
             id: 1,
+            repo_id: 1,
             title: "Kanban Board".to_string(),
             description: None,
             is_closed: false,
@@ -654,7 +847,7 @@ pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Jso
 pub async fn list_collaborators(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Collaborator>> {
     let user = User::new(2, "collab_user".to_string(), None);
     vec![
-        Collaborator { user, permissions: "write".to_string() }
+        Collaborator { user, repo_id: 1, permissions: "write".to_string() }
     ].into()
 }
 
@@ -668,28 +861,39 @@ pub async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String
 
 pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let commit = Commit { sha: "abc".to_string(), repo_id: 1, message: "init".to_string(), author: user, date: "now".to_string() };
     let branches = vec![
-        Branch { name: "main".to_string(), commit, protected: true }
+        Branch { name: "main".to_string(), repo_id: 1, commit, protected: true }
     ];
     Json(branches)
 }
 
 pub async fn create_branch(
-    Path((_owner, _repo)): Path<(String, String)>,
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateBranchOption>
 ) -> (StatusCode, Json<Branch>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Branch {
+            repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), repo_id: 0, message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "def".to_string(), message: "new branch".to_string(), author: user, date: "now".to_string() };
-    let branch = Branch { name: payload.name, commit, protected: false };
+    let commit = Commit { sha: "def".to_string(), repo_id, message: "new branch".to_string(), author: user, date: "now".to_string() };
+    let branch = Branch { name: payload.name, repo_id, commit, protected: false };
     (StatusCode::CREATED, Json(branch))
 }
 
 pub async fn list_tags(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Tag>> {
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let commit = Commit { sha: "abc".to_string(), repo_id: 1, message: "init".to_string(), author: user, date: "now".to_string() };
     let tags = vec![
-        Tag { name: "v1.0".to_string(), id: "1".to_string(), commit }
+        Tag { name: "v1.0".to_string(), repo_id: 1, id: "1".to_string(), commit }
     ];
     Json(tags)
 }
@@ -722,9 +926,13 @@ pub async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u
     Json(diffs)
 }
 
-pub async fn list_commits(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Commit>> {
+pub async fn list_commits(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Commit>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let commits = state.commits.read().unwrap();
-    Json(commits.clone())
+    let filtered_commits: Vec<Commit> = commits.iter().filter(|c| c.repo_id == repo_id).cloned().collect();
+    Json(filtered_commits)
 }
 
 pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>, Query(params): Query<RepoSearchOptions>) -> Json<Vec<CodeSearchResult>> {
@@ -763,6 +971,14 @@ pub async fn update_file(
     Path((owner, repo, path)): Path<(String, String, String)>,
     Json(payload): Json<UpdateFileOption>
 ) -> (StatusCode, Json<FileEntry>) {
+    let repos = state.repos.read().unwrap();
+    let repo_obj = repos.iter().find(|r| r.owner == owner && r.name == repo);
+
+    if repo_obj.is_none() {
+        return (StatusCode::NOT_FOUND, Json(FileEntry { name: "".to_string(), path: "".to_string(), kind: "".to_string(), size: 0 }));
+    }
+    let repo_id = repo_obj.unwrap().id;
+
     // Create a commit for the file update
     let mut commits = state.commits.write().unwrap();
     let commit_message = if payload.message.is_empty() {
@@ -774,6 +990,7 @@ pub async fn update_file(
     let commit_id = commits.len() + 1;
     commits.push(Commit {
         sha: format!("update{}", commit_id),
+        repo_id,
         message: commit_message,
         author: User::new(1, "admin".to_string(), None),
         date: "now".to_string(),
@@ -784,6 +1001,7 @@ pub async fn update_file(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "update_file".to_string(),

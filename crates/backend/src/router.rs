@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
-    Repository, User, Activity, Commit, LfsLock
+    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -26,6 +26,9 @@ pub struct AppState {
     pub activities: Arc<RwLock<Vec<Activity>>>,
     pub commits: Arc<RwLock<Vec<Commit>>>,
     pub lfs_locks: Arc<RwLock<Vec<LfsLock>>>,
+    pub topics: Arc<RwLock<Vec<Topic>>>,
+    pub packages: Arc<RwLock<Vec<Package>>>,
+    pub teams: Arc<RwLock<Vec<Team>>>,
 }
 
 pub fn api_router() -> Router {
@@ -38,6 +41,7 @@ pub fn api_router() -> Router {
         issues: Arc::new(RwLock::new(vec![
              Issue {
                 id: 1,
+                repo_id: 1,
                 number: 1,
                 title: "First Issue".to_string(),
                 body: Some("This is a bug".to_string()),
@@ -55,6 +59,7 @@ pub fn api_router() -> Router {
         pulls: Arc::new(RwLock::new(vec![
             PullRequest {
                 id: 1,
+                repo_id: 1,
                 number: 1,
                 title: "First PR".to_string(),
                 body: Some("Description".to_string()),
@@ -66,6 +71,7 @@ pub fn api_router() -> Router {
         releases: Arc::new(RwLock::new(vec![
             Release {
                 id: 1,
+                repo_id: 1,
                 tag_name: "v1.0.0".to_string(),
                 name: "Initial Release".to_string(),
                 body: Some("Description".to_string()),
@@ -78,6 +84,7 @@ pub fn api_router() -> Router {
         labels: Arc::new(RwLock::new(vec![
             Label {
                 id: 1,
+                repo_id: 1,
                 name: "bug".to_string(),
                 color: "#ff0000".to_string(),
                 description: None,
@@ -86,6 +93,7 @@ pub fn api_router() -> Router {
         milestones: Arc::new(RwLock::new(vec![
             Milestone {
                 id: 1,
+                repo_id: 1,
                 title: "v1.0".to_string(),
                 description: None,
                 due_on: None,
@@ -95,6 +103,7 @@ pub fn api_router() -> Router {
         comments: Arc::new(RwLock::new(vec![
             Comment {
                 id: 1,
+                issue_id: 1,
                 body: "Great idea!".to_string(),
                 user: user.clone(),
                 created_at: "2023-01-01".to_string(),
@@ -119,6 +128,7 @@ pub fn api_router() -> Router {
         hooks: Arc::new(RwLock::new(vec![
             Webhook {
                 id: 1,
+                repo_id: 1,
                 url: "http://example.com/hook".to_string(),
                 events: vec!["push".to_string()],
                 active: true,
@@ -127,6 +137,7 @@ pub fn api_router() -> Router {
         activities: Arc::new(RwLock::new(vec![
             Activity {
                 id: 1,
+                repo_id: 1,
                 user_id: 1,
                 user_name: "admin".to_string(),
                 op_type: "create_repo".to_string(),
@@ -137,12 +148,39 @@ pub fn api_router() -> Router {
         commits: Arc::new(RwLock::new(vec![
             Commit {
                 sha: "abc123456789".to_string(),
+                repo_id: 1,
                 message: "Initial commit".to_string(),
                 author: user.clone(),
                 date: "2023-01-01T12:00:00Z".to_string(),
             }
         ])),
         lfs_locks: Arc::new(RwLock::new(vec![])),
+        topics: Arc::new(RwLock::new(vec![
+            Topic {
+                id: 1,
+                repo_id: 1,
+                name: "rust".to_string(),
+                created: "2023-01-01".to_string(),
+            }
+        ])),
+        packages: Arc::new(RwLock::new(vec![
+            Package {
+                id: 1,
+                owner: "admin".to_string(),
+                name: "my-lib".to_string(),
+                version: "1.0.0".to_string(),
+                package_type: "cargo".to_string(),
+            }
+        ])),
+        teams: Arc::new(RwLock::new(vec![
+            Team {
+                id: 1,
+                org_name: "codeza-org".to_string(),
+                name: "Developers".to_string(),
+                description: Some("Dev Team".to_string()),
+                permission: "write".to_string(),
+            }
+        ])),
     };
 
     Router::new()

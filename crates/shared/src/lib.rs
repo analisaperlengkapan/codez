@@ -93,6 +93,7 @@ pub struct CreateRepoOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Issue {
     pub id: u64,
+    pub repo_id: u64,
     pub number: u64,
     pub title: String,
     pub body: Option<String>,
@@ -112,6 +113,7 @@ pub struct CreateIssueOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PullRequest {
     pub id: u64,
+    pub repo_id: u64,
     pub number: u64,
     pub title: String,
     pub body: Option<String>,
@@ -147,6 +149,7 @@ pub struct UpdateFileOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Commit {
     pub sha: String,
+    pub repo_id: u64,
     pub message: String,
     pub author: User,
     pub date: String,
@@ -155,6 +158,7 @@ pub struct Commit {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Release {
     pub id: u64,
+    pub repo_id: u64,
     pub tag_name: String,
     pub name: String,
     pub body: Option<String>,
@@ -197,6 +201,7 @@ pub struct Organization {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Comment {
     pub id: u64,
+    pub issue_id: u64,
     pub body: String,
     pub user: User,
     pub created_at: String,
@@ -218,6 +223,7 @@ pub struct MergePullRequestOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Label {
     pub id: u64,
+    pub repo_id: u64,
     pub name: String,
     pub color: String,
     pub description: Option<String>,
@@ -233,6 +239,7 @@ pub struct CreateLabelOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Milestone {
     pub id: u64,
+    pub repo_id: u64,
     pub title: String,
     pub description: Option<String>,
     pub due_on: Option<String>,
@@ -249,6 +256,7 @@ pub struct CreateMilestoneOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Topic {
     pub id: u64,
+    pub repo_id: u64,
     pub name: String,
     pub created: String,
 }
@@ -316,6 +324,7 @@ pub struct CreateKeyOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Webhook {
     pub id: u64,
+    pub repo_id: u64,
     pub url: String,
     pub events: Vec<String>,
     pub active: bool,
@@ -331,6 +340,7 @@ pub struct CreateHookOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Team {
     pub id: u64,
+    pub org_name: String,
     pub name: String,
     pub description: Option<String>,
     pub permission: String,
@@ -339,6 +349,7 @@ pub struct Team {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Project {
     pub id: u64,
+    pub repo_id: u64,
     pub title: String,
     pub description: Option<String>,
     pub is_closed: bool,
@@ -346,12 +357,14 @@ pub struct Project {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Collaborator {
+    pub repo_id: u64,
     pub user: User,
     pub permissions: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Branch {
+    pub repo_id: u64,
     pub name: String,
     pub commit: Commit,
     pub protected: bool,
@@ -365,6 +378,7 @@ pub struct CreateBranchOption {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Tag {
+    pub repo_id: u64,
     pub name: String,
     pub id: String,
     pub commit: Commit,
@@ -381,6 +395,7 @@ pub struct AdminStats {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Activity {
     pub id: u64,
+    pub repo_id: u64,
     pub user_id: u64,
     pub user_name: String,
     pub op_type: String,
@@ -398,6 +413,7 @@ pub struct ActionWorkflow {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Package {
     pub id: u64,
+    pub owner: String,
     pub name: String,
     pub version: String,
     pub package_type: String,
@@ -406,6 +422,7 @@ pub struct Package {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Secret {
     pub name: String,
+    pub repo_id: u64,
     pub created_at: String,
 }
 
@@ -418,6 +435,7 @@ pub struct CreateSecretOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DeployKey {
     pub id: u64,
+    pub repo_id: u64,
     pub title: String,
     pub key: String,
     pub fingerprint: String,
@@ -581,6 +599,7 @@ pub struct CodeSearchResult {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LfsLock {
     pub id: String,
+    pub repo_id: u64,
     pub path: String,
     pub owner: User,
     pub locked_at: String,
@@ -600,15 +619,15 @@ mod tests {
     #[test]
     fn test_collab_branch_tag() {
         let user = User::new(1, "u".to_string(), None);
-        let commit = Commit { sha: "s".to_string(), message: "m".to_string(), author: user.clone(), date: "d".to_string() };
+        let commit = Commit { sha: "s".to_string(), repo_id: 1, message: "m".to_string(), author: user.clone(), date: "d".to_string() };
 
-        let c = Collaborator { user: user.clone(), permissions: "read".to_string() };
+        let c = Collaborator { user: user.clone(), repo_id: 1, permissions: "read".to_string() };
         assert_eq!(c.permissions, "read");
 
-        let b = Branch { name: "main".to_string(), commit: commit.clone(), protected: true };
+        let b = Branch { name: "main".to_string(), repo_id: 1, commit: commit.clone(), protected: true };
         assert!(b.protected);
 
-        let t = Tag { name: "v1".to_string(), id: "1".to_string(), commit: commit.clone() };
+        let t = Tag { name: "v1".to_string(), repo_id: 1, id: "1".to_string(), commit: commit.clone() };
         assert_eq!(t.name, "v1");
     }
 
@@ -671,10 +690,10 @@ mod tests {
 
     #[test]
     fn test_secret_deploykey() {
-        let s = Secret { name: "TOKEN".to_string(), created_at: "now".to_string() };
+        let s = Secret { name: "TOKEN".to_string(), repo_id: 1, created_at: "now".to_string() };
         assert_eq!(s.name, "TOKEN");
 
-        let k = DeployKey { id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
+        let k = DeployKey { id: 1, repo_id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
         assert_eq!(k.title, "deploy");
     }
 
@@ -683,13 +702,13 @@ mod tests {
         let wf = ActionWorkflow { id: 1, name: "build".to_string(), status: "success".to_string() };
         assert_eq!(wf.name, "build");
 
-        let pkg = Package { id: 1, name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() };
+        let pkg = Package { id: 1, owner: "admin".to_string(), name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() };
         assert_eq!(pkg.package_type, "npm");
     }
 
     #[test]
     fn test_activity_struct() {
-        let act = Activity { id: 1, user_id: 1, user_name: "u".to_string(), op_type: "push".to_string(), content: "c".to_string(), created: "d".to_string() };
+        let act = Activity { id: 1, repo_id: 1, user_id: 1, user_name: "u".to_string(), op_type: "push".to_string(), content: "c".to_string(), created: "d".to_string() };
         assert_eq!(act.op_type, "push");
     }
 
@@ -701,10 +720,10 @@ mod tests {
 
     #[test]
     fn test_team_project_structs() {
-        let team = Team { id: 1, name: "dev".to_string(), description: None, permission: "write".to_string() };
+        let team = Team { id: 1, org_name: "org".to_string(), name: "dev".to_string(), description: None, permission: "write".to_string() };
         assert_eq!(team.name, "dev");
 
-        let project = Project { id: 1, title: "v1".to_string(), description: None, is_closed: false };
+        let project = Project { id: 1, repo_id: 1, title: "v1".to_string(), description: None, is_closed: false };
         assert!(!project.is_closed);
     }
 
@@ -713,7 +732,7 @@ mod tests {
         let key = PublicKey { id: 1, title: "Laptop".to_string(), key: "ssh-rsa...".to_string(), fingerprint: "sha256...".to_string() };
         assert_eq!(key.title, "Laptop");
 
-        let hook = Webhook { id: 1, url: "http://example.com".to_string(), events: vec!["push".to_string()], active: true };
+        let hook = Webhook { id: 1, repo_id: 1, url: "http://example.com".to_string(), events: vec!["push".to_string()], active: true };
         assert!(hook.active);
     }
 
@@ -747,7 +766,7 @@ mod tests {
 
     #[test]
     fn test_topic_structs() {
-        let topic = Topic { id: 1, name: "rust".to_string(), created: "date".to_string() };
+        let topic = Topic { id: 1, repo_id: 1, name: "rust".to_string(), created: "date".to_string() };
         assert_eq!(topic.name, "rust");
 
         let opts = RepoTopicOptions { topics: vec!["rust".to_string(), "gitea".to_string()] };
@@ -764,6 +783,7 @@ mod tests {
     fn test_label_structs() {
         let label = Label {
             id: 1,
+            repo_id: 1,
             name: "bug".to_string(),
             color: "#ff0000".to_string(),
             description: None,
@@ -782,6 +802,7 @@ mod tests {
     fn test_milestone_structs() {
         let milestone = Milestone {
             id: 1,
+            repo_id: 1,
             title: "v1.0".to_string(),
             description: None,
             due_on: None,
@@ -802,6 +823,7 @@ mod tests {
         let user = User::new(1, "u".to_string(), None);
         let comment = Comment {
             id: 1,
+            issue_id: 1,
             body: "text".to_string(),
             user,
             created_at: "date".to_string(),
@@ -848,6 +870,7 @@ mod tests {
         let user = User::new(1, "u".to_string(), None);
         let rel = Release {
             id: 1,
+            repo_id: 1,
             tag_name: "v1.0".to_string(),
             name: "Release 1.0".to_string(),
             body: None,
@@ -873,6 +896,7 @@ mod tests {
         let user = User::new(1, "committer".to_string(), None);
         let commit = Commit {
             sha: "abc1234".to_string(),
+            repo_id: 1,
             message: "Initial commit".to_string(),
             author: user,
             date: "2023-01-01".to_string(),
@@ -897,6 +921,7 @@ mod tests {
         let user = User::new(1, "user".to_string(), None);
         let pr = PullRequest {
             id: 1,
+            repo_id: 1,
             number: 1,
             title: "PR Title".to_string(),
             body: None,
@@ -921,6 +946,7 @@ mod tests {
         let user = User::new(1, "user".to_string(), None);
         let issue = Issue {
             id: 1,
+            repo_id: 1,
             number: 1,
             title: "Bug".to_string(),
             body: None,
@@ -1054,7 +1080,7 @@ mod tests {
     #[test]
     fn test_lfs_lock() {
         let u = User::new(1, "u".to_string(), None);
-        let l = LfsLock { id: "1".to_string(), path: "p".to_string(), owner: u, locked_at: "t".to_string() };
+        let l = LfsLock { id: "1".to_string(), repo_id: 1, path: "p".to_string(), owner: u, locked_at: "t".to_string() };
         assert_eq!(l.path, "p");
     }
 }

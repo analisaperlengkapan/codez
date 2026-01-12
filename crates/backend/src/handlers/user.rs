@@ -66,6 +66,7 @@ pub async fn update_user_settings(
         let activity_id = (activities.len() as u64) + 1;
         activities.push(Activity {
             id: activity_id,
+            repo_id: 0,
             user_id: user.id,
             user_name: user.username.clone(),
             op_type: "update_settings".to_string(),
@@ -176,21 +177,31 @@ pub async fn list_following(Path(_username): Path<String>) -> Json<Vec<User>> {
     vec![User::new(3, "following".to_string(), None)].into()
 }
 
-pub async fn list_packages(Path(_owner): Path<String>) -> Json<Vec<Package>> {
-    let pkgs = vec![
-        Package { id: 1, name: "my-lib".to_string(), version: "1.0.0".to_string(), package_type: "cargo".to_string() }
-    ];
-    Json(pkgs)
+pub async fn list_packages(State(state): State<AppState>, Path(owner): Path<String>) -> Json<Vec<Package>> {
+    let packages = state.packages.read().unwrap();
+    let filtered_packages: Vec<Package> = packages.iter().filter(|p| p.owner == owner).cloned().collect();
+    Json(filtered_packages)
 }
 
 pub async fn upload_package(
     State(state): State<AppState>,
     Path(owner): Path<String>
 ) -> StatusCode {
+    let mut packages = state.packages.write().unwrap();
+    let id = (packages.len() as u64) + 1;
+    packages.push(Package {
+        id,
+        owner: owner.clone(),
+        name: "new-package".to_string(), // In real impl, would come from body
+        version: "1.0.0".to_string(),
+        package_type: "generic".to_string(),
+    });
+
     let mut activities = state.activities.write().unwrap();
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id: 0,
         user_id: 1, // mock admin
         user_name: "admin".to_string(),
         op_type: "upload_package".to_string(),
@@ -200,8 +211,10 @@ pub async fn upload_package(
     StatusCode::CREATED
 }
 
-pub async fn get_package_detail(Path((_owner, _type, _name, _version)): Path<(String, String, String, String)>) -> Json<Package> {
-    Json(Package { id: 1, name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() })
+pub async fn get_package_detail(State(state): State<AppState>, Path((owner, _type, name, version)): Path<(String, String, String, String)>) -> Json<Option<Package>> {
+    let packages = state.packages.read().unwrap();
+    let pkg = packages.iter().find(|p| p.owner == owner && p.name == name && p.version == version).cloned();
+    Json(pkg)
 }
 
 pub async fn get_2fa() -> Json<TwoFactor> {
