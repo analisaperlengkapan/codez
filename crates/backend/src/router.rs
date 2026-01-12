@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
-    Repository, User
+    Repository, User, Activity, Commit
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -23,6 +23,8 @@ pub struct AppState {
     pub notifications: Arc<RwLock<Vec<Notification>>>,
     pub keys: Arc<RwLock<Vec<PublicKey>>>,
     pub hooks: Arc<RwLock<Vec<Webhook>>>,
+    pub activities: Arc<RwLock<Vec<Activity>>>,
+    pub commits: Arc<RwLock<Vec<Commit>>>,
 }
 
 pub fn api_router() -> Router {
@@ -119,6 +121,24 @@ pub fn api_router() -> Router {
                 url: "http://example.com/hook".to_string(),
                 events: vec!["push".to_string()],
                 active: true,
+            }
+        ])),
+        activities: Arc::new(RwLock::new(vec![
+            Activity {
+                id: 1,
+                user_id: 1,
+                user_name: "admin".to_string(),
+                op_type: "create_repo".to_string(),
+                content: "created repository codeza".to_string(),
+                created: "2023-01-01".to_string(),
+            }
+        ])),
+        commits: Arc::new(RwLock::new(vec![
+            Commit {
+                sha: "abc123456789".to_string(),
+                message: "Initial commit".to_string(),
+                author: user.clone(),
+                date: "2023-01-01T12:00:00Z".to_string(),
             }
         ])),
     };

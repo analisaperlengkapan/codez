@@ -10,7 +10,7 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption
+    DiffLine, UpdateFileOption, Activity
 };
 use crate::router::AppState;
 
@@ -31,8 +31,30 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
         return (StatusCode::CONFLICT, Json(Repository::new(0, "".to_string(), "".to_string())));
     }
     let id = (repos.len() as u64) + 1;
-    let repo = Repository::new(id, payload.name, "admin".to_string());
+    let repo = Repository::new(id, payload.name.clone(), "admin".to_string());
     repos.push(repo.clone());
+
+    // Create initial commit
+    let mut commits = state.commits.write().unwrap();
+    commits.push(Commit {
+        sha: format!("init{}", id),
+        message: "Initial commit".to_string(),
+        author: User::new(1, "admin".to_string(), None),
+        date: "now".to_string(),
+    });
+
+    // Log activity
+    let mut activities = state.activities.write().unwrap();
+    let activity_id = (activities.len() as u64) + 1;
+    activities.push(Activity {
+        id: activity_id,
+        user_id: 1,
+        user_name: "admin".to_string(),
+        op_type: "create_repo".to_string(),
+        content: format!("created repository {}", payload.name),
+        created: "now".to_string(),
+    });
+
     (StatusCode::CREATED, Json(repo))
 }
 
@@ -70,7 +92,7 @@ pub async fn create_issue(
     let issue = Issue {
         id,
         number: id,
-        title: payload.title,
+        title: payload.title.clone(),
         body: payload.body,
         state: "open".to_string(),
         user: User::new(1, "admin".to_string(), None),
@@ -79,6 +101,19 @@ pub async fn create_issue(
         milestone: None,
     };
     issues.push(issue.clone());
+
+    // Log activity
+    let mut activities = state.activities.write().unwrap();
+    let activity_id = (activities.len() as u64) + 1;
+    activities.push(Activity {
+        id: activity_id,
+        user_id: 1,
+        user_name: "admin".to_string(),
+        op_type: "create_issue".to_string(),
+        content: format!("opened issue #{} in {}/{}", id, owner, repo_name),
+        created: "now".to_string(),
+    });
+
     (StatusCode::CREATED, Json(issue))
 }
 
@@ -95,7 +130,7 @@ pub async fn list_pulls(State(state): State<AppState>, Path((_owner, _repo)): Pa
 
 pub async fn create_pull(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo)): Path<(String, String)>,
     Json(payload): Json<CreatePullRequestOption>
 ) -> (StatusCode, Json<PullRequest>) {
     let mut pulls = state.pulls.write().unwrap();
@@ -103,13 +138,26 @@ pub async fn create_pull(
     let pr = PullRequest {
         id,
         number: id,
-        title: payload.title,
+        title: payload.title.clone(),
         body: payload.body,
         state: "open".to_string(),
         user: User::new(1, "admin".to_string(), None),
         merged: false,
     };
     pulls.push(pr.clone());
+
+    // Log activity
+    let mut activities = state.activities.write().unwrap();
+    let activity_id = (activities.len() as u64) + 1;
+    activities.push(Activity {
+        id: activity_id,
+        user_id: 1,
+        user_name: "admin".to_string(),
+        op_type: "create_pull_request".to_string(),
+        content: format!("opened pull request #{} in {}/{}", id, owner, repo),
+        created: "now".to_string(),
+    });
+
     (StatusCode::CREATED, Json(pr))
 }
 
@@ -321,8 +369,26 @@ pub async fn watch_repo(Path((_owner, _repo)): Path<(String, String)>) -> Status
     StatusCode::NO_CONTENT
 }
 
-pub async fn fork_repo(Path((owner, repo)): Path<(String, String)>) -> Json<Repository> {
-    Json(Repository::new(2, repo, owner))
+pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> Json<Repository> {
+    let mut repos = state.repos.write().unwrap();
+    let id = (repos.len() as u64) + 1;
+    // Assuming forked to "admin" for now, or generating a new name
+    let new_repo = Repository::new(id, format!("{}-fork", repo), "admin".to_string());
+    repos.push(new_repo.clone());
+
+    // Log activity
+    let mut activities = state.activities.write().unwrap();
+    let activity_id = (activities.len() as u64) + 1;
+    activities.push(Activity {
+        id: activity_id,
+        user_id: 1,
+        user_name: "admin".to_string(),
+        op_type: "fork_repo".to_string(),
+        content: format!("forked {}/{} to admin/{}", owner, repo, new_repo.name),
+        created: "now".to_string(),
+    });
+
+    Json(new_repo)
 }
 
 pub async fn create_wiki_page(
@@ -410,10 +476,40 @@ pub async fn get_root_contents(Path((owner, repo)): Path<(String, String)>) -> J
 }
 
 pub async fn merge_pull(
-    Path((_owner, _repo, _index)): Path<(String, String, u64)>,
+    State(state): State<AppState>,
+    Path((owner, repo, index)): Path<(String, String, u64)>,
     Json(_payload): Json<MergePullRequestOption>
 ) -> StatusCode {
-    StatusCode::OK
+    let mut pulls = state.pulls.write().unwrap();
+    if let Some(pr) = pulls.iter_mut().find(|p| p.number == index) {
+        pr.merged = true;
+        pr.state = "closed".to_string();
+
+        // Create merge commit
+        let mut commits = state.commits.write().unwrap();
+        commits.push(Commit {
+            sha: format!("merge{}", index),
+            message: format!("Merge pull request #{} from {}", index, pr.title),
+            author: User::new(1, "admin".to_string(), None),
+            date: "now".to_string(),
+        });
+
+        // Log activity
+        let mut activities = state.activities.write().unwrap();
+        let activity_id = (activities.len() as u64) + 1;
+        activities.push(Activity {
+            id: activity_id,
+            user_id: 1,
+            user_name: "admin".to_string(),
+            op_type: "merge_pull_request".to_string(),
+            content: format!("merged pull request #{} in {}/{}", index, owner, repo),
+            created: "now".to_string(),
+        });
+
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn search_repos() -> Json<Vec<Repository>> {
@@ -506,29 +602,9 @@ pub async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u
     Json(diffs)
 }
 
-pub async fn list_commits(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Commit>> {
-    let user = User::new(1, "admin".to_string(), None);
-    let commits = vec![
-        Commit {
-            sha: "abc123456789".to_string(),
-            message: "Initial commit".to_string(),
-            author: user.clone(),
-            date: "2023-01-01T12:00:00Z".to_string(),
-        },
-        Commit {
-            sha: "def456789012".to_string(),
-            message: "Refactor backend handlers".to_string(),
-            author: user.clone(),
-            date: "2023-01-02T14:30:00Z".to_string(),
-        },
-        Commit {
-            sha: "ghi789012345".to_string(),
-            message: "Add frontend components".to_string(),
-            author: user,
-            date: "2023-01-03T09:15:00Z".to_string(),
-        }
-    ];
-    Json(commits)
+pub async fn list_commits(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Commit>> {
+    let commits = state.commits.read().unwrap();
+    Json(commits.clone())
 }
 
 pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>, Query(params): Query<RepoSearchOptions>) -> Json<Vec<CodeSearchResult>> {
@@ -563,12 +639,34 @@ pub async fn get_raw_file(Path((_owner, _repo, _path)): Path<(String, String, St
 }
 
 pub async fn update_file(
-    Path((_owner, _repo, _path)): Path<(String, String, String)>,
-    Json(_payload): Json<UpdateFileOption>
+    State(state): State<AppState>,
+    Path((owner, repo, path)): Path<(String, String, String)>,
+    Json(payload): Json<UpdateFileOption>
 ) -> (StatusCode, Json<FileEntry>) {
+    // Create a commit for the file update
+    let mut commits = state.commits.write().unwrap();
+    commits.push(Commit {
+        sha: format!("update{}", commits.len() + 1),
+        message: payload.message.clone().unwrap_or(format!("Update {}", path)),
+        author: User::new(1, "admin".to_string(), None),
+        date: "now".to_string(),
+    });
+
+    // Log activity
+    let mut activities = state.activities.write().unwrap();
+    let activity_id = (activities.len() as u64) + 1;
+    activities.push(Activity {
+        id: activity_id,
+        user_id: 1,
+        user_name: "admin".to_string(),
+        op_type: "update_file".to_string(),
+        content: format!("updated file {} in {}/{}", path, owner, repo),
+        created: "now".to_string(),
+    });
+
     (StatusCode::OK, Json(FileEntry {
         name: "updated_file".to_string(),
-        path: "path/to/updated_file".to_string(),
+        path: path,
         kind: "file".to_string(),
         size: 123,
     }))

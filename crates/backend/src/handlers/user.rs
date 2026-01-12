@@ -79,17 +79,11 @@ pub async fn create_key(State(state): State<AppState>, Json(payload): Json<Creat
     (StatusCode::CREATED, Json(key))
 }
 
-pub async fn list_feeds() -> Json<Vec<Activity>> {
-    let feeds = vec![
-        Activity {
-            id: 1,
-            user_id: 1,
-            user_name: "admin".to_string(),
-            op_type: "push_branch".to_string(),
-            content: "pushed to main".to_string(),
-            created: "2023-01-01".to_string(),
-        }
-    ];
+pub async fn list_feeds(State(state): State<AppState>) -> Json<Vec<Activity>> {
+    let feeds = state.activities.read().unwrap();
+    // Return latest first
+    let mut feeds = feeds.clone();
+    feeds.sort_by(|a, b| b.id.cmp(&a.id));
     Json(feeds)
 }
 
