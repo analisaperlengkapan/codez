@@ -7,7 +7,7 @@ use shared::{
     CreateRepoOption, Repository, CreateIssueOption, Issue, CreatePullRequestOption, PullRequest,
     CreateReleaseOption, Release, CreateCommentOption, Comment, CreateLabelOption, Label,
     CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSearchOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
-    CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction,
+    CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption
@@ -36,9 +36,21 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     (StatusCode::CREATED, Json(repo))
 }
 
-pub async fn list_issues(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Issue>> {
+pub async fn list_issues(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>, Query(filter): Query<IssueFilterOptions>) -> Json<Vec<Issue>> {
     let issues = state.issues.read().unwrap();
-    Json(issues.clone())
+    let mut filtered_issues = issues.clone();
+
+    if let Some(state_filter) = filter.state {
+        if state_filter != "all" {
+             filtered_issues.retain(|i| i.state == state_filter);
+        }
+    }
+    if let Some(q) = filter.q {
+        let q_lower = q.to_lowercase();
+        filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
+    }
+
+    Json(filtered_issues)
 }
 
 pub async fn create_issue(

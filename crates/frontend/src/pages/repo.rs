@@ -233,10 +233,13 @@ pub fn IssueList() -> impl IntoView {
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
+    let (state_filter, set_state_filter) = create_signal("open".to_string());
+    let (search_query, set_search_query) = create_signal("".to_string());
+
     let issues = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues", o, r))
+        move || (owner(), repo_name(), state_filter.get(), search_query.get()),
+        |(o, r, s, q)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}", o, r, s, q))
                 .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
         }
     );
@@ -244,6 +247,12 @@ pub fn IssueList() -> impl IntoView {
     view! {
         <div class="issue-list">
             <h3>"Issues for " {owner} "/" {repo_name}</h3>
+            <div class="issue-filters">
+                <button on:click=move |_| set_state_filter.set("open".to_string()) class:active=move || state_filter.get() == "open">"Open"</button>
+                <button on:click=move |_| set_state_filter.set("closed".to_string()) class:active=move || state_filter.get() == "closed">"Closed"</button>
+                <button on:click=move |_| set_state_filter.set("all".to_string()) class:active=move || state_filter.get() == "all">"All"</button>
+                <input type="text" placeholder="Search issues..." prop:value=search_query on:input=move |ev| set_search_query.set(event_target_value(&ev)) />
+            </div>
             <ul>
                 <Suspense fallback=move || view! { <li>"Loading issues..."</li> }>
                     {move || issues.get().map(|list| view! {
