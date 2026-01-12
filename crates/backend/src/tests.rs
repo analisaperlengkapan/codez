@@ -1,0 +1,153 @@
+#[cfg(test)]
+mod tests {
+    use crate::router::api_router;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt; // for `oneshot`
+    use shared::{CreateRepoOption, Repository, Activity, CreateIssueOption, Issue, UpdateFileOption, FileEntry};
+
+    #[tokio::test]
+    async fn test_create_repo_flow() {
+        let app = api_router();
+
+        let payload = CreateRepoOption {
+            name: "test-repo".to_string(),
+            description: None,
+            private: false,
+            auto_init: true,
+            gitignores: None,
+            license: None,
+            readme: None,
+        };
+
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/user/repos")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let repo: Repository = serde_json::from_slice(&body).unwrap();
+        assert_eq!(repo.name, "test-repo");
+
+        // Verify Activity Log
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/user/feeds")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
+
+        let found = activities.iter().any(|a| a.content.contains("created repository test-repo"));
+        assert!(found, "Should find creation activity in feed");
+    }
+
+    #[tokio::test]
+    async fn test_create_issue_flow() {
+        let app = api_router();
+
+        // Create Issue
+        let payload = CreateIssueOption {
+            title: "Test Bug".to_string(),
+            body: Some("Description".to_string()),
+        };
+
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issue: Issue = serde_json::from_slice(&body).unwrap();
+        assert_eq!(issue.title, "Test Bug");
+
+        // Verify Activity
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/user/feeds")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
+        let found = activities.iter().any(|a| a.op_type == "create_issue" && a.content.contains("opened issue"));
+        assert!(found);
+    }
+
+    #[tokio::test]
+    async fn test_update_file_flow() {
+        let app = api_router();
+
+        let payload = UpdateFileOption {
+            content: "fn main() {}".to_string(),
+            message: "Update main.rs".to_string(),
+            sha: "old_sha".to_string(),
+            branch: Some("main".to_string()),
+        };
+
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("PUT")
+                    .uri("/api/v1/repos/admin/codeza/contents/src/main.rs")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let file: FileEntry = serde_json::from_slice(&body).unwrap();
+        assert_eq!(file.path, "src/main.rs");
+
+        // Verify Commit (via Activity or Commit List)
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/user/feeds")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
+        let found = activities.iter().any(|a| a.op_type == "update_file" && a.content.contains("updated file src/main.rs"));
+        assert!(found);
+    }
+}

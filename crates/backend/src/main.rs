@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 mod handlers;
 mod router;
+mod tests;
 
 use router::api_router;
 

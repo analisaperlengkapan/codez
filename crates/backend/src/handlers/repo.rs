@@ -60,6 +60,9 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
 
 pub async fn list_issues(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>, Query(filter): Query<IssueFilterOptions>) -> Json<Vec<Issue>> {
     let issues = state.issues.read().unwrap();
+    // Ideally we filter by repo here, but Issue struct doesn't have repo_id yet.
+    // For now, we return all issues, but filtering by state/q.
+    // TODO: Add repo_id to Issue struct and filter here.
     let mut filtered_issues = issues.clone();
 
     if let Some(state_filter) = filter.state {
