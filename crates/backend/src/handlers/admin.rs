@@ -70,22 +70,41 @@ pub async fn list_notices() -> Json<Vec<SystemNotice>> {
     Json(notices)
 }
 
-pub async fn admin_list_users() -> Json<Vec<User>> {
-    vec![
-        User::new(1, "admin".to_string(), Some("admin@example.com".to_string())),
-        User::new(2, "user".to_string(), Some("user@example.com".to_string())),
-    ].into()
+use axum::extract::State;
+use crate::router::AppState;
+
+pub async fn admin_list_users(State(state): State<AppState>) -> Json<Vec<User>> {
+    let users = state.users.read().unwrap();
+    Json(users.clone())
 }
 
 pub async fn admin_edit_user(
-    Path(_username): Path<String>,
-    Json(_payload): Json<AdminUserEditOption>
+    State(state): State<AppState>,
+    Path(username): Path<String>,
+    Json(payload): Json<AdminUserEditOption>
 ) -> StatusCode {
-    StatusCode::OK
+    let mut users = state.users.write().unwrap();
+    if let Some(user) = users.iter_mut().find(|u| u.username == username) {
+        if let Some(email) = payload.email {
+            user.email = Some(email);
+        }
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
-pub async fn admin_delete_user(Path(_username): Path<String>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn admin_delete_user(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> StatusCode {
+    let mut users = state.users.write().unwrap();
+    if let Some(pos) = users.iter().position(|u| u.username == username) {
+        users.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 // Miscellaneous Handlers
