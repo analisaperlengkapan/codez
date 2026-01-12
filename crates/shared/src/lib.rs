@@ -265,6 +265,12 @@ pub struct RepoSearchOptions {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PaginationOptions {
+    pub page: Option<u64>,
+    pub limit: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WikiPage {
     pub title: String,
     pub content: String,

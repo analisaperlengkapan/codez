@@ -10,13 +10,26 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption, Activity, Notification
+    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions
 };
 use crate::router::AppState;
 
-pub async fn list_repos(State(state): State<AppState>) -> Json<Vec<Repository>> {
+pub async fn list_repos(
+    State(state): State<AppState>,
+    Query(pagination): Query<PaginationOptions>
+) -> Json<Vec<Repository>> {
     let repos = state.repos.read().unwrap();
-    Json(repos.clone())
+    let page = pagination.page.unwrap_or(1);
+    let limit = pagination.limit.unwrap_or(10);
+
+    let start = ((page - 1) * limit) as usize;
+    let end = (start + limit as usize).min(repos.len());
+
+    if start >= repos.len() {
+        Json(vec![])
+    } else {
+        Json(repos[start..end].to_vec())
+    }
 }
 
 pub async fn get_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> Json<Option<Repository>> {

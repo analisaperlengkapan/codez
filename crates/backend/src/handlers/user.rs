@@ -1,6 +1,7 @@
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
+    response::IntoResponse,
 };
 use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
@@ -19,8 +20,11 @@ pub async fn login_user(State(state): State<AppState>, Json(payload): Json<Login
     (StatusCode::UNAUTHORIZED, Json(None))
 }
 
-pub async fn register_user(State(state): State<AppState>, Json(payload): Json<RegisterOption>) -> (StatusCode, Json<User>) {
+pub async fn register_user(State(state): State<AppState>, Json(payload): Json<RegisterOption>) -> impl IntoResponse {
     let mut users = state.users.write().unwrap();
+    if users.iter().any(|u| u.username == payload.username || u.email == Some(payload.email.clone())) {
+        return (StatusCode::CONFLICT, Json(User::new(0, "".to_string(), None)));
+    }
     let id = (users.len() as u64) + 1;
     let user = User::new(id, payload.username, Some(payload.email));
     users.push(user.clone());

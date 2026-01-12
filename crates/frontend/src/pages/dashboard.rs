@@ -49,10 +49,31 @@ pub fn UserDashboard() -> impl IntoView {
 
 #[component]
 pub fn Explore() -> impl IntoView {
+    let repos = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/repos").send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
+    });
+
     view! {
         <div class="explore">
             <h2>"Explore Codeza"</h2>
             <Search/>
+            <h3>"Recent Repositories"</h3>
+            <div class="explore-list">
+                <Suspense fallback=move || view! { <p>"Loading..."</p> }>
+                    {move || repos.get().map(|list| view! {
+                        <For each=move || list.clone() key=|r| r.id children=move |r| {
+                            let href = format!("/repos/{}/{}", r.owner, r.name);
+                            view! {
+                                <div class="explore-item">
+                                    <a href=href><strong>{r.owner} "/" {r.name}</strong></a>
+                                    <p>{r.description.unwrap_or_default()}</p>
+                                    <span>"⭐ " {r.stars_count}</span>
+                                </div>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </div>
         </div>
     }
 }
