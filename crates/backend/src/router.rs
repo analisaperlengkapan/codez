@@ -100,6 +100,7 @@ pub fn api_router() -> Router {
         comments: Arc::new(RwLock::new(vec![
             Comment {
                 id: 1,
+                issue_id: 1,
                 body: "Great idea!".to_string(),
                 user: user.clone(),
                 created_at: "2023-01-01".to_string(),

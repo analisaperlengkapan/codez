@@ -262,20 +262,48 @@ pub async fn create_release(
     (StatusCode::CREATED, Json(release))
 }
 
-pub async fn list_comments(State(state): State<AppState>, Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
+pub async fn list_comments(State(state): State<AppState>, Path((owner, repo_name, index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let issues = state.issues.read().unwrap();
+    let issue_id = issues.iter().find(|i| i.repo_id == repo_id && i.number == index).map(|i| i.id).unwrap_or(0);
+
     let comments = state.comments.read().unwrap();
-    Json(comments.clone())
+    let filtered_comments: Vec<Comment> = comments.iter().filter(|c| c.issue_id == issue_id).cloned().collect();
+    Json(filtered_comments)
 }
 
 pub async fn create_comment(
     State(state): State<AppState>,
-    Path((_owner, _repo, _index)): Path<(String, String, u64)>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
     Json(payload): Json<CreateCommentOption>
 ) -> (StatusCode, Json<Comment>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Comment {
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
+    let issues = state.issues.read().unwrap();
+    let issue = issues.iter().find(|i| i.repo_id == repo_id && i.number == index);
+
+    if issue.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Comment {
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+        }));
+    }
+    let issue_id = issue.unwrap().id;
+
     let mut comments = state.comments.write().unwrap();
     let id = (comments.len() as u64) + 1;
     let comment = Comment {
         id,
+        issue_id,
         body: payload.body,
         user: User::new(1, "admin".to_string(), None),
         created_at: "2023-01-02".to_string(),

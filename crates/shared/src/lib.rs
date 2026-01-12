@@ -201,6 +201,7 @@ pub struct Organization {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Comment {
     pub id: u64,
+    pub issue_id: u64,
     pub body: String,
     pub user: User,
     pub created_at: String,
@@ -819,6 +820,7 @@ mod tests {
         let user = User::new(1, "u".to_string(), None);
         let comment = Comment {
             id: 1,
+            issue_id: 1,
             body: "text".to_string(),
             user,
             created_at: "date".to_string(),
