@@ -133,6 +133,7 @@ pub fn api_router() -> Router {
         activities: Arc::new(RwLock::new(vec![
             Activity {
                 id: 1,
+                repo_id: 1,
                 user_id: 1,
                 user_name: "admin".to_string(),
                 op_type: "create_repo".to_string(),
@@ -143,6 +144,7 @@ pub fn api_router() -> Router {
         commits: Arc::new(RwLock::new(vec![
             Commit {
                 sha: "abc123456789".to_string(),
+                repo_id: 1,
                 message: "Initial commit".to_string(),
                 author: user.clone(),
                 date: "2023-01-01T12:00:00Z".to_string(),

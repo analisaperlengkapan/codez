@@ -149,6 +149,7 @@ pub struct UpdateFileOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Commit {
     pub sha: String,
+    pub repo_id: u64,
     pub message: String,
     pub author: User,
     pub date: String,
@@ -391,6 +392,7 @@ pub struct AdminStats {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Activity {
     pub id: u64,
+    pub repo_id: u64,
     pub user_id: u64,
     pub user_name: String,
     pub op_type: String,
@@ -593,6 +595,7 @@ pub struct CodeSearchResult {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct LfsLock {
     pub id: String,
+    pub repo_id: u64,
     pub path: String,
     pub owner: User,
     pub locked_at: String,
@@ -612,7 +615,7 @@ mod tests {
     #[test]
     fn test_collab_branch_tag() {
         let user = User::new(1, "u".to_string(), None);
-        let commit = Commit { sha: "s".to_string(), message: "m".to_string(), author: user.clone(), date: "d".to_string() };
+        let commit = Commit { sha: "s".to_string(), repo_id: 1, message: "m".to_string(), author: user.clone(), date: "d".to_string() };
 
         let c = Collaborator { user: user.clone(), repo_id: 1, permissions: "read".to_string() };
         assert_eq!(c.permissions, "read");
@@ -701,7 +704,7 @@ mod tests {
 
     #[test]
     fn test_activity_struct() {
-        let act = Activity { id: 1, user_id: 1, user_name: "u".to_string(), op_type: "push".to_string(), content: "c".to_string(), created: "d".to_string() };
+        let act = Activity { id: 1, repo_id: 1, user_id: 1, user_name: "u".to_string(), op_type: "push".to_string(), content: "c".to_string(), created: "d".to_string() };
         assert_eq!(act.op_type, "push");
     }
 
@@ -888,6 +891,7 @@ mod tests {
         let user = User::new(1, "committer".to_string(), None);
         let commit = Commit {
             sha: "abc1234".to_string(),
+            repo_id: 1,
             message: "Initial commit".to_string(),
             author: user,
             date: "2023-01-01".to_string(),
@@ -1071,7 +1075,7 @@ mod tests {
     #[test]
     fn test_lfs_lock() {
         let u = User::new(1, "u".to_string(), None);
-        let l = LfsLock { id: "1".to_string(), path: "p".to_string(), owner: u, locked_at: "t".to_string() };
+        let l = LfsLock { id: "1".to_string(), repo_id: 1, path: "p".to_string(), owner: u, locked_at: "t".to_string() };
         assert_eq!(l.path, "p");
     }
 }

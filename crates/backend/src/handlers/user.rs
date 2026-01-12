@@ -66,6 +66,7 @@ pub async fn update_user_settings(
         let activity_id = (activities.len() as u64) + 1;
         activities.push(Activity {
             id: activity_id,
+            repo_id: 0,
             user_id: user.id,
             user_name: user.username.clone(),
             op_type: "update_settings".to_string(),
@@ -191,6 +192,7 @@ pub async fn upload_package(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id: 0,
         user_id: 1, // mock admin
         user_name: "admin".to_string(),
         op_type: "upload_package".to_string(),

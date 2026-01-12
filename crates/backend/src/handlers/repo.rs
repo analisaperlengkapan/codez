@@ -51,6 +51,7 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     let mut commits = state.commits.write().unwrap();
     commits.push(Commit {
         sha: format!("init{}", id),
+        repo_id: id,
         message: "Initial commit".to_string(),
         author: User::new(1, "admin".to_string(), None),
         date: "now".to_string(),
@@ -61,6 +62,7 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id: id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_repo".to_string(),
@@ -128,6 +130,7 @@ pub async fn create_issue(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_issue".to_string(),
@@ -197,6 +200,7 @@ pub async fn create_pull(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_pull_request".to_string(),
@@ -473,21 +477,34 @@ pub async fn list_deploy_keys(Path((_owner, _repo)): Path<(String, String)>) -> 
 
 pub async fn list_lfs_locks(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>
+    Path((owner, repo_name)): Path<(String, String)>
 ) -> Json<Vec<LfsLock>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let locks = state.lfs_locks.read().unwrap();
-    Json(locks.clone())
+    let filtered_locks: Vec<LfsLock> = locks.iter().filter(|l| l.repo_id == repo_id).cloned().collect();
+    Json(filtered_locks)
 }
 
 pub async fn create_lfs_lock(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>
+    Path((owner, repo_name)): Path<(String, String)>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+        return StatusCode::NOT_FOUND;
+    }
+    let repo_id = repo.unwrap().id;
+
     let mut locks = state.lfs_locks.write().unwrap();
     let id = (locks.len() as u64) + 1;
     let user = User::new(1, "admin".to_string(), None);
     locks.push(LfsLock {
         id: id.to_string(),
+        repo_id,
         path: format!("file{}.bin", id),
         owner: user,
         locked_at: "now".to_string(),
@@ -558,6 +575,7 @@ pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id: id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "fork_repo".to_string(),
@@ -701,7 +719,10 @@ pub async fn merge_pull(
     Json(_payload): Json<MergePullRequestOption>
 ) -> StatusCode {
     let mut pulls = state.pulls.write().unwrap();
-    if let Some(pr) = pulls.iter_mut().find(|p| p.number == index) {
+    let pr_opt = pulls.iter_mut().find(|p| p.number == index);
+
+    if let Some(pr) = pr_opt {
+        let repo_id = pr.repo_id;
         pr.merged = true;
         pr.state = "closed".to_string();
 
@@ -709,6 +730,7 @@ pub async fn merge_pull(
         let mut commits = state.commits.write().unwrap();
         commits.push(Commit {
             sha: format!("merge{}", index),
+            repo_id,
             message: format!("Merge pull request #{} from {}", index, pr.title),
             author: User::new(1, "admin".to_string(), None),
             date: "now".to_string(),
@@ -719,6 +741,7 @@ pub async fn merge_pull(
         let activity_id = (activities.len() as u64) + 1;
         activities.push(Activity {
             id: activity_id,
+            repo_id,
             user_id: 1,
             user_name: "admin".to_string(),
             op_type: "merge_pull_request".to_string(),
@@ -781,7 +804,7 @@ pub async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String
 
 pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let commit = Commit { sha: "abc".to_string(), repo_id: 1, message: "init".to_string(), author: user, date: "now".to_string() };
     let branches = vec![
         Branch { name: "main".to_string(), repo_id: 1, commit, protected: true }
     ];
@@ -798,20 +821,20 @@ pub async fn create_branch(
 
     if repo.is_none() {
          return (StatusCode::NOT_FOUND, Json(Branch {
-            repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
+            repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), repo_id: 0, message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
         }));
     }
     let repo_id = repo.unwrap().id;
 
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "def".to_string(), message: "new branch".to_string(), author: user, date: "now".to_string() };
+    let commit = Commit { sha: "def".to_string(), repo_id, message: "new branch".to_string(), author: user, date: "now".to_string() };
     let branch = Branch { name: payload.name, repo_id, commit, protected: false };
     (StatusCode::CREATED, Json(branch))
 }
 
 pub async fn list_tags(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Tag>> {
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "abc".to_string(), message: "init".to_string(), author: user, date: "now".to_string() };
+    let commit = Commit { sha: "abc".to_string(), repo_id: 1, message: "init".to_string(), author: user, date: "now".to_string() };
     let tags = vec![
         Tag { name: "v1.0".to_string(), repo_id: 1, id: "1".to_string(), commit }
     ];
@@ -846,9 +869,13 @@ pub async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u
     Json(diffs)
 }
 
-pub async fn list_commits(State(state): State<AppState>, Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Commit>> {
+pub async fn list_commits(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Commit>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let commits = state.commits.read().unwrap();
-    Json(commits.clone())
+    let filtered_commits: Vec<Commit> = commits.iter().filter(|c| c.repo_id == repo_id).cloned().collect();
+    Json(filtered_commits)
 }
 
 pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>, Query(params): Query<RepoSearchOptions>) -> Json<Vec<CodeSearchResult>> {
@@ -887,6 +914,14 @@ pub async fn update_file(
     Path((owner, repo, path)): Path<(String, String, String)>,
     Json(payload): Json<UpdateFileOption>
 ) -> (StatusCode, Json<FileEntry>) {
+    let repos = state.repos.read().unwrap();
+    let repo_obj = repos.iter().find(|r| r.owner == owner && r.name == repo);
+
+    if repo_obj.is_none() {
+        return (StatusCode::NOT_FOUND, Json(FileEntry { name: "".to_string(), path: "".to_string(), kind: "".to_string(), size: 0 }));
+    }
+    let repo_id = repo_obj.unwrap().id;
+
     // Create a commit for the file update
     let mut commits = state.commits.write().unwrap();
     let commit_message = if payload.message.is_empty() {
@@ -898,6 +933,7 @@ pub async fn update_file(
     let commit_id = commits.len() + 1;
     commits.push(Commit {
         sha: format!("update{}", commit_id),
+        repo_id,
         message: commit_message,
         author: User::new(1, "admin".to_string(), None),
         date: "now".to_string(),
@@ -908,6 +944,7 @@ pub async fn update_file(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
+        repo_id,
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "update_file".to_string(),
