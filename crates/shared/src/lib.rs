@@ -345,6 +345,7 @@ pub struct Team {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Project {
     pub id: u64,
+    pub repo_id: u64,
     pub title: String,
     pub description: Option<String>,
     pub is_closed: bool,
@@ -412,6 +413,7 @@ pub struct Package {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Secret {
     pub name: String,
+    pub repo_id: u64,
     pub created_at: String,
 }
 
@@ -424,6 +426,7 @@ pub struct CreateSecretOption {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DeployKey {
     pub id: u64,
+    pub repo_id: u64,
     pub title: String,
     pub key: String,
     pub fingerprint: String,
@@ -677,10 +680,10 @@ mod tests {
 
     #[test]
     fn test_secret_deploykey() {
-        let s = Secret { name: "TOKEN".to_string(), created_at: "now".to_string() };
+        let s = Secret { name: "TOKEN".to_string(), repo_id: 1, created_at: "now".to_string() };
         assert_eq!(s.name, "TOKEN");
 
-        let k = DeployKey { id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
+        let k = DeployKey { id: 1, repo_id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
         assert_eq!(k.title, "deploy");
     }
 
@@ -710,7 +713,7 @@ mod tests {
         let team = Team { id: 1, name: "dev".to_string(), description: None, permission: "write".to_string() };
         assert_eq!(team.name, "dev");
 
-        let project = Project { id: 1, title: "v1".to_string(), description: None, is_closed: false };
+        let project = Project { id: 1, repo_id: 1, title: "v1".to_string(), description: None, is_closed: false };
         assert!(!project.is_closed);
     }
 
