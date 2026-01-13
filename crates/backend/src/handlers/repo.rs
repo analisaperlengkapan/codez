@@ -96,7 +96,49 @@ pub async fn list_issues(State(state): State<AppState>, Path((owner, repo_name))
         filtered_issues.retain(|i| i.assignees.iter().any(|u| u.username == assignee));
     }
 
-    Json(filtered_issues)
+    // Sort issues
+    if let Some(sort) = &filter.sort {
+        let direction = filter.direction.clone().unwrap_or("desc".to_string());
+        match sort.as_str() {
+            "created" => {
+                // Mock sorting by ID since created_at is not in Issue struct, assume ID correlates with creation
+                if direction == "asc" {
+                    filtered_issues.sort_by(|a, b| a.id.cmp(&b.id));
+                } else {
+                    filtered_issues.sort_by(|a, b| b.id.cmp(&a.id));
+                }
+            },
+            "updated" => {
+                // Mock sorting by ID as proxy for updated
+                if direction == "asc" {
+                    filtered_issues.sort_by(|a, b| a.id.cmp(&b.id));
+                } else {
+                    filtered_issues.sort_by(|a, b| b.id.cmp(&a.id));
+                }
+            },
+            "comments" => {
+                // Mock sorting by ID as proxy, real impl would join comments count
+                if direction == "asc" {
+                    filtered_issues.sort_by(|a, b| a.id.cmp(&b.id));
+                } else {
+                    filtered_issues.sort_by(|a, b| b.id.cmp(&a.id));
+                }
+            },
+            _ => {}
+        }
+    }
+
+    // Pagination
+    let page = filter.page.unwrap_or(1);
+    let limit = filter.limit.unwrap_or(10);
+    let start = ((page - 1) * limit) as usize;
+    let end = (start + limit as usize).min(filtered_issues.len());
+
+    if start >= filtered_issues.len() {
+        Json(vec![])
+    } else {
+        Json(filtered_issues[start..end].to_vec())
+    }
 }
 
 pub async fn create_issue(

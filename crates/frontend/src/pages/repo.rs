@@ -238,11 +238,14 @@ pub fn IssueList() -> impl IntoView {
     let (search_query, set_search_query) = create_signal("".to_string());
     let (label_filter, set_label_filter) = create_signal("".to_string());
     let (assignee_filter, set_assignee_filter) = create_signal("".to_string());
+    let (sort, set_sort) = create_signal("created".to_string());
+    let (direction, set_direction) = create_signal("desc".to_string());
+    let (page, set_page) = create_signal(1);
 
     let issues = create_resource(
-        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get()),
-        |(o, r, s, q, l, a)| async move {
-            let mut url = format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}", o, r, s, q);
+        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get(), sort.get(), direction.get(), page.get()),
+        |(o, r, s, q, l, a, srt, dir, p)| async move {
+            let mut url = format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}&sort={}&direction={}&page={}&limit=10", o, r, s, q, srt, dir, p);
             if !l.is_empty() {
                 url.push_str(&format!("&label_id={}", l));
             }
@@ -304,6 +307,16 @@ pub fn IssueList() -> impl IntoView {
                         </select>
                     })}
                 </Suspense>
+
+                <select on:change=move |ev| set_sort.set(event_target_value(&ev))>
+                    <option value="created">"Created"</option>
+                    <option value="updated">"Updated"</option>
+                    <option value="comments">"Comments"</option>
+                </select>
+
+                <button on:click=move |_| set_direction.update(|d| *d = if d == "asc" { "desc".to_string() } else { "asc".to_string() })>
+                    {move || if direction.get() == "asc" { "Asc" } else { "Desc" }}
+                </button>
             </div>
             <ul>
                 <Suspense fallback=move || view! { <li>"Loading issues..."</li> }>
@@ -315,6 +328,11 @@ pub fn IssueList() -> impl IntoView {
                     })}
                 </Suspense>
             </ul>
+            <div class="pagination" style="margin-top: 10px;">
+                <button on:click=move |_| set_page.update(|p| if *p > 1 { *p -= 1 }) disabled=move || page.get() <= 1>"Previous"</button>
+                <span style="margin: 0 10px;">"Page " {page}</span>
+                <button on:click=move |_| set_page.update(|p| *p += 1)>"Next"</button>
+            </div>
         </div>
     }
 }

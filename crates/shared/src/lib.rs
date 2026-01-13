@@ -35,6 +35,10 @@ pub struct IssueFilterOptions {
     pub q: Option<String>,     // search query
     pub label_id: Option<u64>,
     pub assignee_username: Option<String>,
+    pub page: Option<u64>,
+    pub limit: Option<u64>,
+    pub sort: Option<String>, // "created", "updated", "comments"
+    pub direction: Option<String>, // "asc", "desc"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

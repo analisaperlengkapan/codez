@@ -228,6 +228,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_issue_pagination_sort_flow() {
+        let app = api_router();
+
+        // Create 2 issues
+        for i in 1..=2 {
+            let payload = CreateIssueOption {
+                title: format!("Issue {}", i),
+                body: None,
+            };
+            let _ = app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/repos/admin/codeza/issues")
+                        .header("Content-Type", "application/json")
+                        .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+
+        // Test Pagination: Limit 1
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/issues?limit=1&page=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(issues.len(), 1);
+
+        // Test Sort Desc (Default) - Issue 2 should be first
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/issues?sort=created&direction=desc")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
+        // Since we created 2 new issues, plus the initial 1, we have 3 total.
+        // Order desc by ID: Issue 3 (created 2nd here), Issue 2 (created 1st here), Issue 1 (initial).
+        // Let's verify the first one is the latest created.
+        assert!(issues[0].id > issues[1].id);
+    }
+
+    #[tokio::test]
     async fn test_update_file_flow() {
         let app = api_router();
 
