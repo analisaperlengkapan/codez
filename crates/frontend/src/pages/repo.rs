@@ -2,12 +2,13 @@ use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
 use shared::{
-    Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
+    Repository, CreateRepoOption, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
-    Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
-    ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
+    Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption,
+    CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
-    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption
+    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
+    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery, CreateIssueOption
 };
 
 #[component]
@@ -28,6 +29,14 @@ pub fn RepoDetail() -> impl IntoView {
         |(o, r)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/languages", o, r))
                 .send().await.unwrap().json::<Vec<LanguageStat>>().await.unwrap_or_default()
+        }
+    );
+
+    let topics = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/topics", o, r))
+                .send().await.unwrap().json::<Vec<shared::Topic>>().await.unwrap_or_default()
         }
     );
 
@@ -82,6 +91,17 @@ pub fn RepoDetail() -> impl IntoView {
                                 }/>
                             </div>
                         }
+                    })}
+                </Suspense>
+            </div>
+
+            <div class="repo-topics" style="margin-bottom: 10px;">
+                <Suspense fallback=move || view! { <span></span> }>
+                    {move || topics.get().map(|list| view! {
+                        <For each=move || list.clone() key=|t| t.id children=move |t| {
+                            let link = format!("/search?q=topic:{}", t.name);
+                            view! { <a href=link style="background: #ddf4ff; color: #0969da; padding: 2px 8px; border-radius: 10px; margin-right: 5px; text-decoration: none; font-size: 0.9em;">{t.name}</a> }
+                        }/>
                     })}
                 </Suspense>
             </div>
@@ -235,23 +255,127 @@ pub fn IssueList() -> impl IntoView {
 
     let (state_filter, set_state_filter) = create_signal("open".to_string());
     let (search_query, set_search_query) = create_signal("".to_string());
+    let (label_filter, set_label_filter) = create_signal("".to_string());
+    let (assignee_filter, set_assignee_filter) = create_signal("".to_string());
+    let (sort, set_sort) = create_signal("created".to_string());
+    let (direction, set_direction) = create_signal("desc".to_string());
+    let (page, set_page) = create_signal(1);
+    let (show_new_issue, set_show_new_issue) = create_signal(false);
+    let (new_issue_title, set_new_issue_title) = create_signal("".to_string());
+    let (new_issue_body, set_new_issue_body) = create_signal("".to_string());
+    let (refresh, set_refresh) = create_signal(0);
 
     let issues = create_resource(
-        move || (owner(), repo_name(), state_filter.get(), search_query.get()),
-        |(o, r, s, q)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}", o, r, s, q))
+        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get(), sort.get(), direction.get(), page.get(), refresh.get()),
+        |(o, r, s, q, l, a, srt, dir, p, _)| async move {
+            let mut url = format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}&sort={}&direction={}&page={}&limit=10", o, r, s, q, srt, dir, p);
+            if !l.is_empty() {
+                url.push_str(&format!("&label_id={}", l));
+            }
+            if !a.is_empty() {
+                url.push_str(&format!("&assignee_username={}", a));
+            }
+            Request::get(&url)
                 .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
         }
     );
 
+    let labels = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/labels", o, r))
+                .send().await.unwrap().json::<Vec<Label>>().await.unwrap_or_default()
+        }
+    );
+
+    let users = create_resource(
+        || (),
+        |_| async move {
+            // Mock users for filtering
+            vec![
+                shared::User::new(1, "admin".to_string(), None),
+                shared::User::new(2, "user".to_string(), None),
+            ]
+        }
+    );
+
+    let on_create_issue = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateIssueOption {
+            title: new_issue_title.get(),
+            body: Some(new_issue_body.get()),
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues", o, r))
+                .json(&payload).unwrap().send().await;
+            set_new_issue_title.set("".to_string());
+            set_new_issue_body.set("".to_string());
+            set_show_new_issue.set(false);
+            set_refresh.update(|n| *n += 1);
+        });
+    };
+
     view! {
         <div class="issue-list">
-            <h3>"Issues for " {owner} "/" {repo_name}</h3>
-            <div class="issue-filters">
+            <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>"Issues for " {owner} "/" {repo_name}</h3>
+                <button on:click=move |_| set_show_new_issue.set(!show_new_issue.get())>
+                    {move || if show_new_issue.get() { "Cancel" } else { "New Issue" }}
+                </button>
+            </div>
+
+            {move || if show_new_issue.get() {
+                view! {
+                    <form on:submit=on_create_issue style="background: #f9f9f9; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd;">
+                        <input type="text" placeholder="Title" prop:value=new_issue_title on:input=move |ev| set_new_issue_title.set(event_target_value(&ev)) style="display: block; width: 100%; margin-bottom: 5px;" required />
+                        <textarea placeholder="Body" prop:value=new_issue_body on:input=move |ev| set_new_issue_body.set(event_target_value(&ev)) style="display: block; width: 100%; margin-bottom: 5px;" rows="5"></textarea>
+                        <button type="submit">"Create Issue"</button>
+                    </form>
+                }.into_view()
+            } else {
+                view! { <span></span> }.into_view()
+            }}
+
+            <div class="issue-filters" style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
                 <button on:click=move |_| set_state_filter.set("open".to_string()) class:active=move || state_filter.get() == "open">"Open"</button>
                 <button on:click=move |_| set_state_filter.set("closed".to_string()) class:active=move || state_filter.get() == "closed">"Closed"</button>
                 <button on:click=move |_| set_state_filter.set("all".to_string()) class:active=move || state_filter.get() == "all">"All"</button>
+
                 <input type="text" placeholder="Search issues..." prop:value=search_query on:input=move |ev| set_search_query.set(event_target_value(&ev)) />
+
+                <Suspense fallback=move || view! { <span>"Loading labels..."</span> }>
+                    {move || labels.get().map(|list| view! {
+                        <select on:change=move |ev| set_label_filter.set(event_target_value(&ev))>
+                            <option value="">"Label"</option>
+                            <For each=move || list.clone() key=|l| l.id children=move |l| {
+                                view! { <option value={l.id}>{l.name}</option> }
+                            }/>
+                        </select>
+                    })}
+                </Suspense>
+
+                <Suspense fallback=move || view! { <span>"Loading users..."</span> }>
+                    {move || users.get().map(|list| view! {
+                        <select on:change=move |ev| set_assignee_filter.set(event_target_value(&ev))>
+                            <option value="">"Assignee"</option>
+                            <For each=move || list.clone() key=|u| u.id children=move |u| {
+                                view! { <option value={u.username.clone()}>{u.username}</option> }
+                            }/>
+                        </select>
+                    })}
+                </Suspense>
+
+                <select on:change=move |ev| set_sort.set(event_target_value(&ev))>
+                    <option value="created">"Created"</option>
+                    <option value="updated">"Updated"</option>
+                    <option value="comments">"Comments"</option>
+                </select>
+
+                <button on:click=move |_| set_direction.update(|d| *d = if d == "asc" { "desc".to_string() } else { "asc".to_string() })>
+                    {move || if direction.get() == "asc" { "Asc" } else { "Desc" }}
+                </button>
             </div>
             <ul>
                 <Suspense fallback=move || view! { <li>"Loading issues..."</li> }>
@@ -263,6 +387,11 @@ pub fn IssueList() -> impl IntoView {
                     })}
                 </Suspense>
             </ul>
+            <div class="pagination" style="margin-top: 10px;">
+                <button on:click=move |_| set_page.update(|p| if *p > 1 { *p -= 1 }) disabled=move || page.get() <= 1>"Previous"</button>
+                <span style="margin: 0 10px;">"Page " {page}</span>
+                <button on:click=move |_| set_page.update(|p| *p += 1)>"Next"</button>
+            </div>
         </div>
     }
 }
@@ -275,20 +404,42 @@ pub fn IssueDetail() -> impl IntoView {
     let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
 
     let (new_comment, set_new_comment) = create_signal("".to_string());
+    let (trigger_refresh, set_trigger_refresh) = create_signal(0);
+    let (editing_comment_id, set_editing_comment_id) = create_signal(None::<u64>);
+    let (edit_comment_body, set_edit_comment_body) = create_signal("".to_string());
 
     let issue = create_resource(
-        move || (owner(), repo_name(), index()),
-        |(o, r, i)| async move {
+        move || (owner(), repo_name(), index(), trigger_refresh.get()),
+        |(o, r, i, _)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, i))
                 .send().await.unwrap().json::<Option<Issue>>().await.unwrap_or(None)
         }
     );
 
     let comments = create_resource(
-        move || (owner(), repo_name(), index()),
-        |(o, r, i)| async move {
+        move || (owner(), repo_name(), index(), trigger_refresh.get()),
+        |(o, r, i, _)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
                 .send().await.unwrap().json::<Vec<Comment>>().await.unwrap_or_default()
+        }
+    );
+
+    let available_milestones = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/milestones", o, r))
+                .send().await.unwrap().json::<Vec<Milestone>>().await.unwrap_or_default()
+        }
+    );
+
+    let available_users = create_resource(
+        || (),
+        |_| async move {
+            // Mock users for assignment - in real app, fetch from collaborators or org members
+            vec![
+                shared::User::new(1, "admin".to_string(), None),
+                shared::User::new(2, "user".to_string(), None),
+            ]
         }
     );
 
@@ -303,6 +454,71 @@ pub fn IssueDetail() -> impl IntoView {
             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
                 .json(&payload).unwrap().send().await;
             set_new_comment.set("".to_string());
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_delete_comment = move |comment_id: u64| {
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/comments/{}", o, r, comment_id))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_add_reaction = move |comment_id: u64, content: String| {
+        let o = owner();
+        let r = repo_name();
+        let payload = shared::CreateReactionOption { content };
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/comments/{}/reactions", o, r, comment_id))
+                .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_start_edit_comment = move |comment_id: u64, current_body: String| {
+        set_editing_comment_id.set(Some(comment_id));
+        set_edit_comment_body.set(current_body);
+    };
+
+    let on_cancel_edit_comment = move |_| {
+        set_editing_comment_id.set(None);
+        set_edit_comment_body.set("".to_string());
+    };
+
+    let on_save_edit_comment = move |comment_id: u64| {
+        let o = owner();
+        let r = repo_name();
+        let body = edit_comment_body.get();
+        let payload = shared::UpdateCommentOption { body };
+
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/comments/{}", o, r, comment_id))
+                .json(&payload).unwrap().send().await;
+            set_editing_comment_id.set(None);
+            set_edit_comment_body.set("".to_string());
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_toggle_state = move |current_state: String| {
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+        let new_state = if current_state == "open" { "closed" } else { "open" };
+        let payload = UpdateIssueOption {
+            title: None,
+            body: None,
+            state: Some(new_state.to_string()),
+            milestone_id: None,
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
         });
     };
 
@@ -319,40 +535,191 @@ pub fn IssueDetail() -> impl IntoView {
                 let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/labels", o, r, i))
                     .json(&payload).unwrap().send().await;
                 set_new_label_name.set("".to_string());
+                set_trigger_refresh.update(|n| *n += 1);
             });
         }
+    };
+
+    let on_remove_label = move |label_id: u64| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        spawn_local(async move {
+            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/labels/{}", o, r, i, label_id))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    // Assignee management
+    let (selected_assignee, set_selected_assignee) = create_signal("".to_string());
+    let on_add_assignee = move |_| {
+        let username = selected_assignee.get();
+        if !username.is_empty() {
+            let o = owner();
+            let r = repo_name();
+            let i = index();
+            // In a real app, we'd need the full user object or ID, but the backend accepts a User struct
+            // We'll construct a minimal one for the payload
+            let payload = shared::User::new(0, username, None);
+            spawn_local(async move {
+                let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/assignees", o, r, i))
+                    .json(&payload).unwrap().send().await;
+                set_selected_assignee.set("".to_string());
+                set_trigger_refresh.update(|n| *n += 1);
+            });
+        }
+    };
+
+    let on_remove_assignee = move |username: String| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        spawn_local(async move {
+            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/assignees/{}", o, r, i, username))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_change_milestone = move |ev: leptos::ev::Event| {
+        let val_str = event_target_value(&ev);
+        let m_id = val_str.parse::<u64>().unwrap_or(0);
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+
+        let payload = UpdateIssueOption {
+            title: None,
+            body: None,
+            state: None,
+            milestone_id: Some(m_id),
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let (is_editing, set_is_editing) = create_signal(false);
+    let (edit_title, set_edit_title) = create_signal("".to_string());
+    let (edit_body, set_edit_body) = create_signal("".to_string());
+
+    let on_start_edit = move |t: String, b: String| {
+        set_edit_title.set(t);
+        set_edit_body.set(b);
+        set_is_editing.set(true);
+    };
+
+    let on_cancel_edit = move |_| {
+        set_is_editing.set(false);
+    };
+
+    let on_save_edit = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+        let payload = UpdateIssueOption {
+            title: Some(edit_title.get()),
+            body: Some(edit_body.get()),
+            state: None,
+            milestone_id: None,
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_is_editing.set(false);
+            set_trigger_refresh.update(|n| *n += 1);
+        });
     };
 
     view! {
         <div class="issue-detail">
             <Suspense fallback=move || view! { <p>"Loading issue..."</p> }>
                 {move || match issue.get() {
-                    Some(Some(i)) => view! {
-                        <div class="issue-header">
-                            <h2>{i.title} " #" {i.number}</h2>
-                            <span class="state">{i.state}</span>
-                            <span class="meta">" opened by " {i.user.username}</span>
-                        </div>
-                        <div class="issue-container" style="display: flex;">
-                            <div class="issue-main" style="flex: 3;">
-                                <div class="issue-body">
-                                    <p>{i.body.unwrap_or_default()}</p>
-                                </div>
+                    Some(Some(i)) => {
+                        let state_clone = i.state.clone();
+                        let state_for_toggle = state_clone.clone();
+                        let title_clone = i.title.clone();
+                        let body_clone = i.body.clone().unwrap_or_default();
+                        let milestone_clone = i.milestone.clone();
+                        view! {
+                            <div class="issue-header">
+                                {if is_editing.get() {
+                                    view! {
+                                        <input type="text" prop:value=edit_title on:input=move |ev| set_edit_title.set(event_target_value(&ev)) style="font-size: 1.5em; width: 80%;" />
+                                    }.into_view()
+                                } else {
+                                    view! { <h2>{i.title.clone()} " #" {i.number}</h2> }.into_view()
+                                }}
+                                <span class="state">{i.state.clone()}</span>
+                                <span class="meta">" opened by " {i.user.username}</span>
+                                <button on:click=move |_| on_toggle_state(state_for_toggle.clone()) style="margin-left: 10px;">
+                                    {if state_clone == "open" { "Close Issue" } else { "Reopen Issue" }}
+                                </button>
+                                {if !is_editing.get() {
+                                    view! { <button on:click=move |_| on_start_edit(title_clone.clone(), body_clone.clone()) style="margin-left: 5px;">"Edit"</button> }.into_view()
+                                } else {
+                                     view! { <span></span> }.into_view()
+                                }}
                             </div>
-                            <div class="issue-sidebar" style="flex: 1; padding-left: 20px; border-left: 1px solid #eee;">
+                            <div class="issue-container" style="display: flex;">
+                                <div class="issue-main" style="flex: 3;">
+                                    <div class="issue-body">
+                                        {if is_editing.get() {
+                                            view! {
+                                                <div>
+                                                    <textarea prop:value=edit_body on:input=move |ev| set_edit_body.set(event_target_value(&ev)) rows="10" style="width: 100%;"></textarea>
+                                                    <button on:click=on_save_edit>"Save"</button>
+                                                    <button on:click=on_cancel_edit style="margin-left: 5px;">"Cancel"</button>
+                                                </div>
+                                            }.into_view()
+                                        } else {
+                                            view! { <p>{i.body.clone().unwrap_or_default()}</p> }.into_view()
+                                        }}
+                                    </div>
+                                </div>
+                                <div class="issue-sidebar" style="flex: 1; padding-left: 20px; border-left: 1px solid #eee;">
                                 <div class="sidebar-item">
                                     <strong>"Assignees"</strong>
                                     <div class="assignees-list">
                                         <For each=move || i.assignees.clone() key=|u| u.id children=move |u| {
-                                            view! { <div>{u.username}</div> }
+                                            let username = u.username.clone();
+                                            view! {
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                                    <span>{username.clone()}</span>
+                                                    <button on:click=move |_| on_remove_assignee(username.clone()) style="font-size: 0.8em; margin-left: 5px; cursor: pointer;">"x"</button>
+                                                </div>
+                                            }
                                         }/>
+                                    </div>
+                                    <div class="add-assignee" style="margin-top: 5px;">
+                                        <Suspense fallback=move || view! { <span>"Loading users..."</span> }>
+                                            {move || available_users.get().map(|users| view! {
+                                                <select on:change=move |ev| set_selected_assignee.set(event_target_value(&ev))>
+                                                    <option value="">"Add Assignee"</option>
+                                                    <For each=move || users.clone() key=|u| u.id children=move |u| {
+                                                        let username = u.username.clone();
+                                                        view! { <option value={username.clone()}>{username}</option> }
+                                                    }/>
+                                                </select>
+                                                <button on:click=on_add_assignee>"+"</button>
+                                            })}
+                                        </Suspense>
                                     </div>
                                 </div>
                                 <div class="sidebar-item">
                                     <strong>"Labels"</strong>
                                     <div class="labels-list">
                                         <For each=move || i.labels.clone() key=|l| l.id children=move |l| {
-                                            view! { <div style=format!("background-color: {}; color: #fff; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-right: 5px;", l.color)>{l.name}</div> }
+                                            let label_id = l.id;
+                                            view! {
+                                                <div style=format!("background-color: {}; color: #fff; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-right: 5px; margin-bottom: 2px;", l.color)>
+                                                    {l.name}
+                                                    <span on:click=move |_| on_remove_label(label_id) style="margin-left: 5px; cursor: pointer; font-weight: bold;">"x"</span>
+                                                </div>
+                                            }
                                         }/>
                                     </div>
                                     <div class="add-label" style="margin-top: 5px;">
@@ -362,11 +729,29 @@ pub fn IssueDetail() -> impl IntoView {
                                 </div>
                                 <div class="sidebar-item">
                                     <strong>"Milestone"</strong>
-                                    <p>{i.milestone.clone().map(|m| m.title).unwrap_or("No milestone".to_string())}</p>
+                                    <div>
+                                        <Suspense fallback=move || view! { <span>"Loading..."</span> }>
+                                            {
+                                                let milestone_clone_2 = milestone_clone.clone();
+                                                move || available_milestones.get().map(|list| {
+                                                    let current_id = milestone_clone_2.as_ref().map(|m| m.id).unwrap_or(0);
+                                                    view! {
+                                                        <select on:change=on_change_milestone>
+                                                            <option value="0" selected={current_id == 0}>"No Milestone"</option>
+                                                            <For each=move || list.clone() key=|m| m.id children=move |m| {
+                                                                let selected = m.id == current_id;
+                                                                view! { <option value={m.id} selected={selected}>{m.title}</option> }
+                                                            }/>
+                                                        </select>
+                                                    }
+                                                })
+                                            }
+                                        </Suspense>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    }.into_view(),
+                    }.into_view() },
                     _ => view! { <p>"Issue not found"</p> }.into_view()
                 }}
             </Suspense>
@@ -376,12 +761,52 @@ pub fn IssueDetail() -> impl IntoView {
                 <Suspense fallback=move || view! { <p>"Loading comments..."</p> }>
                     {move || comments.get().map(|list| view! {
                         <For each=move || list.clone() key=|c| c.id children=move |c| {
+                            let comment_id = c.id;
+                            let comment_body = c.body.clone();
                             view! {
                                 <div class="comment">
                                     <div class="comment-header">
                                         <strong>{c.user.username}</strong> " commented on " {c.created_at}
+                                        {
+                                            // Mock admin check: allow edit/delete for everyone in mock
+                                            view! {
+                                                <span style="float: right;">
+                                                    <button on:click=move |_| on_start_edit_comment(comment_id, comment_body.clone())>"Edit"</button>
+                                                    <button on:click=move |_| on_delete_comment(comment_id)>"Delete"</button>
+                                                </span>
+                                            }
+                                        }
                                     </div>
-                                    <div class="comment-body">{c.body}</div>
+                                    <div class="comment-body">
+                                        {move || if editing_comment_id.get() == Some(comment_id) {
+                                            view! {
+                                                <div>
+                                                    <textarea prop:value=edit_comment_body on:input=move |ev| set_edit_comment_body.set(event_target_value(&ev))></textarea>
+                                                    <button on:click=move |_| on_save_edit_comment(comment_id)>"Save"</button>
+                                                    <button on:click=on_cancel_edit_comment>"Cancel"</button>
+                                                </div>
+                                            }.into_view()
+                                        } else {
+                                            view! { <p>{c.body.clone()}</p> }.into_view()
+                                        }}
+                                    </div>
+                                    <div class="comment-reactions" style="margin-top: 5px;">
+                                        <div class="reactions-list" style="display: flex; gap: 5px; margin-bottom: 5px;">
+                                            <For each=move || c.reactions.clone() key=|r| r.id children=move |r| {
+                                                view! { <span title={r.user.username} style="border: 1px solid #ddd; padding: 2px 5px; border-radius: 10px;">{r.content}</span> }
+                                            }/>
+                                        </div>
+                                        <div class="reaction-picker">
+                                            <button on:click=move |_| on_add_reaction(comment_id, "👍".to_string()) title="+1">"👍"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "👎".to_string()) title="-1">"👎"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "😄".to_string()) title="laugh">"😄"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "😕".to_string()) title="confused">"😕"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "❤️".to_string()) title="heart">"❤️"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "🎉".to_string()) title="hooray">"🎉"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "👀".to_string()) title="eyes">"👀"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "🚀".to_string()) title="rocket">"🚀"</button>
+                                        </div>
+                                    </div>
                                 </div>
                             }
                         }/>
@@ -468,45 +893,6 @@ pub fn CreateRepo() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn PackageList() -> impl IntoView {
-    let params = use_params_map();
-    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
-
-    let packages = create_resource(owner, |owner_name| async move {
-        Request::get(&format!("http://127.0.0.1:3000/api/v1/packages/{}", owner_name)).send().await.unwrap().json::<Vec<Package>>().await.unwrap_or_default()
-    });
-
-    view! {
-        <div class="package-list">
-            <h3>"Packages for " {owner}</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
-                    {move || packages.get().map(|list| view! {
-                        <For each=move || list.clone() key=|p| p.id children=move |p| {
-                            let href = format!("/packages/{}/{}/{}/{}", owner(), p.package_type, p.name, p.version);
-                            view! { <li><a href=href>{p.name} " (" {p.package_type} ") - " {p.version}</a></li> }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
-        </div>
-    }
-}
-
-#[component]
-pub fn PackageDetail() -> impl IntoView {
-    let params = use_params_map();
-    let name = move || params.with(|params| params.get("name").cloned().unwrap_or_default());
-    let version = move || params.with(|params| params.get("version").cloned().unwrap_or_default());
-
-    view! {
-        <div class="package-detail">
-            <h3>"Package: " {name} " " {version}</h3>
-            <p>"Installation instructions..."</p>
-        </div>
-    }
-}
 
 #[component]
 pub fn CommitList() -> impl IntoView {
@@ -595,6 +981,7 @@ pub fn CommitDiff() -> impl IntoView {
                     })}
                 </Suspense>
             </div>
+
         </div>
     }
 }
@@ -638,6 +1025,23 @@ pub fn PullRequestDetail() -> impl IntoView {
     let index = move || params.with(|params| params.get("index").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
 
     let (merge_action, set_merge_action) = create_signal("merge".to_string());
+    let (trigger_refresh, set_trigger_refresh) = create_signal(0);
+
+    // Fetch PR details to display status, title, body etc.
+    let pull_request = create_resource(
+        move || (owner(), repo_name(), index(), trigger_refresh.get()),
+        |(o, r, i, _)| async move {
+            // Note: list_pulls filters by repo, but we need get_pull. Since get_pull logic is inside list_pulls basically,
+            // we might not have a direct endpoint for get_pull in router yet? No, router has `list_pulls` but no `get_pull`.
+            // Wait, looking at router.rs: `.route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls)...)`
+            // There isn't a `get_pull` route! We should add one or iterate list (inefficient but works for now).
+            // Actually, we can use the `list_pulls` and find the one with the right index client-side or add endpoint.
+            // For now, let's filter client side from list since that endpoint exists.
+            let pulls = Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls", o, r))
+                .send().await.unwrap().json::<Vec<PullRequest>>().await.unwrap_or_default();
+            pulls.into_iter().find(|p| p.number == i)
+        }
+    );
 
     let pr_files = create_resource(
         move || (owner(), repo_name(), index()),
@@ -660,12 +1064,133 @@ pub fn PullRequestDetail() -> impl IntoView {
             };
             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/merge", o, r, i))
                 .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_toggle_state = move |current_state: String| {
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+        let new_state = if current_state == "open" { "closed" } else { "open" };
+        let payload = UpdatePullRequestOption {
+            title: None,
+            body: None,
+            state: Some(new_state.to_string()),
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let (is_editing, set_is_editing) = create_signal(false);
+    let (edit_title, set_edit_title) = create_signal("".to_string());
+    let (edit_body, set_edit_body) = create_signal("".to_string());
+
+    let on_start_edit = move |t: String, b: String| {
+        set_edit_title.set(t);
+        set_edit_body.set(b);
+        set_is_editing.set(true);
+    };
+
+    let on_cancel_edit = move |_| {
+        set_is_editing.set(false);
+    };
+
+    let on_save_edit = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+        let payload = UpdatePullRequestOption {
+            title: Some(edit_title.get()),
+            body: Some(edit_body.get()),
+            state: None,
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_is_editing.set(false);
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let reviews = create_resource(
+        move || (owner(), repo_name(), index(), trigger_refresh.get()),
+        |(o, r, i, _)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i))
+                .send().await.unwrap().json::<Vec<Review>>().await.unwrap_or_default()
+        }
+    );
+
+    let (review_body, set_review_body) = create_signal("".to_string());
+
+    let on_submit_review = move |event: String| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        let payload = CreateReviewOption {
+            body: review_body.get(),
+            event,
+        };
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i))
+                .json(&payload).unwrap().send().await;
+            set_review_body.set("".to_string());
+            set_trigger_refresh.update(|n| *n += 1);
         });
     };
 
     view! {
         <div class="pull-detail">
-            <h3>"Pull Request #" {index}</h3>
+            <Suspense fallback=move || view! { <p>"Loading PR..."</p> }>
+                {move || match pull_request.get() {
+                    Some(Some(pr)) => {
+                        let state_clone = pr.state.clone();
+                        let state_for_toggle = state_clone.clone();
+                        let title_clone = pr.title.clone();
+                        let body_clone = pr.body.clone().unwrap_or_default();
+
+                        view! {
+                            <div class="pr-header">
+                                {if is_editing.get() {
+                                    view! {
+                                        <input type="text" prop:value=edit_title on:input=move |ev| set_edit_title.set(event_target_value(&ev)) style="font-size: 1.5em; width: 80%;" />
+                                    }.into_view()
+                                } else {
+                                    view! { <h3>"Pull Request #" {index} ": " {pr.title.clone()}</h3> }.into_view()
+                                }}
+                                <span class="state">{pr.state.clone()}</span>
+                                <span class="meta">" opened by " {pr.user.username}</span>
+                                <button on:click=move |_| on_toggle_state(state_for_toggle.clone()) style="margin-left: 10px;">
+                                    {if state_clone == "open" { "Close PR" } else { "Reopen PR" }}
+                                </button>
+                                {if !is_editing.get() {
+                                    view! { <button on:click=move |_| on_start_edit(title_clone.clone(), body_clone.clone()) style="margin-left: 5px;">"Edit"</button> }.into_view()
+                                } else {
+                                     view! { <span></span> }.into_view()
+                                }}
+                            </div>
+                            <div class="pr-body" style="margin: 10px 0; padding: 10px; border: 1px solid #eee;">
+                                {if is_editing.get() {
+                                    view! {
+                                        <div>
+                                            <textarea prop:value=edit_body on:input=move |ev| set_edit_body.set(event_target_value(&ev)) rows="5" style="width: 100%;"></textarea>
+                                            <button on:click=on_save_edit>"Save"</button>
+                                            <button on:click=on_cancel_edit style="margin-left: 5px;">"Cancel"</button>
+                                        </div>
+                                    }.into_view()
+                                } else {
+                                    view! { <p>{pr.body.clone().unwrap_or_default()}</p> }.into_view()
+                                }}
+                            </div>
+                        }
+                    }.into_view(),
+                    _ => view! { <p>"Pull Request not found"</p> }.into_view()
+                }}
+            </Suspense>
+
             <div class="pr-actions">
                 <select on:change=move |ev| set_merge_action.set(event_target_value(&ev))>
                     <option value="merge">"Merge Commit"</option>
@@ -691,6 +1216,44 @@ pub fn PullRequestDetail() -> impl IntoView {
                         }/>
                     })}
                 </Suspense>
+            </div>
+
+            <div class="pr-reviews" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+                <h4>"Reviews"</h4>
+                <div class="review-list">
+                    <Suspense fallback=move || view! { <p>"Loading reviews..."</p> }>
+                        {move || reviews.get().map(|list| view! {
+                            <For each=move || list.clone() key=|r| r.id children=move |r| {
+                                view! {
+                                    <div class="review-item" style="border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+                                        <div class="review-header">
+                                            <strong>{r.user.username}</strong> " "
+                                            <span style=format!("font-weight: bold; color: {}", match r.state.as_str() {
+                                                "APPROVED" => "green",
+                                                "CHANGES_REQUESTED" => "red",
+                                                _ => "gray"
+                                            })>{r.state}</span>
+                                            " on " {r.created_at}
+                                        </div>
+                                        <div class="review-body" style="margin-top: 5px;">
+                                            {r.body}
+                                        </div>
+                                    </div>
+                                }
+                            }/>
+                        })}
+                    </Suspense>
+                </div>
+
+                <div class="add-review" style="margin-top: 10px; border: 1px solid #ccc; padding: 10px;">
+                    <h5>"Submit Review"</h5>
+                    <textarea prop:value=review_body on:input=move |ev| set_review_body.set(event_target_value(&ev)) placeholder="Leave a comment" style="width: 100%; margin-bottom: 5px;"></textarea>
+                    <div style="display: flex; gap: 5px;">
+                        <button on:click=move |_| on_submit_review("COMMENT".to_string())>"Comment"</button>
+                        <button on:click=move |_| on_submit_review("APPROVE".to_string()) style="color: green;">"Approve"</button>
+                        <button on:click=move |_| on_submit_review("REQUEST_CHANGES".to_string()) style="color: red;">"Request Changes"</button>
+                    </div>
+                </div>
             </div>
         </div>
     }
@@ -889,7 +1452,7 @@ pub fn RepoSettings() -> impl IntoView {
                 <p><a href="webhooks">"Webhooks"</a></p>
                 <p><a href="secrets">"Secrets"</a></p>
                 <p><a href="keys">"Deploy Keys"</a></p>
-                <p><a href="branches">"Protected Branches"</a></p>
+                <p><a href=format!("/repos/{}/{}/settings/branches", owner(), repo_name())>"Protected Branches"</a></p>
                 <p><a href="lfs">"Git LFS Locks"</a></p>
             </div>
         </div>
@@ -995,7 +1558,42 @@ pub fn WebhookList() -> impl IntoView {
                 <Suspense fallback=move || view! { <li>"Loading..."</li> }>
                     {move || hooks.get().map(|list| view! {
                         <For each=move || list.clone() key=|h| h.id children=move |h| {
-                            view! { <li>{h.url} " (" {if h.active { "Active" } else { "Inactive" }} ")"</li> }
+                            let hook_id = h.id;
+                            let o = owner();
+                            let r = repo_name();
+                            let deliveries = create_resource(
+                                move || (o.clone(), r.clone(), hook_id),
+                                |(o, r, id)| async move {
+                                    Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/hooks/{}/deliveries", o, r, id))
+                                        .send().await.unwrap().json::<Vec<WebhookDelivery>>().await.unwrap_or_default()
+                                }
+                            );
+
+                            view! {
+                                <li style="margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                                    <div>
+                                        {h.url} " (" {if h.active { "Active" } else { "Inactive" }} ")"
+                                    </div>
+                                    <div class="deliveries" style="margin-left: 20px; font-size: 0.8em; color: #666;">
+                                        <strong>"Recent Deliveries:"</strong>
+                                        <Suspense fallback=move || view! { <span>"..."</span> }>
+                                            {move || deliveries.get().map(|list| {
+                                                if list.is_empty() {
+                                                    view! { <div>"No deliveries yet"</div> }.into_view()
+                                                } else {
+                                                    view! {
+                                                        <ul style="margin: 0; padding-left: 15px;">
+                                                            <For each=move || list.clone() key=|d| d.id children=move |d| {
+                                                                view! { <li>{d.delivered_at} " - " {d.event} " - " {d.status} " (" {d.response_status} ")"</li> }
+                                                            }/>
+                                                        </ul>
+                                                    }.into_view()
+                                                }
+                                            })}
+                                        </Suspense>
+                                    </div>
+                                </li>
+                            }
                         }/>
                     })}
                 </Suspense>
@@ -1319,13 +1917,22 @@ pub fn MilestoneDetail() -> impl IntoView {
                 }}
             </Suspense>
              <Suspense fallback=move || view! { <p>"Loading stats..."</p> }>
-                {move || stats.get().map(|s| view! {
+                {move || stats.get().map(|s| {
+                    let total = s.open_issues + s.closed_issues;
+                    let percentage = if total > 0 { (s.closed_issues as f64 / total as f64 * 100.0) as u64 } else { 0 };
+
+                    view! {
                     <div class="stats">
-                        <span>"Open Issues: " {s.open_issues}</span>
-                        " | "
-                        <span>"Closed Issues: " {s.closed_issues}</span>
+                        <div class="progress-bar" style="width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; margin-bottom: 10px;">
+                            <div style=format!("width: {}%; height: 100%; background: #2cbe4e;", percentage)></div>
+                        </div>
+                        <div>
+                            <strong>{percentage} "% complete"</strong>
+                            <span style="margin-left: 10px;">{s.open_issues} " Open"</span>
+                            <span style="margin-left: 10px;">{s.closed_issues} " Closed"</span>
+                        </div>
                     </div>
-                })}
+                }})}
             </Suspense>
         </div>
     }
@@ -1346,35 +1953,58 @@ pub fn Wiki() -> impl IntoView {
         }
     );
 
+    let wiki_pages = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/wiki/pages", o, r))
+                .send().await.unwrap().json::<Vec<WikiPage>>().await.unwrap_or_default()
+        }
+    );
+
     view! {
-        <div class="wiki-view">
-            <Suspense fallback=move || view! { <p>"Loading wiki..."</p> }>
-                {move || match wiki_page.get() {
-                    Some(Some(page)) => {
-                        let title = page.title.clone();
-                        view! {
-                            <div class="wiki-header">
-                                <h3>{page.title}</h3>
-                                <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), title) class="btn">"Edit"</a>
-                            </div>
-                            <div class="wiki-content">
-                                <pre>{page.content}</pre>
-                            </div>
-                        }.into_view()
-                    },
-                    _ => {
-                        let p = page_name();
-                        view! {
-                            <div>
-                                <p>"Wiki page '" {p.clone()} "' not found."</p>
-                                <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), p)>
-                                    "Create " {p} " Page"
-                                </a>
-                            </div>
-                        }.into_view()
-                    }
-                }}
-            </Suspense>
+        <div class="wiki-container" style="display: flex;">
+            <div class="wiki-sidebar" style="width: 200px; padding-right: 20px; border-right: 1px solid #eee;">
+                <h4>"Pages"</h4>
+                <ul>
+                    <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                        {move || wiki_pages.get().map(|list| view! {
+                            <For each=move || list.clone() key=|p| p.title.clone() children=move |p| {
+                                let href = format!("/repos/{}/{}/wiki/pages/{}", owner(), repo_name(), p.title);
+                                view! { <li><a href=href>{p.title}</a></li> }
+                            }/>
+                        })}
+                    </Suspense>
+                </ul>
+            </div>
+            <div class="wiki-view" style="flex: 1; padding-left: 20px;">
+                <Suspense fallback=move || view! { <p>"Loading wiki..."</p> }>
+                    {move || match wiki_page.get() {
+                        Some(Some(page)) => {
+                            let title = page.title.clone();
+                            view! {
+                                <div class="wiki-header">
+                                    <h3>{page.title}</h3>
+                                    <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), title) class="btn">"Edit"</a>
+                                </div>
+                                <div class="wiki-content">
+                                    <pre>{page.content}</pre>
+                                </div>
+                            }.into_view()
+                        },
+                        _ => {
+                            let p = page_name();
+                            view! {
+                                <div>
+                                    <p>"Wiki page '" {p.clone()} "' not found."</p>
+                                    <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), p)>
+                                        "Create " {p} " Page"
+                                    </a>
+                                </div>
+                            }.into_view()
+                        }
+                    }}
+                </Suspense>
+            </div>
         </div>
     }
 }
@@ -1429,74 +2059,7 @@ pub fn WikiEdit() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn ProjectList() -> impl IntoView {
-    let params = use_params_map();
-    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
-    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
-    let projects = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects", o, r))
-                .send().await.unwrap().json::<Vec<Project>>().await.unwrap_or_default()
-        }
-    );
-
-    view! {
-        <div class="project-list">
-            <h3>"Projects"</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading projects..."</li> }>
-                    {move || projects.get().map(|list| view! {
-                        <For each=move || list.clone() key=|p| p.id children=move |p| {
-                            view! {
-                                <li>
-                                    <strong>{p.title}</strong>
-                                    <p>{p.description.unwrap_or_default()}</p>
-                                </li>
-                            }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
-        </div>
-    }
-}
-
-#[component]
-pub fn ActionsList() -> impl IntoView {
-    let params = use_params_map();
-    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
-    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-
-    let actions = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows", o, r))
-                .send().await.unwrap().json::<Vec<ActionWorkflow>>().await.unwrap_or_default()
-        }
-    );
-
-    view! {
-        <div class="actions-list">
-            <h3>"Actions Workflows"</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading workflows..."</li> }>
-                    {move || actions.get().map(|list| view! {
-                        <For each=move || list.clone() key=|w| w.id children=move |w| {
-                            view! {
-                                <li>
-                                    <strong>{w.name}</strong> " - " {w.status}
-                                </li>
-                            }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
-        </div>
-    }
-}
 
 #[component]
 pub fn RepoCodeSearch() -> impl IntoView {

@@ -33,6 +33,12 @@ impl Repository {
 pub struct IssueFilterOptions {
     pub state: Option<String>, // "open", "closed", "all"
     pub q: Option<String>,     // search query
+    pub label_id: Option<u64>,
+    pub assignee_username: Option<String>,
+    pub page: Option<u64>,
+    pub limit: Option<u64>,
+    pub sort: Option<String>, // "created", "updated", "comments"
+    pub direction: Option<String>, // "asc", "desc"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -111,6 +117,14 @@ pub struct CreateIssueOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateIssueOption {
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub state: Option<String>, // "open" or "closed"
+    pub milestone_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PullRequest {
     pub id: u64,
     pub repo_id: u64,
@@ -128,6 +142,13 @@ pub struct CreatePullRequestOption {
     pub body: Option<String>,
     pub head: String,
     pub base: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdatePullRequestOption {
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -199,16 +220,40 @@ pub struct Organization {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateOrgOption {
+    pub username: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateTeamOption {
+    pub name: String,
+    pub description: Option<String>,
+    pub permission: String, // "read", "write", "admin"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AddTeamMemberOption {
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Comment {
     pub id: u64,
     pub issue_id: u64,
     pub body: String,
     pub user: User,
     pub created_at: String,
+    pub reactions: Vec<Reaction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CreateCommentOption {
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateCommentOption {
     pub body: String,
 }
 
@@ -338,6 +383,17 @@ pub struct CreateHookOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WebhookDelivery {
+    pub id: u64,
+    pub hook_id: u64,
+    pub event: String,
+    pub status: String, // "success", "failed"
+    pub request_url: String,
+    pub response_status: u16,
+    pub delivered_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Team {
     pub id: u64,
     pub org_name: String,
@@ -353,6 +409,48 @@ pub struct Project {
     pub title: String,
     pub description: Option<String>,
     pub is_closed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateProjectOption {
+    pub title: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProjectColumn {
+    pub id: u64,
+    pub project_id: u64,
+    pub title: String,
+    pub ordering: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateProjectColumnOption {
+    pub title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ProjectCard {
+    pub id: u64,
+    pub column_id: u64,
+    pub content: Option<String>,
+    pub note: Option<String>,
+    pub issue_id: Option<u64>, // Linked issue
+    pub ordering: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateProjectCardOption {
+    pub content: Option<String>,
+    pub note: Option<String>,
+    pub issue_id: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MoveProjectCardOption {
+    pub column_id: u64,
+    pub new_index: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -411,12 +509,33 @@ pub struct ActionWorkflow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateWorkflowRunOption {
+    pub workflow_id: u64,
+    pub ref_name: String, // branch or tag
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkflowRun {
+    pub id: u64,
+    pub workflow_id: u64,
+    pub status: String, // "queued", "in_progress", "success", "failure"
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Package {
     pub id: u64,
     pub owner: String,
     pub name: String,
     pub version: String,
     pub package_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreatePackageOption {
+    pub name: String,
+    pub version: String,
+    pub package_type: String, // "npm", "maven", "cargo", etc.
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -532,6 +651,22 @@ pub struct ReviewRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Review {
+    pub id: u64,
+    pub pull_request_id: u64,
+    pub user: User,
+    pub body: String,
+    pub state: String, // "APPROVED", "CHANGES_REQUESTED", "COMMENTED", "PENDING"
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateReviewOption {
+    pub body: String,
+    pub event: String, // "APPROVE", "REQUEST_CHANGES", "COMMENT"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AdminUserEditOption {
     pub email: Option<String>,
     pub password: Option<String>,
@@ -548,6 +683,13 @@ pub struct LanguageStat {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProtectedBranch {
+    pub name: String,
+    pub enable_push: bool,
+    pub enable_force_push: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateProtectedBranchOption {
     pub name: String,
     pub enable_push: bool,
     pub enable_force_push: bool,
@@ -827,6 +969,7 @@ mod tests {
             body: "text".to_string(),
             user,
             created_at: "date".to_string(),
+            reactions: vec![],
         };
         assert_eq!(comment.body, "text");
 
@@ -963,6 +1106,14 @@ mod tests {
             body: Some("Description".to_string()),
         };
         assert_eq!(opts.title, "New Bug");
+
+        let update = UpdateIssueOption {
+            title: Some("Updated".to_string()),
+            body: None,
+            state: Some("closed".to_string()),
+            milestone_id: None,
+        };
+        assert_eq!(update.title, Some("Updated".to_string()));
     }
 
     #[test]
