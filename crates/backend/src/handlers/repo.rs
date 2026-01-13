@@ -5,7 +5,7 @@ use axum::{
 };
 use shared::{
     CreateRepoOption, Repository, CreateIssueOption, Issue, CreatePullRequestOption, PullRequest,
-    CreateReleaseOption, Release, CreateCommentOption, Comment, CreateLabelOption, Label,
+    CreateCommentOption, Comment, CreateLabelOption, Label,
     CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSearchOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic,
@@ -347,46 +347,6 @@ pub async fn update_pull(
     (StatusCode::NOT_FOUND, Json(None))
 }
 
-pub async fn list_releases(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Release>> {
-    let repos = state.repos.read().unwrap();
-    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
-
-    let releases = state.releases.read().unwrap();
-    let filtered_releases: Vec<Release> = releases.iter().filter(|r| r.repo_id == repo_id).cloned().collect();
-    Json(filtered_releases)
-}
-
-pub async fn create_release(
-    State(state): State<AppState>,
-    Path((owner, repo_name)): Path<(String, String)>,
-    Json(payload): Json<CreateReleaseOption>
-) -> (StatusCode, Json<Release>) {
-    let repos = state.repos.read().unwrap();
-    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
-
-    if repo.is_none() {
-         return (StatusCode::NOT_FOUND, Json(Release {
-            id: 0, repo_id: 0, tag_name: "".to_string(), name: "".to_string(), body: None, draft: false, prerelease: false, created_at: "".to_string(), author: User::new(0, "".to_string(), None)
-        }));
-    }
-    let repo_id = repo.unwrap().id;
-
-    let mut releases = state.releases.write().unwrap();
-    let id = (releases.len() as u64) + 1;
-    let release = Release {
-        id,
-        repo_id,
-        tag_name: payload.tag_name,
-        name: payload.name,
-        body: payload.body,
-        draft: payload.draft,
-        prerelease: payload.prerelease,
-        created_at: "2023-01-02".to_string(),
-        author: User::new(1, "admin".to_string(), None),
-    };
-    releases.push(release.clone());
-    (StatusCode::CREATED, Json(release))
-}
 
 pub async fn list_comments(State(state): State<AppState>, Path((owner, repo_name, index)): Path<(String, String, u64)>) -> Json<Vec<Comment>> {
     let repos = state.repos.read().unwrap();
