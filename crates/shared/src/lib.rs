@@ -383,6 +383,17 @@ pub struct CreateHookOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WebhookDelivery {
+    pub id: u64,
+    pub hook_id: u64,
+    pub event: String,
+    pub status: String, // "success", "failed"
+    pub request_url: String,
+    pub response_status: u16,
+    pub delivered_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Team {
     pub id: u64,
     pub org_name: String,

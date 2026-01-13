@@ -864,4 +864,67 @@ mod tests {
         assert_eq!(teams.len(), 1);
         assert_eq!(teams[0].name, "Devs");
     }
+
+    #[tokio::test]
+    async fn test_webhook_delivery_flow() {
+        let app = api_router();
+
+        // 1. Create Webhook
+        let hook_payload = shared::CreateHookOption {
+            url: "http://example.com/webhook".to_string(),
+            events: vec!["issues".to_string()],
+            active: true,
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/hooks")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&hook_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let hook: shared::Webhook = serde_json::from_slice(&body).unwrap();
+        let hook_id = hook.id;
+
+        // 2. Trigger Event (Create Issue)
+        let issue_payload = CreateIssueOption {
+            title: "Webhook Test Issue".to_string(),
+            body: None,
+        };
+        let _ = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&issue_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // 3. Verify Delivery
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&format!("/api/v1/repos/admin/codeza/hooks/{}/deliveries", hook_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let deliveries: Vec<shared::WebhookDelivery> = serde_json::from_slice(&body).unwrap();
+
+        // Should have 1 delivery for "issues" event
+        assert!(deliveries.iter().any(|d| d.event == "issues" && d.status == "success"));
+    }
 }

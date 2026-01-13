@@ -8,7 +8,7 @@ use shared::{
     CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
-    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption
+    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery
 };
 
 #[component]
@@ -1499,7 +1499,42 @@ pub fn WebhookList() -> impl IntoView {
                 <Suspense fallback=move || view! { <li>"Loading..."</li> }>
                     {move || hooks.get().map(|list| view! {
                         <For each=move || list.clone() key=|h| h.id children=move |h| {
-                            view! { <li>{h.url} " (" {if h.active { "Active" } else { "Inactive" }} ")"</li> }
+                            let hook_id = h.id;
+                            let o = owner();
+                            let r = repo_name();
+                            let deliveries = create_resource(
+                                move || (o.clone(), r.clone(), hook_id),
+                                |(o, r, id)| async move {
+                                    Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/hooks/{}/deliveries", o, r, id))
+                                        .send().await.unwrap().json::<Vec<WebhookDelivery>>().await.unwrap_or_default()
+                                }
+                            );
+
+                            view! {
+                                <li style="margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                                    <div>
+                                        {h.url} " (" {if h.active { "Active" } else { "Inactive" }} ")"
+                                    </div>
+                                    <div class="deliveries" style="margin-left: 20px; font-size: 0.8em; color: #666;">
+                                        <strong>"Recent Deliveries:"</strong>
+                                        <Suspense fallback=move || view! { <span>"..."</span> }>
+                                            {move || deliveries.get().map(|list| {
+                                                if list.is_empty() {
+                                                    view! { <div>"No deliveries yet"</div> }.into_view()
+                                                } else {
+                                                    view! {
+                                                        <ul style="margin: 0; padding-left: 15px;">
+                                                            <For each=move || list.clone() key=|d| d.id children=move |d| {
+                                                                view! { <li>{d.delivered_at} " - " {d.event} " - " {d.status} " (" {d.response_status} ")"</li> }
+                                                            }/>
+                                                        </ul>
+                                                    }.into_view()
+                                                }
+                                            })}
+                                        </Suspense>
+                                    </div>
+                                </li>
+                            }
                         }/>
                     })}
                 </Suspense>

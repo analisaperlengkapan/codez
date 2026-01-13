@@ -11,7 +11,7 @@ use shared::{
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
-    Review, CreateReviewOption
+    Review, CreateReviewOption, WebhookDelivery
 };
 use crate::router::AppState;
 
@@ -197,6 +197,9 @@ pub async fn create_issue(
         updated_at: "now".to_string(),
     });
 
+    // Trigger Webhooks
+    dispatch_hooks(&state, repo_id, "issues");
+
     (StatusCode::CREATED, Json(issue))
 }
 
@@ -307,6 +310,9 @@ pub async fn create_pull(
         unread: true,
         updated_at: "now".to_string(),
     });
+
+    // Trigger Webhooks
+    dispatch_hooks(&state, repo_id, "pull_request");
 
     (StatusCode::CREATED, Json(pr))
 }
@@ -575,6 +581,41 @@ pub async fn create_hook(
     };
     hooks.push(hook.clone());
     (StatusCode::CREATED, Json(hook))
+}
+
+pub async fn list_hook_deliveries(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> Json<Vec<WebhookDelivery>> {
+    let deliveries = state.webhook_deliveries.read().unwrap();
+    let filtered: Vec<WebhookDelivery> = deliveries.iter().filter(|d| d.hook_id == id).cloned().collect();
+    Json(filtered)
+}
+
+fn dispatch_hooks(state: &AppState, repo_id: u64, event: &str) {
+    let hooks = state.hooks.read().unwrap();
+    let relevant_hooks: Vec<Webhook> = hooks.iter()
+        .filter(|h| h.repo_id == repo_id && h.active && h.events.contains(&event.to_string()))
+        .cloned()
+        .collect();
+
+    if relevant_hooks.is_empty() {
+        return;
+    }
+
+    let mut deliveries = state.webhook_deliveries.write().unwrap();
+    for hook in relevant_hooks {
+        let delivery_id = (deliveries.len() as u64) + 1;
+        deliveries.push(WebhookDelivery {
+            id: delivery_id,
+            hook_id: hook.id,
+            event: event.to_string(),
+            status: "success".to_string(), // Mock success
+            request_url: hook.url.clone(),
+            response_status: 200,
+            delivered_at: "now".to_string(),
+        });
+    }
 }
 
 pub async fn create_secret(
@@ -1166,6 +1207,9 @@ pub async fn update_file(
         content: format!("updated file {} in {}/{}", path, owner, repo),
         created: "now".to_string(),
     });
+
+    // Trigger Webhooks
+    dispatch_hooks(&state, repo_id, "push");
 
     (StatusCode::OK, Json(FileEntry {
         name: "updated_file".to_string(),
