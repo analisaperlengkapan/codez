@@ -62,7 +62,9 @@ pub async fn create_release(
     let repo_id = repo.unwrap().id;
 
     let mut releases = state.releases.write().unwrap();
-    let id = (releases.len() as u64) + 1;
+    // Generate safe ID
+    let id = releases.iter().map(|r| r.id).max().unwrap_or(0) + 1;
+
     let release = Release {
         id,
         repo_id,
@@ -134,11 +136,28 @@ pub async fn upload_release_asset(
             id: asset_id,
             name: format!("asset-{}.zip", asset_id),
             size: 1024,
-            download_url: format!("http://127.0.0.1:3000/download/releases/{}/{}", id, asset_id),
+            download_url: format!("/api/v1/repos/{}/{}/releases/{}/assets/{}", owner, repo_name, id, asset_id),
             created_at: "now".to_string(),
         };
         r.assets.push(asset.clone());
         return (StatusCode::CREATED, Json(Some(asset)));
     }
     (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn download_release_asset(
+    State(state): State<AppState>,
+    Path((owner, repo_name, id, asset_id)): Path<(String, String, u64, u64)>
+) -> (StatusCode, String) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let releases = state.releases.read().unwrap();
+    if let Some(release) = releases.iter().find(|r| r.repo_id == repo_id && r.id == id) {
+        if let Some(asset) = release.assets.iter().find(|a| a.id == asset_id) {
+            // Mock file content download
+            return (StatusCode::OK, format!("Content of asset {} ({})", asset.name, asset_id));
+        }
+    }
+    (StatusCode::NOT_FOUND, "Asset not found".to_string())
 }

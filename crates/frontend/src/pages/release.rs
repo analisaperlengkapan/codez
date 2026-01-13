@@ -12,7 +12,7 @@ pub fn ReleaseList() -> impl IntoView {
     let releases = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/releases", o, r))
+            Request::get(&format!("/api/v1/repos/{}/{}/releases", o, r))
                 .send().await.unwrap().json::<Vec<Release>>().await.unwrap_or_default()
         }
     );
@@ -74,7 +74,7 @@ pub fn ReleaseDetail() -> impl IntoView {
     let release = create_resource(
         move || (owner(), repo_name(), id(), trigger.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/releases/{}", o, r, i))
+            Request::get(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
                 .send().await.unwrap().json::<Option<Release>>().await.unwrap_or(None)
         }
     );
@@ -84,7 +84,7 @@ pub fn ReleaseDetail() -> impl IntoView {
          let r = repo_name();
          let i = id();
          spawn_local(async move {
-            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/releases/{}/assets", o, r, i))
+            let _ = Request::post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i))
                 .send().await;
             set_trigger.update(|n| *n += 1);
          });
@@ -95,7 +95,7 @@ pub fn ReleaseDetail() -> impl IntoView {
          let r = repo_name();
          let i = id();
          spawn_local(async move {
-            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/releases/{}", o, r, i))
+            let _ = Request::delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
                 .send().await;
             // Redirect to list would be good here, simplistic mock for now
             let window = web_sys::window().unwrap();
@@ -170,7 +170,7 @@ pub fn ReleaseCreate() -> impl IntoView {
         let r = repo_name();
 
         spawn_local(async move {
-            let res = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/releases", o, r))
+            let res = Request::post(&format!("/api/v1/repos/{}/{}/releases", o, r))
                 .json(&payload).unwrap().send().await;
 
             if res.is_ok() {

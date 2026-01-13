@@ -228,6 +228,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/releases", get(list_releases).post(create_release))
         .route("/api/v1/repos/:owner/:repo/releases/:id", get(get_release).patch(update_release).delete(delete_release))
         .route("/api/v1/repos/:owner/:repo/releases/:id/assets", post(upload_release_asset))
+        .route("/api/v1/repos/:owner/:repo/releases/:id/assets/:asset_id", get(download_release_asset))
         .route("/api/v1/users/login", post(login_user))
         .route("/api/v1/users/register", post(register_user))
         .route("/api/v1/orgs", post(create_org))
