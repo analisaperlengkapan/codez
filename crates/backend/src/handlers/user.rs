@@ -1,12 +1,12 @@
 use axum::{
-    extract::{Json, Path, State},
+    extract::{Json, Path, State, Query},
     http::StatusCode,
     response::IntoResponse,
 };
 use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
     GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application, Package, TwoFactor, OAuth2Provider,
-    Contribution
+    Contribution, Issue, PullRequest, IssueFilterOptions
 };
 use crate::router::AppState;
 
@@ -241,4 +241,48 @@ pub async fn get_user_heatmap(Path(_username): Path<String>) -> Json<Vec<Contrib
         Contribution { date: "2023-01-01".to_string(), count: 5 },
         Contribution { date: "2023-01-02".to_string(), count: 2 },
     ].into()
+}
+
+pub async fn list_user_issues(
+    State(state): State<AppState>,
+    Query(filter): Query<IssueFilterOptions>
+) -> Json<Vec<Issue>> {
+    // Mock user ID for current user is 1 (admin)
+    let current_user_id = 1;
+    let issues = state.issues.read().unwrap();
+
+    let mut filtered_issues: Vec<Issue> = issues.iter()
+        .filter(|i| i.assignees.iter().any(|u| u.id == current_user_id))
+        .cloned()
+        .collect();
+
+    if let Some(state_filter) = filter.state {
+        if state_filter != "all" {
+             filtered_issues.retain(|i| i.state == state_filter);
+        }
+    }
+
+    Json(filtered_issues)
+}
+
+pub async fn list_user_pulls(
+    State(state): State<AppState>,
+    Query(filter): Query<IssueFilterOptions> // Reusing IssueFilterOptions as it has 'state'
+) -> Json<Vec<PullRequest>> {
+    // Mock user ID for current user is 1 (admin)
+    let current_user_id = 1;
+    let pulls = state.pulls.read().unwrap();
+
+    let mut filtered_pulls: Vec<PullRequest> = pulls.iter()
+        .filter(|p| p.user.id == current_user_id)
+        .cloned()
+        .collect();
+
+    if let Some(state_filter) = filter.state {
+        if state_filter != "all" {
+             filtered_pulls.retain(|p| p.state == state_filter);
+        }
+    }
+
+    Json(filtered_pulls)
 }

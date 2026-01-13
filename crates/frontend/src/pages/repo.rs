@@ -409,6 +409,17 @@ pub fn IssueDetail() -> impl IntoView {
         });
     };
 
+    let on_add_reaction = move |comment_id: u64, content: String| {
+        let o = owner();
+        let r = repo_name();
+        let payload = shared::CreateReactionOption { content };
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/comments/{}/reactions", o, r, comment_id))
+                .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
     let on_start_edit_comment = move |comment_id: u64, current_body: String| {
         set_editing_comment_id.set(Some(comment_id));
         set_edit_comment_body.set(current_body);
@@ -719,6 +730,23 @@ pub fn IssueDetail() -> impl IntoView {
                                         } else {
                                             view! { <p>{c.body.clone()}</p> }.into_view()
                                         }}
+                                    </div>
+                                    <div class="comment-reactions" style="margin-top: 5px;">
+                                        <div class="reactions-list" style="display: flex; gap: 5px; margin-bottom: 5px;">
+                                            <For each=move || c.reactions.clone() key=|r| r.id children=move |r| {
+                                                view! { <span title={r.user.username} style="border: 1px solid #ddd; padding: 2px 5px; border-radius: 10px;">{r.content}</span> }
+                                            }/>
+                                        </div>
+                                        <div class="reaction-picker">
+                                            <button on:click=move |_| on_add_reaction(comment_id, "👍".to_string()) title="+1">"👍"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "👎".to_string()) title="-1">"👎"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "😄".to_string()) title="laugh">"😄"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "😕".to_string()) title="confused">"😕"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "❤️".to_string()) title="heart">"❤️"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "🎉".to_string()) title="hooray">"🎉"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "👀".to_string()) title="eyes">"👀"</button>
+                                            <button on:click=move |_| on_add_reaction(comment_id, "🚀".to_string()) title="rocket">"🚀"</button>
+                                        </div>
                                     </div>
                                 </div>
                             }

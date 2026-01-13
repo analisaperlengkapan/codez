@@ -226,6 +226,7 @@ pub struct Comment {
     pub body: String,
     pub user: User,
     pub created_at: String,
+    pub reactions: Vec<Reaction>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -853,6 +854,7 @@ mod tests {
             body: "text".to_string(),
             user,
             created_at: "date".to_string(),
+            reactions: vec![],
         };
         assert_eq!(comment.body, "text");
 

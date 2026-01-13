@@ -403,7 +403,7 @@ pub async fn create_comment(
 
     if repo.is_none() {
          return (StatusCode::NOT_FOUND, Json(Comment {
-            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string(), reactions: vec![]
         }));
     }
     let repo_id = repo.unwrap().id;
@@ -413,7 +413,7 @@ pub async fn create_comment(
 
     if issue.is_none() {
          return (StatusCode::NOT_FOUND, Json(Comment {
-            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string(), reactions: vec![]
         }));
     }
     let issue_id = issue.unwrap().id;
@@ -426,6 +426,7 @@ pub async fn create_comment(
         body: payload.body,
         user: User::new(1, "admin".to_string(), None),
         created_at: "2023-01-02".to_string(),
+        reactions: vec![],
     };
     comments.push(comment.clone());
     (StatusCode::CREATED, Json(comment))
@@ -686,17 +687,25 @@ pub async fn create_lfs_lock(
 }
 
 pub async fn add_reaction(
-    Path((_owner, _repo, _id)): Path<(String, String, u64)>,
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
     Json(payload): Json<CreateReactionOption>
 ) -> (StatusCode, Json<Reaction>) {
-    let user = User::new(1, "admin".to_string(), None);
-    let reaction = Reaction {
-        id: 1,
-        user,
-        content: payload.content,
-        created_at: "now".to_string(),
-    };
-    (StatusCode::CREATED, Json(reaction))
+    let mut comments = state.comments.write().unwrap();
+    if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
+        let user = User::new(1, "admin".to_string(), None);
+        let reaction_id = (comment.reactions.len() as u64) + 1;
+        let reaction = Reaction {
+            id: reaction_id,
+            user,
+            content: payload.content,
+            created_at: "now".to_string(),
+        };
+        comment.reactions.push(reaction.clone());
+        (StatusCode::CREATED, Json(reaction))
+    } else {
+        (StatusCode::NOT_FOUND, Json(Reaction { id: 0, user: User::new(0, "".to_string(), None), content: "".to_string(), created_at: "".to_string() }))
+    }
 }
 
 pub async fn update_topics(

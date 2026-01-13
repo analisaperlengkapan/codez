@@ -107,6 +107,7 @@ pub fn api_router() -> Router {
                 body: "Great idea!".to_string(),
                 user: user.clone(),
                 created_at: "2023-01-01".to_string(),
+                reactions: vec![],
             }
         ])),
         notifications: Arc::new(RwLock::new(vec![
@@ -191,6 +192,8 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/issues", get(list_issues).post(create_issue))
         .route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls).post(create_pull))
         .route("/api/v1/repos/:owner/:repo/pulls/:index", patch(update_pull))
+        .route("/api/v1/user/issues", get(list_user_issues))
+        .route("/api/v1/user/pulls", get(list_user_pulls))
         .route("/api/v1/repos/:owner/:repo/contents/*path", get(get_contents).put(update_file))
         .route("/api/v1/repos/:owner/:repo/contents", get(get_root_contents))
         .route("/api/v1/repos/:owner/:repo/commits", get(list_commits))
@@ -207,6 +210,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))
         .route("/api/v1/repos/:owner/:repo/milestones/:id", get(get_milestone))
         .route("/api/v1/repos/:owner/:repo/topics", get(list_topics).put(update_topics))
+        .route("/api/v1/repos/:owner/:repo/issues/comments/:id/reactions", post(add_reaction))
         .route("/api/v1/repos/:owner/:repo/star", post(star_repo))
         .route("/api/v1/repos/:owner/:repo/watch", post(watch_repo))
         .route("/api/v1/repos/:owner/:repo/fork", post(fork_repo))
@@ -235,7 +239,6 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/tags", get(list_tags))
         .route("/api/v1/repos/:owner/:repo/media", post(upload_media))
         .route("/api/v1/user/oauth2", get(list_oauth2_providers))
-        .route("/api/v1/repos/:owner/:repo/issues/comments/:id/reactions", post(add_reaction))
         .route("/api/v1/repos/:owner/:repo/commits/:sha/diff", get(get_commit_diff))
         .route("/api/v1/repos/:owner/:repo/raw/*path", get(get_raw_file))
         .route("/api/v1/users/:username/followers", get(list_followers))
