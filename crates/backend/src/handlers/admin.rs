@@ -116,6 +116,20 @@ pub async fn admin_list_users(State(state): State<AppState>) -> Json<Vec<User>> 
     Json(users.clone())
 }
 
+pub async fn admin_create_user(
+    State(state): State<AppState>,
+    Json(payload): Json<shared::RegisterOption>
+) -> (StatusCode, Json<User>) {
+    let mut users = state.users.write().unwrap();
+    if users.iter().any(|u| u.username == payload.username || u.email == Some(payload.email.clone())) {
+        return (StatusCode::CONFLICT, Json(User::new(0, "".to_string(), None)));
+    }
+    let id = (users.len() as u64) + 1;
+    let user = User::new(id, payload.username, Some(payload.email));
+    users.push(user.clone());
+    (StatusCode::CREATED, Json(user))
+}
+
 pub async fn admin_edit_user(
     State(state): State<AppState>,
     Path(username): Path<String>,

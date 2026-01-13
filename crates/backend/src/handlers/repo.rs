@@ -947,6 +947,22 @@ pub async fn remove_issue_label(
     }
 }
 
+pub async fn list_wiki_pages(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<WikiPage>> {
+    let pages = vec![
+        WikiPage {
+            title: "Home".to_string(),
+            content: "Welcome to the wiki!".to_string(),
+            commit_message: None,
+        },
+        WikiPage {
+            title: "Installation".to_string(),
+            content: "How to install...".to_string(),
+            commit_message: None,
+        }
+    ];
+    Json(pages)
+}
+
 pub async fn update_wiki_page(
     Path((_owner, _repo, _page_name)): Path<(String, String, String)>,
     Json(_payload): Json<CreateWikiPageOption>
@@ -959,6 +975,12 @@ pub async fn get_wiki_page(Path((_owner, _repo, page_name)): Path<(String, Strin
         Json(Some(WikiPage {
             title: "Home".to_string(),
             content: "Welcome to the wiki!".to_string(),
+            commit_message: None,
+        }))
+    } else if page_name == "Installation" {
+        Json(Some(WikiPage {
+            title: "Installation".to_string(),
+            content: "How to install...".to_string(),
             commit_message: None,
         }))
     } else {
@@ -1106,8 +1128,14 @@ pub async fn upload_media(Path((_owner, _repo)): Path<(String, String)>) -> (Sta
     (StatusCode::CREATED, Json(lfs))
 }
 
-pub async fn get_milestone_stats(Path((_owner, _repo, _id)): Path<(String, String, u64)>) -> Json<MilestoneStats> {
-    Json(MilestoneStats { open_issues: 10, closed_issues: 5 })
+pub async fn get_milestone_stats(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> Json<MilestoneStats> {
+    let issues = state.issues.read().unwrap();
+    let open_count = issues.iter().filter(|i| i.milestone.as_ref().map(|m| m.id).unwrap_or(0) == id && i.state == "open").count() as u64;
+    let closed_count = issues.iter().filter(|i| i.milestone.as_ref().map(|m| m.id).unwrap_or(0) == id && i.state == "closed").count() as u64;
+    Json(MilestoneStats { open_issues: open_count, closed_issues: closed_count })
 }
 
 pub async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<DiffFile>> {

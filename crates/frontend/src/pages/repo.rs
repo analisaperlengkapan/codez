@@ -1917,13 +1917,22 @@ pub fn MilestoneDetail() -> impl IntoView {
                 }}
             </Suspense>
              <Suspense fallback=move || view! { <p>"Loading stats..."</p> }>
-                {move || stats.get().map(|s| view! {
+                {move || stats.get().map(|s| {
+                    let total = s.open_issues + s.closed_issues;
+                    let percentage = if total > 0 { (s.closed_issues as f64 / total as f64 * 100.0) as u64 } else { 0 };
+
+                    view! {
                     <div class="stats">
-                        <span>"Open Issues: " {s.open_issues}</span>
-                        " | "
-                        <span>"Closed Issues: " {s.closed_issues}</span>
+                        <div class="progress-bar" style="width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; margin-bottom: 10px;">
+                            <div style=format!("width: {}%; height: 100%; background: #2cbe4e;", percentage)></div>
+                        </div>
+                        <div>
+                            <strong>{percentage} "% complete"</strong>
+                            <span style="margin-left: 10px;">{s.open_issues} " Open"</span>
+                            <span style="margin-left: 10px;">{s.closed_issues} " Closed"</span>
+                        </div>
                     </div>
-                })}
+                }})}
             </Suspense>
         </div>
     }
@@ -1944,35 +1953,58 @@ pub fn Wiki() -> impl IntoView {
         }
     );
 
+    let wiki_pages = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/wiki/pages", o, r))
+                .send().await.unwrap().json::<Vec<WikiPage>>().await.unwrap_or_default()
+        }
+    );
+
     view! {
-        <div class="wiki-view">
-            <Suspense fallback=move || view! { <p>"Loading wiki..."</p> }>
-                {move || match wiki_page.get() {
-                    Some(Some(page)) => {
-                        let title = page.title.clone();
-                        view! {
-                            <div class="wiki-header">
-                                <h3>{page.title}</h3>
-                                <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), title) class="btn">"Edit"</a>
-                            </div>
-                            <div class="wiki-content">
-                                <pre>{page.content}</pre>
-                            </div>
-                        }.into_view()
-                    },
-                    _ => {
-                        let p = page_name();
-                        view! {
-                            <div>
-                                <p>"Wiki page '" {p.clone()} "' not found."</p>
-                                <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), p)>
-                                    "Create " {p} " Page"
-                                </a>
-                            </div>
-                        }.into_view()
-                    }
-                }}
-            </Suspense>
+        <div class="wiki-container" style="display: flex;">
+            <div class="wiki-sidebar" style="width: 200px; padding-right: 20px; border-right: 1px solid #eee;">
+                <h4>"Pages"</h4>
+                <ul>
+                    <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                        {move || wiki_pages.get().map(|list| view! {
+                            <For each=move || list.clone() key=|p| p.title.clone() children=move |p| {
+                                let href = format!("/repos/{}/{}/wiki/pages/{}", owner(), repo_name(), p.title);
+                                view! { <li><a href=href>{p.title}</a></li> }
+                            }/>
+                        })}
+                    </Suspense>
+                </ul>
+            </div>
+            <div class="wiki-view" style="flex: 1; padding-left: 20px;">
+                <Suspense fallback=move || view! { <p>"Loading wiki..."</p> }>
+                    {move || match wiki_page.get() {
+                        Some(Some(page)) => {
+                            let title = page.title.clone();
+                            view! {
+                                <div class="wiki-header">
+                                    <h3>{page.title}</h3>
+                                    <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), title) class="btn">"Edit"</a>
+                                </div>
+                                <div class="wiki-content">
+                                    <pre>{page.content}</pre>
+                                </div>
+                            }.into_view()
+                        },
+                        _ => {
+                            let p = page_name();
+                            view! {
+                                <div>
+                                    <p>"Wiki page '" {p.clone()} "' not found."</p>
+                                    <a href=format!("/repos/{}/{}/wiki/pages/{}/edit", owner(), repo_name(), p)>
+                                        "Create " {p} " Page"
+                                    </a>
+                                </div>
+                            }.into_view()
+                        }
+                    }}
+                </Suspense>
+            </div>
         </div>
     }
 }
