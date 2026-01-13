@@ -2,7 +2,7 @@ use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
 use shared::{
-    Repository, CreateRepoOption, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
+    Repository, CreateRepoOption, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption,
     CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
