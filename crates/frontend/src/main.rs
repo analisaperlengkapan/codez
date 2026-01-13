@@ -30,6 +30,7 @@ fn App() -> impl IntoView {
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
                     <Route path="/repo/migrate" view=MigrateRepo/>
+                    <Route path="/org/create" view=CreateOrg/>
                     <Route path="/users/:username" view=UserProfile/>
                     <Route path="/users/:username/followers" view=UserFollowers/>
                     <Route path="/users/:username/following" view=UserFollowing/>
@@ -41,6 +42,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/pulls" view=PullRequestList/>
                     <Route path="/repos/:owner/:repo/pulls/:index" view=PullRequestDetail/>
                     <Route path="/repos/:owner/:repo/actions" view=ActionsList/>
+                    <Route path="/repos/:owner/:repo/actions/workflows/:id" view=WorkflowRunsList/>
                     <Route path="/repos/:owner/:repo/branches" view=BranchList/>
                     <Route path="/repos/:owner/:repo/tags" view=TagList/>
                     <Route path="/repos/:owner/:repo/src/*path" view=RepoCode/>
@@ -51,6 +53,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/milestones" view=MilestoneList/>
                     <Route path="/repos/:owner/:repo/milestones/:index" view=MilestoneDetail/>
                     <Route path="/repos/:owner/:repo/projects" view=ProjectList/>
+                    <Route path="/repos/:owner/:repo/projects/:id" view=ProjectDetail/>
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
                     <Route path="/repos/:owner/:repo/wiki/pages/:page_name" view=Wiki/>
                     <Route path="/repos/:owner/:repo/wiki/pages/:page_name/edit" view=WikiEdit/>

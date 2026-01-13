@@ -8,9 +8,10 @@ use shared::{
     CreateReleaseOption, Release, CreateCommentOption, Comment, CreateLabelOption, Label,
     CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSearchOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
-    MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
+    MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions
+    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
+    Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch
 };
 use crate::router::AppState;
 
@@ -89,8 +90,56 @@ pub async fn list_issues(State(state): State<AppState>, Path((owner, repo_name))
         let q_lower = q.to_lowercase();
         filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
     }
+    if let Some(label_id) = filter.label_id {
+        filtered_issues.retain(|i| i.labels.iter().any(|l| l.id == label_id));
+    }
+    if let Some(assignee) = filter.assignee_username {
+        filtered_issues.retain(|i| i.assignees.iter().any(|u| u.username == assignee));
+    }
 
-    Json(filtered_issues)
+    // Sort issues
+    if let Some(sort) = &filter.sort {
+        let direction = filter.direction.clone().unwrap_or("desc".to_string());
+        match sort.as_str() {
+            "created" => {
+                // Mock sorting by ID since created_at is not in Issue struct, assume ID correlates with creation
+                if direction == "asc" {
+                    filtered_issues.sort_by(|a, b| a.id.cmp(&b.id));
+                } else {
+                    filtered_issues.sort_by(|a, b| b.id.cmp(&a.id));
+                }
+            },
+            "updated" => {
+                // Mock sorting by ID as proxy for updated
+                if direction == "asc" {
+                    filtered_issues.sort_by(|a, b| a.id.cmp(&b.id));
+                } else {
+                    filtered_issues.sort_by(|a, b| b.id.cmp(&a.id));
+                }
+            },
+            "comments" => {
+                // Mock sorting by ID as proxy, real impl would join comments count
+                if direction == "asc" {
+                    filtered_issues.sort_by(|a, b| a.id.cmp(&b.id));
+                } else {
+                    filtered_issues.sort_by(|a, b| b.id.cmp(&a.id));
+                }
+            },
+            _ => {}
+        }
+    }
+
+    // Pagination
+    let page = filter.page.unwrap_or(1);
+    let limit = filter.limit.unwrap_or(10);
+    let start = ((page - 1) * limit) as usize;
+    let end = (start + limit as usize).min(filtered_issues.len());
+
+    if start >= filtered_issues.len() {
+        Json(vec![])
+    } else {
+        Json(filtered_issues[start..end].to_vec())
+    }
 }
 
 pub async fn create_issue(
@@ -148,6 +197,9 @@ pub async fn create_issue(
         updated_at: "now".to_string(),
     });
 
+    // Trigger Webhooks
+    dispatch_hooks(&state, repo_id, "issues");
+
     (StatusCode::CREATED, Json(issue))
 }
 
@@ -155,6 +207,47 @@ pub async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index
     let issues = state.issues.read().unwrap();
     let issue = issues.iter().find(|i| i.id == index).cloned();
     Json(issue)
+}
+
+pub async fn update_issue(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateIssueOption>
+) -> (StatusCode, Json<Option<Issue>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(None));
+    }
+
+    let mut issues = state.issues.write().unwrap();
+    let issue = issues.iter_mut().find(|i| i.id == index && i.repo_id == repo_id);
+
+    if let Some(i) = issue {
+        if let Some(title) = payload.title {
+            i.title = title;
+        }
+        if let Some(body) = payload.body {
+            i.body = Some(body);
+        }
+        if let Some(state_val) = payload.state {
+            i.state = state_val;
+        }
+        if let Some(milestone_id) = payload.milestone_id {
+            if milestone_id == 0 {
+                i.milestone = None;
+            } else {
+                // Validate milestone existence
+                let milestones = state.milestones.read().unwrap();
+                if let Some(m) = milestones.iter().find(|m| m.id == milestone_id) {
+                    i.milestone = Some(m.clone());
+                }
+            }
+        }
+        return (StatusCode::OK, Json(Some(i.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
 }
 
 pub async fn list_pulls(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<PullRequest>> {
@@ -218,7 +311,40 @@ pub async fn create_pull(
         updated_at: "now".to_string(),
     });
 
+    // Trigger Webhooks
+    dispatch_hooks(&state, repo_id, "pull_request");
+
     (StatusCode::CREATED, Json(pr))
+}
+
+pub async fn update_pull(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdatePullRequestOption>
+) -> (StatusCode, Json<Option<PullRequest>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(None));
+    }
+
+    let mut pulls = state.pulls.write().unwrap();
+    let pr = pulls.iter_mut().find(|p| p.number == index && p.repo_id == repo_id);
+
+    if let Some(p) = pr {
+        if let Some(title) = payload.title {
+            p.title = title;
+        }
+        if let Some(body) = payload.body {
+            p.body = Some(body);
+        }
+        if let Some(state_val) = payload.state {
+            p.state = state_val;
+        }
+        return (StatusCode::OK, Json(Some(p.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
 }
 
 pub async fn list_releases(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Release>> {
@@ -284,7 +410,7 @@ pub async fn create_comment(
 
     if repo.is_none() {
          return (StatusCode::NOT_FOUND, Json(Comment {
-            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string(), reactions: vec![]
         }));
     }
     let repo_id = repo.unwrap().id;
@@ -294,7 +420,7 @@ pub async fn create_comment(
 
     if issue.is_none() {
          return (StatusCode::NOT_FOUND, Json(Comment {
-            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string()
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string(), reactions: vec![]
         }));
     }
     let issue_id = issue.unwrap().id;
@@ -307,9 +433,36 @@ pub async fn create_comment(
         body: payload.body,
         user: User::new(1, "admin".to_string(), None),
         created_at: "2023-01-02".to_string(),
+        reactions: vec![],
     };
     comments.push(comment.clone());
     (StatusCode::CREATED, Json(comment))
+}
+
+pub async fn update_comment(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateCommentOption>
+) -> (StatusCode, Json<Option<Comment>>) {
+    let mut comments = state.comments.write().unwrap();
+    if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
+        comment.body = payload.body;
+        return (StatusCode::OK, Json(Some(comment.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn delete_comment(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let mut comments = state.comments.write().unwrap();
+    if let Some(pos) = comments.iter().position(|c| c.id == id) {
+        comments.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_labels(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Label>> {
@@ -430,6 +583,41 @@ pub async fn create_hook(
     (StatusCode::CREATED, Json(hook))
 }
 
+pub async fn list_hook_deliveries(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> Json<Vec<WebhookDelivery>> {
+    let deliveries = state.webhook_deliveries.read().unwrap();
+    let filtered: Vec<WebhookDelivery> = deliveries.iter().filter(|d| d.hook_id == id).cloned().collect();
+    Json(filtered)
+}
+
+fn dispatch_hooks(state: &AppState, repo_id: u64, event: &str) {
+    let hooks = state.hooks.read().unwrap();
+    let relevant_hooks: Vec<Webhook> = hooks.iter()
+        .filter(|h| h.repo_id == repo_id && h.active && h.events.contains(&event.to_string()))
+        .cloned()
+        .collect();
+
+    if relevant_hooks.is_empty() {
+        return;
+    }
+
+    let mut deliveries = state.webhook_deliveries.write().unwrap();
+    for hook in relevant_hooks {
+        let delivery_id = (deliveries.len() as u64) + 1;
+        deliveries.push(WebhookDelivery {
+            id: delivery_id,
+            hook_id: hook.id,
+            event: event.to_string(),
+            status: "success".to_string(), // Mock success
+            request_url: hook.url.clone(),
+            response_status: 200,
+            delivered_at: "now".to_string(),
+        });
+    }
+}
+
 pub async fn create_secret(
     State(state): State<AppState>,
     Path((owner, repo_name)): Path<(String, String)>,
@@ -541,17 +729,25 @@ pub async fn create_lfs_lock(
 }
 
 pub async fn add_reaction(
-    Path((_owner, _repo, _id)): Path<(String, String, u64)>,
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
     Json(payload): Json<CreateReactionOption>
 ) -> (StatusCode, Json<Reaction>) {
-    let user = User::new(1, "admin".to_string(), None);
-    let reaction = Reaction {
-        id: 1,
-        user,
-        content: payload.content,
-        created_at: "now".to_string(),
-    };
-    (StatusCode::CREATED, Json(reaction))
+    let mut comments = state.comments.write().unwrap();
+    if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
+        let user = User::new(1, "admin".to_string(), None);
+        let reaction_id = (comment.reactions.len() as u64) + 1;
+        let reaction = Reaction {
+            id: reaction_id,
+            user,
+            content: payload.content,
+            created_at: "now".to_string(),
+        };
+        comment.reactions.push(reaction.clone());
+        (StatusCode::CREATED, Json(reaction))
+    } else {
+        (StatusCode::NOT_FOUND, Json(Reaction { id: 0, user: User::new(0, "".to_string(), None), content: "".to_string(), created_at: "".to_string() }))
+    }
 }
 
 pub async fn update_topics(
@@ -602,6 +798,23 @@ pub async fn star_repo(
     if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
         repo.stars_count += 1;
         StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn remove_issue_assignee(
+    State(state): State<AppState>,
+    Path((_owner, _repo, index, username)): Path<(String, String, u64, String)>
+) -> StatusCode {
+    let mut issues = state.issues.write().unwrap();
+    if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
+        if let Some(pos) = issue.assignees.iter().position(|u| u.username == username) {
+            issue.assignees.remove(pos);
+            StatusCode::NO_CONTENT
+        } else {
+            StatusCode::NOT_FOUND
+        }
     } else {
         StatusCode::NOT_FOUND
     }
@@ -734,6 +947,22 @@ pub async fn remove_issue_label(
     }
 }
 
+pub async fn list_wiki_pages(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<WikiPage>> {
+    let pages = vec![
+        WikiPage {
+            title: "Home".to_string(),
+            content: "Welcome to the wiki!".to_string(),
+            commit_message: None,
+        },
+        WikiPage {
+            title: "Installation".to_string(),
+            content: "How to install...".to_string(),
+            commit_message: None,
+        }
+    ];
+    Json(pages)
+}
+
 pub async fn update_wiki_page(
     Path((_owner, _repo, _page_name)): Path<(String, String, String)>,
     Json(_payload): Json<CreateWikiPageOption>
@@ -746,6 +975,12 @@ pub async fn get_wiki_page(Path((_owner, _repo, page_name)): Path<(String, Strin
         Json(Some(WikiPage {
             title: "Home".to_string(),
             content: "Welcome to the wiki!".to_string(),
+            commit_message: None,
+        }))
+    } else if page_name == "Installation" {
+        Json(Some(WikiPage {
+            title: "Installation".to_string(),
+            content: "How to install...".to_string(),
             commit_message: None,
         }))
     } else {
@@ -830,20 +1065,6 @@ pub async fn search_repos(
     }
 }
 
-pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Project>> {
-    // Projects are mocked here.
-    let projects = vec![
-        Project {
-            id: 1,
-            repo_id: 1,
-            title: "Kanban Board".to_string(),
-            description: None,
-            is_closed: false,
-        }
-    ];
-    Json(projects)
-}
-
 pub async fn list_collaborators(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Collaborator>> {
     let user = User::new(2, "collab_user".to_string(), None);
     vec![
@@ -907,8 +1128,14 @@ pub async fn upload_media(Path((_owner, _repo)): Path<(String, String)>) -> (Sta
     (StatusCode::CREATED, Json(lfs))
 }
 
-pub async fn get_milestone_stats(Path((_owner, _repo, _id)): Path<(String, String, u64)>) -> Json<MilestoneStats> {
-    Json(MilestoneStats { open_issues: 10, closed_issues: 5 })
+pub async fn get_milestone_stats(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> Json<MilestoneStats> {
+    let issues = state.issues.read().unwrap();
+    let open_count = issues.iter().filter(|i| i.milestone.as_ref().map(|m| m.id).unwrap_or(0) == id && i.state == "open").count() as u64;
+    let closed_count = issues.iter().filter(|i| i.milestone.as_ref().map(|m| m.id).unwrap_or(0) == id && i.state == "closed").count() as u64;
+    Json(MilestoneStats { open_issues: open_count, closed_issues: closed_count })
 }
 
 pub async fn get_pr_files(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> Json<Vec<DiffFile>> {
@@ -1009,6 +1236,9 @@ pub async fn update_file(
         created: "now".to_string(),
     });
 
+    // Trigger Webhooks
+    dispatch_hooks(&state, repo_id, "push");
+
     (StatusCode::OK, Json(FileEntry {
         name: "updated_file".to_string(),
         path: path,
@@ -1048,6 +1278,70 @@ pub async fn request_review(Path((_owner, _repo, _index)): Path<(String, String,
     (StatusCode::CREATED, Json(ReviewRequest { reviewer, status: "requested".to_string() }))
 }
 
+pub async fn list_reviews(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>
+) -> Json<Vec<Review>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let pulls = state.pulls.read().unwrap();
+    // Assuming pull requests have unique IDs globally or we filter by repo/number.
+    // Shared `PullRequest` has `id`, `repo_id`, `number`.
+    let pr = pulls.iter().find(|p| p.repo_id == repo_id && p.number == index);
+
+    if let Some(p) = pr {
+        let reviews = state.reviews.read().unwrap();
+        let filtered: Vec<Review> = reviews.iter().filter(|r| r.pull_request_id == p.id).cloned().collect();
+        Json(filtered)
+    } else {
+        Json(vec![])
+    }
+}
+
+pub async fn create_review(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
+    Json(payload): Json<CreateReviewOption>
+) -> (StatusCode, Json<Review>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Review {
+            id: 0, pull_request_id: 0, user: User::new(0, "".to_string(), None), body: "".to_string(), state: "".to_string(), created_at: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
+    let pulls = state.pulls.read().unwrap();
+    let pr = pulls.iter().find(|p| p.repo_id == repo_id && p.number == index);
+
+    if let Some(p) = pr {
+        let mut reviews = state.reviews.write().unwrap();
+        let id = (reviews.len() as u64) + 1;
+        let state_val = match payload.event.as_str() {
+            "APPROVE" => "APPROVED",
+            "REQUEST_CHANGES" => "CHANGES_REQUESTED",
+            _ => "COMMENTED",
+        };
+        let review = Review {
+            id,
+            pull_request_id: p.id,
+            user: User::new(1, "admin".to_string(), None), // Mock user
+            body: payload.body,
+            state: state_val.to_string(),
+            created_at: "now".to_string(),
+        };
+        reviews.push(review.clone());
+        (StatusCode::CREATED, Json(review))
+    } else {
+        (StatusCode::NOT_FOUND, Json(Review {
+            id: 0, pull_request_id: 0, user: User::new(0, "".to_string(), None), body: "".to_string(), state: "".to_string(), created_at: "".to_string()
+        }))
+    }
+}
+
 pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, String)>) -> Json<Vec<DiffFile>> {
     let diffs = vec![
         DiffFile {
@@ -1065,4 +1359,58 @@ pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, 
         }
     ];
     Json(diffs)
+}
+
+pub async fn list_branch_protections(
+    State(state): State<AppState>,
+    Path((_owner, _repo)): Path<(String, String)>
+) -> Json<Vec<ProtectedBranch>> {
+    let branches = state.protected_branches.read().unwrap();
+    // In real impl we would filter by repo ID
+    Json(branches.clone())
+}
+
+pub async fn create_branch_protection(
+    State(state): State<AppState>,
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateProtectedBranchOption>
+) -> (StatusCode, Json<ProtectedBranch>) {
+    let mut branches = state.protected_branches.write().unwrap();
+    if branches.iter().any(|b| b.name == payload.name) {
+         return (StatusCode::CONFLICT, Json(ProtectedBranch { name: "".to_string(), enable_push: false, enable_force_push: false }));
+    }
+    let protection = ProtectedBranch {
+        name: payload.name,
+        enable_push: payload.enable_push,
+        enable_force_push: payload.enable_force_push,
+    };
+    branches.push(protection.clone());
+    (StatusCode::CREATED, Json(protection))
+}
+
+pub async fn delete_branch_protection(
+    State(state): State<AppState>,
+    Path((_owner, _repo, name)): Path<(String, String, String)>
+) -> StatusCode {
+    let mut branches = state.protected_branches.write().unwrap();
+    if let Some(pos) = branches.iter().position(|b| b.name == name) {
+        branches.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn search_issues_global(
+    State(state): State<AppState>,
+    Query(filter): Query<IssueFilterOptions>
+) -> Json<Vec<Issue>> {
+    let issues = state.issues.read().unwrap();
+    let mut filtered_issues: Vec<Issue> = issues.clone();
+
+    if let Some(q) = filter.q {
+        let q_lower = q.to_lowercase();
+        filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
+    }
+    Json(filtered_issues)
 }
