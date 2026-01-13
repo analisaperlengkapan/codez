@@ -5,7 +5,7 @@ use axum::{
 };
 use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
-    GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application, Package, TwoFactor, OAuth2Provider,
+    GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application, TwoFactor, OAuth2Provider,
     Contribution, Issue, PullRequest, IssueFilterOptions
 };
 use crate::router::AppState;
@@ -177,45 +177,6 @@ pub async fn list_following(Path(_username): Path<String>) -> Json<Vec<User>> {
     vec![User::new(3, "following".to_string(), None)].into()
 }
 
-pub async fn list_packages(State(state): State<AppState>, Path(owner): Path<String>) -> Json<Vec<Package>> {
-    let packages = state.packages.read().unwrap();
-    let filtered_packages: Vec<Package> = packages.iter().filter(|p| p.owner == owner).cloned().collect();
-    Json(filtered_packages)
-}
-
-pub async fn upload_package(
-    State(state): State<AppState>,
-    Path(owner): Path<String>
-) -> StatusCode {
-    let mut packages = state.packages.write().unwrap();
-    let id = (packages.len() as u64) + 1;
-    packages.push(Package {
-        id,
-        owner: owner.clone(),
-        name: "new-package".to_string(), // In real impl, would come from body
-        version: "1.0.0".to_string(),
-        package_type: "generic".to_string(),
-    });
-
-    let mut activities = state.activities.write().unwrap();
-    let activity_id = (activities.len() as u64) + 1;
-    activities.push(Activity {
-        id: activity_id,
-        repo_id: 0,
-        user_id: 1, // mock admin
-        user_name: "admin".to_string(),
-        op_type: "upload_package".to_string(),
-        content: format!("uploaded package to {}", owner),
-        created: "now".to_string(),
-    });
-    StatusCode::CREATED
-}
-
-pub async fn get_package_detail(State(state): State<AppState>, Path((owner, _type, name, version)): Path<(String, String, String, String)>) -> Json<Option<Package>> {
-    let packages = state.packages.read().unwrap();
-    let pkg = packages.iter().find(|p| p.owner == owner && p.name == name && p.version == version).cloned();
-    Json(pkg)
-}
 
 pub async fn get_2fa() -> Json<TwoFactor> {
     Json(TwoFactor { enabled: false, method: "totp".to_string() })

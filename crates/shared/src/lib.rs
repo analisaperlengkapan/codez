@@ -498,12 +498,33 @@ pub struct ActionWorkflow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateWorkflowRunOption {
+    pub workflow_id: u64,
+    pub ref_name: String, // branch or tag
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkflowRun {
+    pub id: u64,
+    pub workflow_id: u64,
+    pub status: String, // "queued", "in_progress", "success", "failure"
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Package {
     pub id: u64,
     pub owner: String,
     pub name: String,
     pub version: String,
     pub package_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreatePackageOption {
+    pub name: String,
+    pub version: String,
+    pub package_type: String, // "npm", "maven", "cargo", etc.
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -2,10 +2,10 @@ use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
 use shared::{
-    Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
+    Repository, CreateRepoOption, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption,
-    ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
+    CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
     UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption
@@ -834,45 +834,6 @@ pub fn CreateRepo() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn PackageList() -> impl IntoView {
-    let params = use_params_map();
-    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
-
-    let packages = create_resource(owner, |owner_name| async move {
-        Request::get(&format!("http://127.0.0.1:3000/api/v1/packages/{}", owner_name)).send().await.unwrap().json::<Vec<Package>>().await.unwrap_or_default()
-    });
-
-    view! {
-        <div class="package-list">
-            <h3>"Packages for " {owner}</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
-                    {move || packages.get().map(|list| view! {
-                        <For each=move || list.clone() key=|p| p.id children=move |p| {
-                            let href = format!("/packages/{}/{}/{}/{}", owner(), p.package_type, p.name, p.version);
-                            view! { <li><a href=href>{p.name} " (" {p.package_type} ") - " {p.version}</a></li> }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
-        </div>
-    }
-}
-
-#[component]
-pub fn PackageDetail() -> impl IntoView {
-    let params = use_params_map();
-    let name = move || params.with(|params| params.get("name").cloned().unwrap_or_default());
-    let version = move || params.with(|params| params.get("version").cloned().unwrap_or_default());
-
-    view! {
-        <div class="package-detail">
-            <h3>"Package: " {name} " " {version}</h3>
-            <p>"Installation instructions..."</p>
-        </div>
-    }
-}
 
 #[component]
 pub fn CommitList() -> impl IntoView {
@@ -1973,39 +1934,6 @@ pub fn WikiEdit() -> impl IntoView {
 }
 
 
-#[component]
-pub fn ActionsList() -> impl IntoView {
-    let params = use_params_map();
-    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
-    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-
-    let actions = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows", o, r))
-                .send().await.unwrap().json::<Vec<ActionWorkflow>>().await.unwrap_or_default()
-        }
-    );
-
-    view! {
-        <div class="actions-list">
-            <h3>"Actions Workflows"</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading workflows..."</li> }>
-                    {move || actions.get().map(|list| view! {
-                        <For each=move || list.clone() key=|w| w.id children=move |w| {
-                            view! {
-                                <li>
-                                    <strong>{w.name}</strong> " - " {w.status}
-                                </li>
-                            }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
-        </div>
-    }
-}
 
 #[component]
 pub fn RepoCodeSearch() -> impl IntoView {

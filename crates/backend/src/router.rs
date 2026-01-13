@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember
+    Organization, OrgMember, WorkflowRun
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -36,6 +36,7 @@ pub struct AppState {
     pub reviews: Arc<RwLock<Vec<Review>>>,
     pub orgs: Arc<RwLock<Vec<Organization>>>,
     pub org_members: Arc<RwLock<Vec<OrgMember>>>,
+    pub workflow_runs: Arc<RwLock<Vec<WorkflowRun>>>,
 }
 
 pub fn api_router() -> Router {
@@ -202,6 +203,7 @@ pub fn api_router() -> Router {
             }
         ])),
         org_members: Arc::new(RwLock::new(vec![])),
+        workflow_runs: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -254,6 +256,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/admin/stats", get(get_admin_stats))
         .route("/api/v1/user/feeds", get(list_feeds))
         .route("/api/v1/repos/:owner/:repo/actions/workflows", get(list_workflows))
+        .route("/api/v1/repos/:owner/:repo/actions/workflows/:id/runs", get(list_workflow_runs).post(trigger_workflow))
         .route("/api/v1/packages/:owner", get(list_packages).post(upload_package))
         .route("/api/v1/repos/:owner/:repo/secrets", get(list_secrets).post(create_secret))
         .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))

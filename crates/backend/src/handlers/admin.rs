@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
 };
 use shared::{
-    Organization, Repository, Team, OrgMember, AdminStats, ActionWorkflow, SystemNotice,
+    Organization, Repository, Team, OrgMember, AdminStats, SystemNotice,
     LicenseTemplate, GitignoreTemplate,
     AdminUserEditOption, User, LanguageStat, ProtectedBranch, CreateOrgOption, CreateTeamOption
 };
@@ -146,12 +146,6 @@ pub async fn admin_delete_user(
 }
 
 // Miscellaneous Handlers
-pub async fn list_workflows(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<ActionWorkflow>> {
-    let wfs = vec![
-        ActionWorkflow { id: 1, name: "CI".to_string(), status: "success".to_string() }
-    ];
-    Json(wfs)
-}
 
 pub async fn list_licenses() -> Json<Vec<LicenseTemplate>> {
     vec![
