@@ -33,6 +33,8 @@ impl Repository {
 pub struct IssueFilterOptions {
     pub state: Option<String>, // "open", "closed", "all"
     pub q: Option<String>,     // search query
+    pub label_id: Option<u64>,
+    pub assignee_username: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

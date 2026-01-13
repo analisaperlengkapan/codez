@@ -172,6 +172,62 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_issue_filter_flow() {
+        let app = api_router();
+
+        // Ensure issue 1 has label 1 and assignee "admin" (default mock state needs setup?)
+        // Actually mock state init has no labels/assignees on issue 1.
+        // Let's add them via API first or assume test starts fresh.
+        // We'll add a label to issue 1
+        let payload = shared::CreateLabelOption { name: "bug".to_string(), color: "#f00".to_string(), description: None };
+        let _ = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues/1/labels")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Filter by label (mock label id 100 from handler)
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/issues?label_id=100")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].number, 1);
+
+        // Filter by wrong label
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/issues?label_id=999")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(issues.len(), 0);
+    }
+
+    #[tokio::test]
     async fn test_update_file_flow() {
         let app = api_router();
 

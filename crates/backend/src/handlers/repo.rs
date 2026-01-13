@@ -89,6 +89,12 @@ pub async fn list_issues(State(state): State<AppState>, Path((owner, repo_name))
         let q_lower = q.to_lowercase();
         filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
     }
+    if let Some(label_id) = filter.label_id {
+        filtered_issues.retain(|i| i.labels.iter().any(|l| l.id == label_id));
+    }
+    if let Some(assignee) = filter.assignee_username {
+        filtered_issues.retain(|i| i.assignees.iter().any(|u| u.username == assignee));
+    }
 
     Json(filtered_issues)
 }

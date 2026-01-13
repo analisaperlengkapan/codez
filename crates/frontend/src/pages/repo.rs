@@ -236,23 +236,74 @@ pub fn IssueList() -> impl IntoView {
 
     let (state_filter, set_state_filter) = create_signal("open".to_string());
     let (search_query, set_search_query) = create_signal("".to_string());
+    let (label_filter, set_label_filter) = create_signal("".to_string());
+    let (assignee_filter, set_assignee_filter) = create_signal("".to_string());
 
     let issues = create_resource(
-        move || (owner(), repo_name(), state_filter.get(), search_query.get()),
-        |(o, r, s, q)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}", o, r, s, q))
+        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get()),
+        |(o, r, s, q, l, a)| async move {
+            let mut url = format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}", o, r, s, q);
+            if !l.is_empty() {
+                url.push_str(&format!("&label_id={}", l));
+            }
+            if !a.is_empty() {
+                url.push_str(&format!("&assignee_username={}", a));
+            }
+            Request::get(&url)
                 .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
+        }
+    );
+
+    let labels = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/labels", o, r))
+                .send().await.unwrap().json::<Vec<Label>>().await.unwrap_or_default()
+        }
+    );
+
+    let users = create_resource(
+        || (),
+        |_| async move {
+            // Mock users for filtering
+            vec![
+                shared::User::new(1, "admin".to_string(), None),
+                shared::User::new(2, "user".to_string(), None),
+            ]
         }
     );
 
     view! {
         <div class="issue-list">
             <h3>"Issues for " {owner} "/" {repo_name}</h3>
-            <div class="issue-filters">
+            <div class="issue-filters" style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
                 <button on:click=move |_| set_state_filter.set("open".to_string()) class:active=move || state_filter.get() == "open">"Open"</button>
                 <button on:click=move |_| set_state_filter.set("closed".to_string()) class:active=move || state_filter.get() == "closed">"Closed"</button>
                 <button on:click=move |_| set_state_filter.set("all".to_string()) class:active=move || state_filter.get() == "all">"All"</button>
+
                 <input type="text" placeholder="Search issues..." prop:value=search_query on:input=move |ev| set_search_query.set(event_target_value(&ev)) />
+
+                <Suspense fallback=move || view! { <span>"Loading labels..."</span> }>
+                    {move || labels.get().map(|list| view! {
+                        <select on:change=move |ev| set_label_filter.set(event_target_value(&ev))>
+                            <option value="">"Label"</option>
+                            <For each=move || list.clone() key=|l| l.id children=move |l| {
+                                view! { <option value={l.id}>{l.name}</option> }
+                            }/>
+                        </select>
+                    })}
+                </Suspense>
+
+                <Suspense fallback=move || view! { <span>"Loading users..."</span> }>
+                    {move || users.get().map(|list| view! {
+                        <select on:change=move |ev| set_assignee_filter.set(event_target_value(&ev))>
+                            <option value="">"Assignee"</option>
+                            <For each=move || list.clone() key=|u| u.id children=move |u| {
+                                view! { <option value={u.username.clone()}>{u.username}</option> }
+                            }/>
+                        </select>
+                    })}
+                </Suspense>
             </div>
             <ul>
                 <Suspense fallback=move || view! { <li>"Loading issues..."</li> }>
