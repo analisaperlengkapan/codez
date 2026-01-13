@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
-    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team
+    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -29,6 +29,9 @@ pub struct AppState {
     pub topics: Arc<RwLock<Vec<Topic>>>,
     pub packages: Arc<RwLock<Vec<Package>>>,
     pub teams: Arc<RwLock<Vec<Team>>>,
+    pub projects: Arc<RwLock<Vec<Project>>>,
+    pub project_columns: Arc<RwLock<Vec<ProjectColumn>>>,
+    pub project_cards: Arc<RwLock<Vec<ProjectCard>>>,
 }
 
 pub fn api_router() -> Router {
@@ -182,6 +185,9 @@ pub fn api_router() -> Router {
                 permission: "write".to_string(),
             }
         ])),
+        projects: Arc::new(RwLock::new(vec![])),
+        project_columns: Arc::new(RwLock::new(vec![])),
+        project_cards: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -222,7 +228,11 @@ pub fn api_router() -> Router {
         .route("/api/v1/user/keys", get(list_keys).post(create_key))
         .route("/api/v1/repos/:owner/:repo/hooks", get(list_hooks).post(create_hook))
         .route("/api/v1/orgs/:org/teams", get(list_teams))
-        .route("/api/v1/repos/:owner/:repo/projects", get(list_projects))
+        .route("/api/v1/repos/:owner/:repo/projects", get(list_projects).post(create_project))
+        .route("/api/v1/repos/:owner/:repo/projects/:id", get(get_project))
+        .route("/api/v1/repos/:owner/:repo/projects/:id/columns", get(list_project_columns).post(create_project_column))
+        .route("/api/v1/repos/:owner/:repo/projects/columns/:id/cards", get(list_project_cards).post(create_project_card))
+        .route("/api/v1/repos/:owner/:repo/projects/cards/:id/move", post(move_project_card))
         .route("/api/v1/admin/stats", get(get_admin_stats))
         .route("/api/v1/user/feeds", get(list_feeds))
         .route("/api/v1/repos/:owner/:repo/actions/workflows", get(list_workflows))

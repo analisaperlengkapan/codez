@@ -4,7 +4,7 @@ use gloo_net::http::Request;
 use shared::{
     Repository, CreateRepoOption, Package, FileEntry, Issue, PullRequest, Commit, DiffFile, Branch, Tag, Release,
     Comment, CreateCommentOption, MergePullRequestOption, RepoSettingsOption, Label, CreateLabelOption,
-    Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption, Project,
+    Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption,
     ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
@@ -1907,40 +1907,6 @@ pub fn WikiEdit() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn ProjectList() -> impl IntoView {
-    let params = use_params_map();
-    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
-    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-
-    let projects = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects", o, r))
-                .send().await.unwrap().json::<Vec<Project>>().await.unwrap_or_default()
-        }
-    );
-
-    view! {
-        <div class="project-list">
-            <h3>"Projects"</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading projects..."</li> }>
-                    {move || projects.get().map(|list| view! {
-                        <For each=move || list.clone() key=|p| p.id children=move |p| {
-                            view! {
-                                <li>
-                                    <strong>{p.title}</strong>
-                                    <p>{p.description.unwrap_or_default()}</p>
-                                </li>
-                            }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
-        </div>
-    }
-}
 
 #[component]
 pub fn ActionsList() -> impl IntoView {

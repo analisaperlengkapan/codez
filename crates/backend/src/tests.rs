@@ -8,7 +8,8 @@ mod tests {
     use tower::ServiceExt; // for `oneshot`
     use shared::{
         CreateRepoOption, Repository, Activity, CreateIssueOption, Issue, UpdateFileOption, FileEntry, UpdateIssueOption,
-        CreateCommentOption, Comment, UpdateCommentOption, CreatePullRequestOption, UpdatePullRequestOption, PullRequest
+        CreateCommentOption, Comment, UpdateCommentOption, CreatePullRequestOption, UpdatePullRequestOption, PullRequest,
+        CreateProjectOption, Project, CreateProjectColumnOption, ProjectColumn, CreateProjectCardOption, ProjectCard, MoveProjectCardOption
     };
 
     #[tokio::test]
@@ -557,5 +558,105 @@ mod tests {
         let my_pulls: Vec<PullRequest> = serde_json::from_slice(&body).unwrap();
         // Should find "My PR" (or "First PR" from init)
         assert!(my_pulls.iter().any(|p| p.title == "My PR"));
+    }
+
+    #[tokio::test]
+    async fn test_project_flow() {
+        let app = api_router();
+
+        // 1. Create Project
+        let payload = CreateProjectOption {
+            title: "My Project".to_string(),
+            description: Some("Kanban Board".to_string()),
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/projects")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let project: Project = serde_json::from_slice(&body).unwrap();
+        let project_id = project.id;
+        assert_eq!(project.title, "My Project");
+
+        // 2. Create Column
+        let payload = CreateProjectColumnOption { title: "To Do".to_string() };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}/columns", project_id))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let column: ProjectColumn = serde_json::from_slice(&body).unwrap();
+        let column_id = column.id;
+        assert_eq!(column.title, "To Do");
+
+        // 3. Create Card
+        let payload = CreateProjectCardOption {
+            content: Some("Task 1".to_string()),
+            note: None,
+            issue_id: None,
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/projects/columns/{}/cards", column_id))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let card: ProjectCard = serde_json::from_slice(&body).unwrap();
+        let card_id = card.id;
+        assert_eq!(card.content, Some("Task 1".to_string()));
+
+        // 4. Move Card (to same column just index change, or assume 2nd column exists)
+        // Let's just create a second column to be sure
+        let payload = CreateProjectColumnOption { title: "Done".to_string() };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}/columns", project_id))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let col2: ProjectColumn = serde_json::from_slice(&body).unwrap();
+
+        let payload = MoveProjectCardOption { column_id: col2.id, new_index: 0 };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/projects/cards/{}/move", card_id))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

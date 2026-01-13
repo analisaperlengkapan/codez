@@ -8,7 +8,7 @@ use shared::{
     CreateReleaseOption, Release, CreateCommentOption, Comment, CreateLabelOption, Label,
     CreateMilestoneOption, Milestone, RepoTopicOptions, RepoSearchOptions, RepoSettingsOption, CreateWikiPageOption, WikiPage,
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
-    MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
+    MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption
 };
@@ -999,20 +999,6 @@ pub async fn search_repos(
             .collect();
         Json(filtered)
     }
-}
-
-pub async fn list_projects(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Project>> {
-    // Projects are mocked here.
-    let projects = vec![
-        Project {
-            id: 1,
-            repo_id: 1,
-            title: "Kanban Board".to_string(),
-            description: None,
-            is_closed: false,
-        }
-    ];
-    Json(projects)
 }
 
 pub async fn list_collaborators(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Collaborator>> {
