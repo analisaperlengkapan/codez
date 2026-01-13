@@ -8,7 +8,7 @@ use shared::{
     CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
-    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery
+    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery, CreateIssueOption
 };
 
 #[component]
@@ -29,6 +29,14 @@ pub fn RepoDetail() -> impl IntoView {
         |(o, r)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/languages", o, r))
                 .send().await.unwrap().json::<Vec<LanguageStat>>().await.unwrap_or_default()
+        }
+    );
+
+    let topics = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/topics", o, r))
+                .send().await.unwrap().json::<Vec<shared::Topic>>().await.unwrap_or_default()
         }
     );
 
@@ -83,6 +91,17 @@ pub fn RepoDetail() -> impl IntoView {
                                 }/>
                             </div>
                         }
+                    })}
+                </Suspense>
+            </div>
+
+            <div class="repo-topics" style="margin-bottom: 10px;">
+                <Suspense fallback=move || view! { <span></span> }>
+                    {move || topics.get().map(|list| view! {
+                        <For each=move || list.clone() key=|t| t.id children=move |t| {
+                            let link = format!("/search?q=topic:{}", t.name);
+                            view! { <a href=link style="background: #ddf4ff; color: #0969da; padding: 2px 8px; border-radius: 10px; margin-right: 5px; text-decoration: none; font-size: 0.9em;">{t.name}</a> }
+                        }/>
                     })}
                 </Suspense>
             </div>
@@ -241,10 +260,14 @@ pub fn IssueList() -> impl IntoView {
     let (sort, set_sort) = create_signal("created".to_string());
     let (direction, set_direction) = create_signal("desc".to_string());
     let (page, set_page) = create_signal(1);
+    let (show_new_issue, set_show_new_issue) = create_signal(false);
+    let (new_issue_title, set_new_issue_title) = create_signal("".to_string());
+    let (new_issue_body, set_new_issue_body) = create_signal("".to_string());
+    let (refresh, set_refresh) = create_signal(0);
 
     let issues = create_resource(
-        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get(), sort.get(), direction.get(), page.get()),
-        |(o, r, s, q, l, a, srt, dir, p)| async move {
+        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get(), sort.get(), direction.get(), page.get(), refresh.get()),
+        |(o, r, s, q, l, a, srt, dir, p, _)| async move {
             let mut url = format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state={}&q={}&sort={}&direction={}&page={}&limit=10", o, r, s, q, srt, dir, p);
             if !l.is_empty() {
                 url.push_str(&format!("&label_id={}", l));
@@ -276,9 +299,45 @@ pub fn IssueList() -> impl IntoView {
         }
     );
 
+    let on_create_issue = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateIssueOption {
+            title: new_issue_title.get(),
+            body: Some(new_issue_body.get()),
+        };
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues", o, r))
+                .json(&payload).unwrap().send().await;
+            set_new_issue_title.set("".to_string());
+            set_new_issue_body.set("".to_string());
+            set_show_new_issue.set(false);
+            set_refresh.update(|n| *n += 1);
+        });
+    };
+
     view! {
         <div class="issue-list">
-            <h3>"Issues for " {owner} "/" {repo_name}</h3>
+            <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>"Issues for " {owner} "/" {repo_name}</h3>
+                <button on:click=move |_| set_show_new_issue.set(!show_new_issue.get())>
+                    {move || if show_new_issue.get() { "Cancel" } else { "New Issue" }}
+                </button>
+            </div>
+
+            {move || if show_new_issue.get() {
+                view! {
+                    <form on:submit=on_create_issue style="background: #f9f9f9; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd;">
+                        <input type="text" placeholder="Title" prop:value=new_issue_title on:input=move |ev| set_new_issue_title.set(event_target_value(&ev)) style="display: block; width: 100%; margin-bottom: 5px;" required />
+                        <textarea placeholder="Body" prop:value=new_issue_body on:input=move |ev| set_new_issue_body.set(event_target_value(&ev)) style="display: block; width: 100%; margin-bottom: 5px;" rows="5"></textarea>
+                        <button type="submit">"Create Issue"</button>
+                    </form>
+                }.into_view()
+            } else {
+                view! { <span></span> }.into_view()
+            }}
+
             <div class="issue-filters" style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
                 <button on:click=move |_| set_state_filter.set("open".to_string()) class:active=move || state_filter.get() == "open">"Open"</button>
                 <button on:click=move |_| set_state_filter.set("closed".to_string()) class:active=move || state_filter.get() == "closed">"Closed"</button>

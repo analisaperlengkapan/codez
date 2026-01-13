@@ -107,11 +107,12 @@ pub fn UserHeatmap() -> impl IntoView {
     view! {
         <div class="user-heatmap">
             <h3>"Contributions"</h3>
-            <div class="calendar-stub">
+            <div class="calendar-stub" style="display: grid; grid-template-columns: repeat(53, 1fr); gap: 2px;">
                 <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                     {move || data.get().map(|list| view! {
                         <For each=move || list.clone() key=|c| c.date.clone() children=move |c| {
-                             view! { <div title=format!("{} commits on {}", c.count, c.date) style="display:inline-block; width: 10px; height: 10px; background-color: green; margin: 1px;"></div> }
+                             let color = if c.count == 0 { "#ebedf0" } else if c.count < 5 { "#9be9a8" } else { "#30a14e" };
+                             view! { <div title=format!("{} commits on {}", c.count, c.date) style=format!("width: 10px; height: 10px; background-color: {};", color)></div> }
                         }/>
                     })}
                 </Suspense>
