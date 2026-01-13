@@ -10,7 +10,7 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption
+    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption
 };
 use crate::router::AppState;
 
@@ -308,6 +308,36 @@ pub async fn create_pull(
     });
 
     (StatusCode::CREATED, Json(pr))
+}
+
+pub async fn update_pull(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdatePullRequestOption>
+) -> (StatusCode, Json<Option<PullRequest>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(None));
+    }
+
+    let mut pulls = state.pulls.write().unwrap();
+    let pr = pulls.iter_mut().find(|p| p.number == index && p.repo_id == repo_id);
+
+    if let Some(p) = pr {
+        if let Some(title) = payload.title {
+            p.title = title;
+        }
+        if let Some(body) = payload.body {
+            p.body = Some(body);
+        }
+        if let Some(state_val) = payload.state {
+            p.state = state_val;
+        }
+        return (StatusCode::OK, Json(Some(p.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
 }
 
 pub async fn list_releases(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Release>> {

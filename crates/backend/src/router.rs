@@ -190,6 +190,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/user/repos", post(create_repo))
         .route("/api/v1/repos/:owner/:repo/issues", get(list_issues).post(create_issue))
         .route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls).post(create_pull))
+        .route("/api/v1/repos/:owner/:repo/pulls/:index", patch(update_pull))
         .route("/api/v1/repos/:owner/:repo/contents/*path", get(get_contents).put(update_file))
         .route("/api/v1/repos/:owner/:repo/contents", get(get_root_contents))
         .route("/api/v1/repos/:owner/:repo/commits", get(list_commits))

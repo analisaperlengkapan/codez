@@ -145,6 +145,13 @@ pub struct CreatePullRequestOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdatePullRequestOption {
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub state: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FileEntry {
     pub name: String,
     pub path: String,
