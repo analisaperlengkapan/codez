@@ -227,6 +227,11 @@ pub struct CreateCommentOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateCommentOption {
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MergePullRequestOption {
     #[serde(rename = "do")]
     pub merge_action: String, // "merge", "rebase", etc.

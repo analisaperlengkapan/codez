@@ -10,7 +10,7 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic, Project,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption
+    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption
 };
 use crate::router::AppState;
 
@@ -399,6 +399,32 @@ pub async fn create_comment(
     };
     comments.push(comment.clone());
     (StatusCode::CREATED, Json(comment))
+}
+
+pub async fn update_comment(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateCommentOption>
+) -> (StatusCode, Json<Option<Comment>>) {
+    let mut comments = state.comments.write().unwrap();
+    if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
+        comment.body = payload.body;
+        return (StatusCode::OK, Json(Some(comment.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn delete_comment(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let mut comments = state.comments.write().unwrap();
+    if let Some(pos) = comments.iter().position(|c| c.id == id) {
+        comments.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_labels(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Label>> {

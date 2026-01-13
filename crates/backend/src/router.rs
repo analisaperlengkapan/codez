@@ -200,6 +200,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/orgs/:org/repos", get(list_org_repos))
         .route("/api/v1/repos/:owner/:repo/issues/:index", get(get_issue).patch(update_issue))
         .route("/api/v1/repos/:owner/:repo/issues/:index/comments", get(list_comments).post(create_comment))
+        .route("/api/v1/repos/:owner/:repo/issues/comments/:id", patch(update_comment).delete(delete_comment))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/merge", post(merge_pull))
         .route("/api/v1/repos/:owner/:repo/labels", get(list_labels).post(create_label))
         .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))

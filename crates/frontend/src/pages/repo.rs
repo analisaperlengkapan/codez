@@ -346,6 +346,8 @@ pub fn IssueDetail() -> impl IntoView {
 
     let (new_comment, set_new_comment) = create_signal("".to_string());
     let (trigger_refresh, set_trigger_refresh) = create_signal(0);
+    let (editing_comment_id, set_editing_comment_id) = create_signal(None::<u64>);
+    let (edit_comment_body, set_edit_comment_body) = create_signal("".to_string());
 
     let issue = create_resource(
         move || (owner(), repo_name(), index(), trigger_refresh.get()),
@@ -356,8 +358,8 @@ pub fn IssueDetail() -> impl IntoView {
     );
 
     let comments = create_resource(
-        move || (owner(), repo_name(), index()),
-        |(o, r, i)| async move {
+        move || (owner(), repo_name(), index(), trigger_refresh.get()),
+        |(o, r, i, _)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
                 .send().await.unwrap().json::<Vec<Comment>>().await.unwrap_or_default()
         }
@@ -393,6 +395,42 @@ pub fn IssueDetail() -> impl IntoView {
             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
                 .json(&payload).unwrap().send().await;
             set_new_comment.set("".to_string());
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_delete_comment = move |comment_id: u64| {
+        let o = owner();
+        let r = repo_name();
+        spawn_local(async move {
+            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/comments/{}", o, r, comment_id))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_start_edit_comment = move |comment_id: u64, current_body: String| {
+        set_editing_comment_id.set(Some(comment_id));
+        set_edit_comment_body.set(current_body);
+    };
+
+    let on_cancel_edit_comment = move |_| {
+        set_editing_comment_id.set(None);
+        set_edit_comment_body.set("".to_string());
+    };
+
+    let on_save_edit_comment = move |comment_id: u64| {
+        let o = owner();
+        let r = repo_name();
+        let body = edit_comment_body.get();
+        let payload = shared::UpdateCommentOption { body };
+
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/comments/{}", o, r, comment_id))
+                .json(&payload).unwrap().send().await;
+            set_editing_comment_id.set(None);
+            set_edit_comment_body.set("".to_string());
+            set_trigger_refresh.update(|n| *n += 1);
         });
     };
 
@@ -653,12 +691,35 @@ pub fn IssueDetail() -> impl IntoView {
                 <Suspense fallback=move || view! { <p>"Loading comments..."</p> }>
                     {move || comments.get().map(|list| view! {
                         <For each=move || list.clone() key=|c| c.id children=move |c| {
+                            let comment_id = c.id;
+                            let comment_body = c.body.clone();
                             view! {
                                 <div class="comment">
                                     <div class="comment-header">
                                         <strong>{c.user.username}</strong> " commented on " {c.created_at}
+                                        {
+                                            // Mock admin check: allow edit/delete for everyone in mock
+                                            view! {
+                                                <span style="float: right;">
+                                                    <button on:click=move |_| on_start_edit_comment(comment_id, comment_body.clone())>"Edit"</button>
+                                                    <button on:click=move |_| on_delete_comment(comment_id)>"Delete"</button>
+                                                </span>
+                                            }
+                                        }
                                     </div>
-                                    <div class="comment-body">{c.body}</div>
+                                    <div class="comment-body">
+                                        {move || if editing_comment_id.get() == Some(comment_id) {
+                                            view! {
+                                                <div>
+                                                    <textarea prop:value=edit_comment_body on:input=move |ev| set_edit_comment_body.set(event_target_value(&ev))></textarea>
+                                                    <button on:click=move |_| on_save_edit_comment(comment_id)>"Save"</button>
+                                                    <button on:click=on_cancel_edit_comment>"Cancel"</button>
+                                                </div>
+                                            }.into_view()
+                                        } else {
+                                            view! { <p>{c.body.clone()}</p> }.into_view()
+                                        }}
+                                    </div>
                                 </div>
                             }
                         }/>
