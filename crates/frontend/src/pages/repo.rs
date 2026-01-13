@@ -302,6 +302,17 @@ pub fn IssueDetail() -> impl IntoView {
         }
     );
 
+    let available_users = create_resource(
+        || (),
+        |_| async move {
+            // Mock users for assignment - in real app, fetch from collaborators or org members
+            vec![
+                shared::User::new(1, "admin".to_string(), None),
+                shared::User::new(2, "user".to_string(), None),
+            ]
+        }
+    );
+
     let on_submit_comment = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let payload = CreateCommentOption { body: new_comment.get() };
@@ -347,8 +358,51 @@ pub fn IssueDetail() -> impl IntoView {
                 let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/labels", o, r, i))
                     .json(&payload).unwrap().send().await;
                 set_new_label_name.set("".to_string());
+                set_trigger_refresh.update(|n| *n += 1);
             });
         }
+    };
+
+    let on_remove_label = move |label_id: u64| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        spawn_local(async move {
+            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/labels/{}", o, r, i, label_id))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    // Assignee management
+    let (selected_assignee, set_selected_assignee) = create_signal("".to_string());
+    let on_add_assignee = move |_| {
+        let username = selected_assignee.get();
+        if !username.is_empty() {
+            let o = owner();
+            let r = repo_name();
+            let i = index();
+            // In a real app, we'd need the full user object or ID, but the backend accepts a User struct
+            // We'll construct a minimal one for the payload
+            let payload = shared::User::new(0, username, None);
+            spawn_local(async move {
+                let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/assignees", o, r, i))
+                    .json(&payload).unwrap().send().await;
+                set_selected_assignee.set("".to_string());
+                set_trigger_refresh.update(|n| *n += 1);
+            });
+        }
+    };
+
+    let on_remove_assignee = move |username: String| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        spawn_local(async move {
+            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}/assignees/{}", o, r, i, username))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
     };
 
     let on_change_milestone = move |ev: leptos::ev::Event| {
@@ -454,15 +508,41 @@ pub fn IssueDetail() -> impl IntoView {
                                     <strong>"Assignees"</strong>
                                     <div class="assignees-list">
                                         <For each=move || i.assignees.clone() key=|u| u.id children=move |u| {
-                                            view! { <div>{u.username}</div> }
+                                            let username = u.username.clone();
+                                            view! {
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                                                    <span>{username.clone()}</span>
+                                                    <button on:click=move |_| on_remove_assignee(username.clone()) style="font-size: 0.8em; margin-left: 5px; cursor: pointer;">"x"</button>
+                                                </div>
+                                            }
                                         }/>
+                                    </div>
+                                    <div class="add-assignee" style="margin-top: 5px;">
+                                        <Suspense fallback=move || view! { <span>"Loading users..."</span> }>
+                                            {move || available_users.get().map(|users| view! {
+                                                <select on:change=move |ev| set_selected_assignee.set(event_target_value(&ev))>
+                                                    <option value="">"Add Assignee"</option>
+                                                    <For each=move || users.clone() key=|u| u.id children=move |u| {
+                                                        let username = u.username.clone();
+                                                        view! { <option value={username.clone()}>{username}</option> }
+                                                    }/>
+                                                </select>
+                                                <button on:click=on_add_assignee>"+"</button>
+                                            })}
+                                        </Suspense>
                                     </div>
                                 </div>
                                 <div class="sidebar-item">
                                     <strong>"Labels"</strong>
                                     <div class="labels-list">
                                         <For each=move || i.labels.clone() key=|l| l.id children=move |l| {
-                                            view! { <div style=format!("background-color: {}; color: #fff; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-right: 5px;", l.color)>{l.name}</div> }
+                                            let label_id = l.id;
+                                            view! {
+                                                <div style=format!("background-color: {}; color: #fff; padding: 2px 5px; border-radius: 3px; display: inline-block; margin-right: 5px; margin-bottom: 2px;", l.color)>
+                                                    {l.name}
+                                                    <span on:click=move |_| on_remove_label(label_id) style="margin-left: 5px; cursor: pointer; font-weight: bold;">"x"</span>
+                                                </div>
+                                            }
                                         }/>
                                     </div>
                                     <div class="add-label" style="margin-top: 5px;">

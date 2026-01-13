@@ -244,6 +244,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/licenses", get(list_licenses))
         .route("/api/v1/gitignore/templates", get(list_gitignores))
         .route("/api/v1/repos/:owner/:repo/issues/:index/assignees", post(add_issue_assignee))
+        .route("/api/v1/repos/:owner/:repo/issues/:index/assignees/:username", delete(remove_issue_assignee))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/requested_reviewers", post(request_review))
         .route("/api/v1/admin/users", get(admin_list_users))
         .route("/api/v1/admin/users/:username", post(admin_edit_user).delete(admin_delete_user))

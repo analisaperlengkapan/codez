@@ -138,6 +138,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_remove_issue_assignee_flow() {
+        let app = api_router();
+
+        // Add assignee first (mocked user is already in Assignees? No, init is empty)
+        // Add User 2
+        let payload = shared::User::new(2, "user".to_string(), None);
+        let _ = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues/1/assignees")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Remove User 2
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/api/v1/repos/admin/codeza/issues/1/assignees/user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    }
+
+    #[tokio::test]
     async fn test_update_file_flow() {
         let app = api_router();
 

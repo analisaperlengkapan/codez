@@ -648,6 +648,23 @@ pub async fn star_repo(
     }
 }
 
+pub async fn remove_issue_assignee(
+    State(state): State<AppState>,
+    Path((_owner, _repo, index, username)): Path<(String, String, u64, String)>
+) -> StatusCode {
+    let mut issues = state.issues.write().unwrap();
+    if let Some(issue) = issues.iter_mut().find(|i| i.id == index) {
+        if let Some(pos) = issue.assignees.iter().position(|u| u.username == username) {
+            issue.assignees.remove(pos);
+            StatusCode::NO_CONTENT
+        } else {
+            StatusCode::NOT_FOUND
+        }
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
 pub async fn watch_repo(
     State(state): State<AppState>,
     Path((owner, repo_name)): Path<(String, String)>
