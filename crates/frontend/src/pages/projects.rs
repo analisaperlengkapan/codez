@@ -129,16 +129,36 @@ pub fn ProjectDetail() -> impl IntoView {
         }
     };
 
+    let on_toggle_close = move |is_closed: bool| {
+        let o = owner();
+        let r = repo_name();
+        let i = id();
+        let action = if is_closed { "reopen" } else { "close" };
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}/{}", o, r, i, action))
+                .send().await;
+            set_refresh.update(|n| *n += 1); // Trigger resource reload
+        });
+    };
+
     view! {
         <div class="project-board" style="height: 100%; display: flex; flex-direction: column;">
             <Suspense fallback=move || view! { <h3>"Loading Project..."</h3> }>
                 {move || project.get().map(|p| match p {
-                    Some(proj) => view! {
-                        <div class="board-header" style="margin-bottom: 10px;">
-                            <h3>{proj.title}</h3>
-                            <p>{proj.description.unwrap_or_default()}</p>
-                        </div>
-                    }.into_view(),
+                    Some(proj) => {
+                        let is_closed = proj.is_closed;
+                        view! {
+                            <div class="board-header" style="margin-bottom: 10px; display: flex; justify-content: space-between;">
+                                <div>
+                                    <h3>{proj.title} {if is_closed { " (Closed)" } else { "" }}</h3>
+                                    <p>{proj.description.unwrap_or_default()}</p>
+                                </div>
+                                <button on:click=move |_| on_toggle_close(is_closed)>
+                                    {if is_closed { "Reopen Project" } else { "Close Project" }}
+                                </button>
+                            </div>
+                        }.into_view()
+                    },
                     None => view! { <h3>"Project Not Found"</h3> }.into_view()
                 })}
             </Suspense>
@@ -171,6 +191,7 @@ fn ProjectColumnView(
 ) -> impl IntoView {
     let (refresh_cards, set_refresh_cards) = create_signal(0);
     let (new_card_content, set_new_card_content) = create_signal("".to_string());
+    let (issue_id_input, set_issue_id_input) = create_signal("".to_string());
 
     let column_id = column.id;
     let o = repo_owner.clone();
@@ -188,23 +209,26 @@ fn ProjectColumnView(
         let o = repo_owner.clone();
         let r = repo_name.clone();
         let c = column_id;
+
+        let issue_id = issue_id_input.get().parse::<u64>().ok();
+        let content = new_card_content.get();
+
         let payload = CreateProjectCardOption {
-            content: Some(new_card_content.get()),
+            content: if content.is_empty() { None } else { Some(content) },
             note: None,
-            issue_id: None,
+            issue_id,
         };
-        if payload.content.is_some() {
+
+        if payload.content.is_some() || payload.issue_id.is_some() {
              spawn_local(async move {
                 let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/columns/{}/cards", o, r, c))
                     .json(&payload).unwrap().send().await;
                 set_new_card_content.set("".to_string());
+                set_issue_id_input.set("".to_string());
                 set_refresh_cards.update(|n| *n += 1);
             });
         }
     };
-
-    // To simulate drag and drop or moving, we'll just implement a "Move Right" button for now (simplified)
-    // Or a dropdown to move to another column.
 
     view! {
         <div class="column" style="min-width: 250px; max-width: 250px; background: #e0e0e0; padding: 10px; border-radius: 5px; display: flex; flex-direction: column;">
@@ -213,10 +237,15 @@ fn ProjectColumnView(
                 <Suspense fallback=move || view! { <div>"Loading..."</div> }>
                     {move || cards.get().map(|list| view! {
                         <For each=move || list.clone() key=|card| card.id children=move |card| {
+                            let issue_link = card.issue_id.map(|id| format!("Issue #{}", id));
                             view! {
                                 <div class="card" style="background: white; padding: 8px; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
-                                    {card.content.unwrap_or_default()}
-                                    // Add controls to move?
+                                    {if let Some(link) = issue_link {
+                                        view! { <div style="font-weight: bold; color: #0366d6;">{link}</div> }.into_view()
+                                    } else {
+                                        view! { <span></span> }.into_view()
+                                    }}
+                                    <div>{card.content.unwrap_or_default()}</div>
                                 </div>
                             }
                         }/>
@@ -224,8 +253,9 @@ fn ProjectColumnView(
                 </Suspense>
             </div>
              <div class="add-card" style="margin-top: 10px;">
-                <textarea placeholder="Add a card..." prop:value=new_card_content on:input=move |ev| set_new_card_content.set(event_target_value(&ev)) style="width: 100%; box-sizing: border-box;"></textarea>
-                <button on:click=on_add_card style="width: 100%;">"Add"</button>
+                <textarea placeholder="Card content..." prop:value=new_card_content on:input=move |ev| set_new_card_content.set(event_target_value(&ev)) style="width: 100%; box-sizing: border-box; margin-bottom: 5px;"></textarea>
+                <input type="text" placeholder="Issue ID (optional)" prop:value=issue_id_input on:input=move |ev| set_issue_id_input.set(event_target_value(&ev)) style="width: 100%; box-sizing: border-box; margin-bottom: 5px;" />
+                <button on:click=on_add_card style="width: 100%;">"Add Card"</button>
             </div>
         </div>
     }

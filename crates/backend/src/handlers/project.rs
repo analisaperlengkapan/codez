@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Project, CreateProjectOption, ProjectColumn, CreateProjectColumnOption,
-    ProjectCard, CreateProjectCardOption, MoveProjectCardOption
+    ProjectCard, CreateProjectCardOption, MoveProjectCardOption, Activity
 };
 use crate::router::AppState;
 
@@ -101,9 +101,12 @@ pub async fn list_project_cards(
 
 pub async fn create_project_card(
     State(state): State<AppState>,
-    Path((_owner, _repo, column_id)): Path<(String, String, u64)>,
+    Path((owner, repo_name, column_id)): Path<(String, String, u64)>,
     Json(payload): Json<CreateProjectCardOption>
 ) -> (StatusCode, Json<ProjectCard>) {
+    // If issue_id is provided, verify it exists (mock check)
+    // In a real app, we would query `state.issues`.
+
     let mut cards = state.project_cards.write().unwrap();
     let id = (cards.len() as u64) + 1;
     let count = cards.iter().filter(|c| c.column_id == column_id).count() as u64;
@@ -117,20 +120,83 @@ pub async fn create_project_card(
         ordering: count,
     };
     cards.push(card.clone());
+
+    // Log Activity
+    // Finding project ID from column ID would be needed for perfect logging context,
+    // but for now we just log to the repo.
+    let repos = state.repos.read().unwrap();
+    if let Some(repo) = repos.iter().find(|r| r.owner == owner && r.name == repo_name) {
+        let mut activities = state.activities.write().unwrap();
+        let activity_id = (activities.len() as u64) + 1;
+        activities.push(Activity {
+            id: activity_id,
+            repo_id: repo.id,
+            user_id: 1, // mock admin
+            user_name: "admin".to_string(),
+            op_type: "create_project_card".to_string(),
+            content: format!("created card in column {}", column_id),
+            created: "now".to_string(),
+        });
+    }
+
     (StatusCode::CREATED, Json(card))
 }
 
 pub async fn move_project_card(
     State(state): State<AppState>,
-    Path((_owner, _repo, card_id)): Path<(String, String, u64)>,
+    Path((owner, repo_name, card_id)): Path<(String, String, u64)>,
     Json(payload): Json<MoveProjectCardOption>
 ) -> StatusCode {
     let mut cards = state.project_cards.write().unwrap();
     if let Some(card) = cards.iter_mut().find(|c| c.id == card_id) {
+        let old_column = card.column_id;
         card.column_id = payload.column_id;
-        // In real impl, we would handle re-ordering other cards in the lists.
-        // For mock, just updating column is sufficient to show movement.
         card.ordering = payload.new_index;
+
+        // Log Activity if column changed
+        if old_column != payload.column_id {
+             let repos = state.repos.read().unwrap();
+             if let Some(repo) = repos.iter().find(|r| r.owner == owner && r.name == repo_name) {
+                let mut activities = state.activities.write().unwrap();
+                let activity_id = (activities.len() as u64) + 1;
+                activities.push(Activity {
+                    id: activity_id,
+                    repo_id: repo.id,
+                    user_id: 1, // mock admin
+                    user_name: "admin".to_string(),
+                    op_type: "move_project_card".to_string(),
+                    content: format!("moved card {} from column {} to {}", card_id, old_column, payload.column_id),
+                    created: "now".to_string(),
+                });
+            }
+        }
+
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn close_project(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let mut projects = state.projects.write().unwrap();
+    if let Some(project) = projects.iter_mut().find(|p| p.id == id) {
+        project.is_closed = true;
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn reopen_project(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let mut projects = state.projects.write().unwrap();
+    if let Some(project) = projects.iter_mut().find(|p| p.id == id) {
+        project.is_closed = false;
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND

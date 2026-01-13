@@ -658,5 +658,83 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+
+        // 5. Close Project
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}/close", project_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Verify closed
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}", project_id))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let p: Option<Project> = serde_json::from_slice(&body).unwrap();
+        assert!(p.unwrap().is_closed);
+
+        // 6. Create Card Linked to Issue
+        // Create Issue first to check if we can link it
+        let issue_payload = CreateIssueOption { title: "Issue for card".to_string(), body: None };
+        let _ = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/issues")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&issue_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        let payload = CreateProjectCardOption {
+            content: None,
+            note: None,
+            issue_id: Some(1), // Assuming ID 1 or we should fetch it. Since tests run in parallel or sequence,
+                               // ID prediction is brittle. Let's assume ID is > 0.
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/projects/columns/{}/cards", column_id))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Verify Activity Log for card creation
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/user/feeds")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
+        assert!(activities.iter().any(|a| a.op_type == "create_project_card"));
+        assert!(activities.iter().any(|a| a.op_type == "move_project_card"));
     }
 }
