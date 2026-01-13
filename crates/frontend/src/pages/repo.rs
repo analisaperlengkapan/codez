@@ -294,6 +294,14 @@ pub fn IssueDetail() -> impl IntoView {
         }
     );
 
+    let available_milestones = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/milestones", o, r))
+                .send().await.unwrap().json::<Vec<Milestone>>().await.unwrap_or_default()
+        }
+    );
+
     let on_submit_comment = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let payload = CreateCommentOption { body: new_comment.get() };
@@ -343,6 +351,26 @@ pub fn IssueDetail() -> impl IntoView {
         }
     };
 
+    let on_change_milestone = move |ev: leptos::ev::Event| {
+        let val_str = event_target_value(&ev);
+        let m_id = val_str.parse::<u64>().unwrap_or(0);
+        let o = owner();
+        let r = repo_name();
+        let idx = index();
+
+        let payload = UpdateIssueOption {
+            title: None,
+            body: None,
+            state: None,
+            milestone_id: Some(m_id),
+        };
+        spawn_local(async move {
+            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues/{}", o, r, idx))
+                .json(&payload).unwrap().send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
     let (is_editing, set_is_editing) = create_signal(false);
     let (edit_title, set_edit_title) = create_signal("".to_string());
     let (edit_body, set_edit_body) = create_signal("".to_string());
@@ -384,6 +412,7 @@ pub fn IssueDetail() -> impl IntoView {
                         let state_for_toggle = state_clone.clone();
                         let title_clone = i.title.clone();
                         let body_clone = i.body.clone().unwrap_or_default();
+                        let milestone_clone = i.milestone.clone();
                         view! {
                             <div class="issue-header">
                                 {if is_editing.get() {
@@ -443,7 +472,25 @@ pub fn IssueDetail() -> impl IntoView {
                                 </div>
                                 <div class="sidebar-item">
                                     <strong>"Milestone"</strong>
-                                    <p>{i.milestone.clone().map(|m| m.title).unwrap_or("No milestone".to_string())}</p>
+                                    <div>
+                                        <Suspense fallback=move || view! { <span>"Loading..."</span> }>
+                                            {
+                                                let milestone_clone_2 = milestone_clone.clone();
+                                                move || available_milestones.get().map(|list| {
+                                                    let current_id = milestone_clone_2.as_ref().map(|m| m.id).unwrap_or(0);
+                                                    view! {
+                                                        <select on:change=on_change_milestone>
+                                                            <option value="0" selected={current_id == 0}>"No Milestone"</option>
+                                                            <For each=move || list.clone() key=|m| m.id children=move |m| {
+                                                                let selected = m.id == current_id;
+                                                                view! { <option value={m.id} selected={selected}>{m.title}</option> }
+                                                            }/>
+                                                        </select>
+                                                    }
+                                                })
+                                            }
+                                        </Suspense>
+                                    </div>
                                 </div>
                             </div>
                         </div>

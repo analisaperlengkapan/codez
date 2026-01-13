@@ -183,10 +183,14 @@ pub async fn update_issue(
             i.state = state_val;
         }
         if let Some(milestone_id) = payload.milestone_id {
-            // Validate milestone existence
-            let milestones = state.milestones.read().unwrap();
-            if let Some(m) = milestones.iter().find(|m| m.id == milestone_id) {
-                i.milestone = Some(m.clone());
+            if milestone_id == 0 {
+                i.milestone = None;
+            } else {
+                // Validate milestone existence
+                let milestones = state.milestones.read().unwrap();
+                if let Some(m) = milestones.iter().find(|m| m.id == milestone_id) {
+                    i.milestone = Some(m.clone());
+                }
             }
         }
         return (StatusCode::OK, Json(Some(i.clone())));
