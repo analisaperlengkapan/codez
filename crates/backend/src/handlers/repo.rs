@@ -890,8 +890,8 @@ pub async fn update_repo_settings(
             repo.private = private;
         }
         // Handle website update if Repo struct supported it, currently it doesn't in shared definition
-        // but we can at least return OK after modifying what we can.
-        StatusCode::OK
+        // but we can at least return NO_CONTENT after modifying what we can.
+        StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
     }

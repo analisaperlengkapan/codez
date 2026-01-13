@@ -1,0 +1,11 @@
+[build]
+target = "index.html"
+public_url = "/"
+
+[watch]
+ignore = ["target"]
+
+[serve]
+port = 3001
+open = false
+ws_protocol = "ws"

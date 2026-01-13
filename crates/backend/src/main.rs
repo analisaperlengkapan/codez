@@ -3,6 +3,8 @@ use std::net::SocketAddr;
 mod handlers;
 mod router;
 mod tests;
+mod error;
+mod validation;
 
 use router::api_router;
 
