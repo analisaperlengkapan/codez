@@ -177,6 +177,15 @@ pub struct Commit {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReleaseAsset {
+    pub id: u64,
+    pub name: String,
+    pub size: u64,
+    pub download_url: String,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Release {
     pub id: u64,
     pub repo_id: u64,
@@ -187,6 +196,7 @@ pub struct Release {
     pub prerelease: bool,
     pub created_at: String,
     pub author: User,
+    pub assets: Vec<ReleaseAsset>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -196,6 +206,15 @@ pub struct CreateReleaseOption {
     pub body: Option<String>,
     pub draft: bool,
     pub prerelease: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateReleaseOption {
+    pub tag_name: Option<String>,
+    pub name: Option<String>,
+    pub body: Option<String>,
+    pub draft: Option<bool>,
+    pub prerelease: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1021,6 +1040,7 @@ mod tests {
             prerelease: false,
             created_at: "date".to_string(),
             author: user,
+            assets: vec![],
         };
         assert_eq!(rel.tag_name, "v1.0");
 

@@ -6,6 +6,7 @@ pub mod org;
 pub mod projects;
 pub mod packages;
 pub mod actions;
+pub mod release;
 
 pub use dashboard::*;
 pub use admin::*;
@@ -15,3 +16,4 @@ pub use org::*;
 pub use projects::*;
 pub use packages::*;
 pub use actions::*;
+pub use release::*;

@@ -1330,42 +1330,6 @@ pub fn TagList() -> impl IntoView {
     }
 }
 
-#[component]
-pub fn ReleaseList() -> impl IntoView {
-    let params = use_params_map();
-    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
-    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-
-    let releases = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/releases", o, r))
-                .send().await.unwrap().json::<Vec<Release>>().await.unwrap_or_default()
-        }
-    );
-
-    view! {
-        <div class="release-list">
-            <h3>"Releases for " {owner} "/" {repo_name}</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading releases..."</li> }>
-                    {move || releases.get().map(|list| view! {
-                        <For each=move || list.clone() key=|r| r.id children=move |r| {
-                            view! {
-                                <li>
-                                    <strong>{r.name}</strong> " (" {r.tag_name} ")"
-                                    {if r.draft { " [Draft]" } else { "" }}
-                                    {if r.prerelease { " [Pre-release]" } else { "" }}
-                                    <p>{r.body.unwrap_or_default()}</p>
-                                </li>
-                            }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
-        </div>
-    }
-}
 
 #[component]
 pub fn RepoSettings() -> impl IntoView {

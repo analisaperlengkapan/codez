@@ -38,6 +38,7 @@ pub struct AppState {
     pub org_members: Arc<RwLock<Vec<OrgMember>>>,
     pub workflow_runs: Arc<RwLock<Vec<WorkflowRun>>>,
     pub webhook_deliveries: Arc<RwLock<Vec<WebhookDelivery>>>,
+    pub protected_branches: Arc<RwLock<Vec<shared::ProtectedBranch>>>,
 }
 
 pub fn api_router() -> Router {
@@ -88,6 +89,7 @@ pub fn api_router() -> Router {
                 prerelease: false,
                 created_at: "2023-01-01".to_string(),
                 author: user.clone(),
+                assets: vec![],
             }
         ])),
         labels: Arc::new(RwLock::new(vec![
@@ -206,6 +208,7 @@ pub fn api_router() -> Router {
         org_members: Arc::new(RwLock::new(vec![])),
         workflow_runs: Arc::new(RwLock::new(vec![])),
         webhook_deliveries: Arc::new(RwLock::new(vec![])),
+        protected_branches: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -223,6 +226,8 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/contents", get(get_root_contents))
         .route("/api/v1/repos/:owner/:repo/commits", get(list_commits))
         .route("/api/v1/repos/:owner/:repo/releases", get(list_releases).post(create_release))
+        .route("/api/v1/repos/:owner/:repo/releases/:id", get(get_release).patch(update_release).delete(delete_release))
+        .route("/api/v1/repos/:owner/:repo/releases/:id/assets", post(upload_release_asset))
         .route("/api/v1/users/login", post(login_user))
         .route("/api/v1/users/register", post(register_user))
         .route("/api/v1/orgs", post(create_org))
