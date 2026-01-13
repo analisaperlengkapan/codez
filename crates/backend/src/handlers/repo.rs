@@ -10,7 +10,8 @@ use shared::{
     CreateHookOption, Webhook, CreateSecretOption, Secret, CreateKeyOption, DeployKey, CreateReactionOption, Reaction, IssueFilterOptions,
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
-    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption
+    DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
+    Review, CreateReviewOption
 };
 use crate::router::AppState;
 
@@ -1203,6 +1204,70 @@ pub async fn add_issue_assignee(
 pub async fn request_review(Path((_owner, _repo, _index)): Path<(String, String, u64)>) -> (StatusCode, Json<ReviewRequest>) {
     let reviewer = User::new(2, "reviewer".to_string(), None);
     (StatusCode::CREATED, Json(ReviewRequest { reviewer, status: "requested".to_string() }))
+}
+
+pub async fn list_reviews(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>
+) -> Json<Vec<Review>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let pulls = state.pulls.read().unwrap();
+    // Assuming pull requests have unique IDs globally or we filter by repo/number.
+    // Shared `PullRequest` has `id`, `repo_id`, `number`.
+    let pr = pulls.iter().find(|p| p.repo_id == repo_id && p.number == index);
+
+    if let Some(p) = pr {
+        let reviews = state.reviews.read().unwrap();
+        let filtered: Vec<Review> = reviews.iter().filter(|r| r.pull_request_id == p.id).cloned().collect();
+        Json(filtered)
+    } else {
+        Json(vec![])
+    }
+}
+
+pub async fn create_review(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
+    Json(payload): Json<CreateReviewOption>
+) -> (StatusCode, Json<Review>) {
+    let repos = state.repos.read().unwrap();
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+
+    if repo.is_none() {
+         return (StatusCode::NOT_FOUND, Json(Review {
+            id: 0, pull_request_id: 0, user: User::new(0, "".to_string(), None), body: "".to_string(), state: "".to_string(), created_at: "".to_string()
+        }));
+    }
+    let repo_id = repo.unwrap().id;
+
+    let pulls = state.pulls.read().unwrap();
+    let pr = pulls.iter().find(|p| p.repo_id == repo_id && p.number == index);
+
+    if let Some(p) = pr {
+        let mut reviews = state.reviews.write().unwrap();
+        let id = (reviews.len() as u64) + 1;
+        let state_val = match payload.event.as_str() {
+            "APPROVE" => "APPROVED",
+            "REQUEST_CHANGES" => "CHANGES_REQUESTED",
+            _ => "COMMENTED",
+        };
+        let review = Review {
+            id,
+            pull_request_id: p.id,
+            user: User::new(1, "admin".to_string(), None), // Mock user
+            body: payload.body,
+            state: state_val.to_string(),
+            created_at: "now".to_string(),
+        };
+        reviews.push(review.clone());
+        (StatusCode::CREATED, Json(review))
+    } else {
+        (StatusCode::NOT_FOUND, Json(Review {
+            id: 0, pull_request_id: 0, user: User::new(0, "".to_string(), None), body: "".to_string(), state: "".to_string(), created_at: "".to_string()
+        }))
+    }
 }
 
 pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, String)>) -> Json<Vec<DiffFile>> {

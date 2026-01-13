@@ -737,4 +737,72 @@ mod tests {
         assert!(activities.iter().any(|a| a.op_type == "create_project_card"));
         assert!(activities.iter().any(|a| a.op_type == "move_project_card"));
     }
+
+    #[tokio::test]
+    async fn test_pull_request_review_flow() {
+        let app = api_router();
+
+        // Create PR first
+        let payload = CreatePullRequestOption {
+            title: "PR for Review".to_string(),
+            body: None,
+            head: "f".to_string(),
+            base: "m".to_string(),
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/pulls")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let pr: PullRequest = serde_json::from_slice(&body).unwrap();
+        let pr_number = pr.number;
+
+        // Submit Review
+        let review_payload = shared::CreateReviewOption {
+            body: "Looks good to me".to_string(),
+            event: "APPROVE".to_string(),
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/pulls/{}/reviews", pr_number))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&review_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let review: shared::Review = serde_json::from_slice(&body).unwrap();
+        assert_eq!(review.state, "APPROVED");
+        assert_eq!(review.body, "Looks good to me");
+
+        // List Reviews
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&format!("/api/v1/repos/admin/codeza/pulls/{}/reviews", pr_number))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let reviews: Vec<shared::Review> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(reviews.len(), 1);
+        assert_eq!(reviews[0].state, "APPROVED");
+    }
 }

@@ -8,7 +8,7 @@ use shared::{
     ActionWorkflow, CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
-    UpdateIssueOption, UpdatePullRequestOption
+    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption
 };
 
 #[component]
@@ -961,6 +961,7 @@ pub fn CommitDiff() -> impl IntoView {
                     })}
                 </Suspense>
             </div>
+
         </div>
     }
 }
@@ -1095,6 +1096,32 @@ pub fn PullRequestDetail() -> impl IntoView {
         });
     };
 
+    let reviews = create_resource(
+        move || (owner(), repo_name(), index(), trigger_refresh.get()),
+        |(o, r, i, _)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i))
+                .send().await.unwrap().json::<Vec<Review>>().await.unwrap_or_default()
+        }
+    );
+
+    let (review_body, set_review_body) = create_signal("".to_string());
+
+    let on_submit_review = move |event: String| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        let payload = CreateReviewOption {
+            body: review_body.get(),
+            event,
+        };
+        spawn_local(async move {
+            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i))
+                .json(&payload).unwrap().send().await;
+            set_review_body.set("".to_string());
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
     view! {
         <div class="pull-detail">
             <Suspense fallback=move || view! { <p>"Loading PR..."</p> }>
@@ -1169,6 +1196,44 @@ pub fn PullRequestDetail() -> impl IntoView {
                         }/>
                     })}
                 </Suspense>
+            </div>
+
+            <div class="pr-reviews" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+                <h4>"Reviews"</h4>
+                <div class="review-list">
+                    <Suspense fallback=move || view! { <p>"Loading reviews..."</p> }>
+                        {move || reviews.get().map(|list| view! {
+                            <For each=move || list.clone() key=|r| r.id children=move |r| {
+                                view! {
+                                    <div class="review-item" style="border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; border-radius: 5px;">
+                                        <div class="review-header">
+                                            <strong>{r.user.username}</strong> " "
+                                            <span style=format!("font-weight: bold; color: {}", match r.state.as_str() {
+                                                "APPROVED" => "green",
+                                                "CHANGES_REQUESTED" => "red",
+                                                _ => "gray"
+                                            })>{r.state}</span>
+                                            " on " {r.created_at}
+                                        </div>
+                                        <div class="review-body" style="margin-top: 5px;">
+                                            {r.body}
+                                        </div>
+                                    </div>
+                                }
+                            }/>
+                        })}
+                    </Suspense>
+                </div>
+
+                <div class="add-review" style="margin-top: 10px; border: 1px solid #ccc; padding: 10px;">
+                    <h5>"Submit Review"</h5>
+                    <textarea prop:value=review_body on:input=move |ev| set_review_body.set(event_target_value(&ev)) placeholder="Leave a comment" style="width: 100%; margin-bottom: 5px;"></textarea>
+                    <div style="display: flex; gap: 5px;">
+                        <button on:click=move |_| on_submit_review("COMMENT".to_string())>"Comment"</button>
+                        <button on:click=move |_| on_submit_review("APPROVE".to_string()) style="color: green;">"Approve"</button>
+                        <button on:click=move |_| on_submit_review("REQUEST_CHANGES".to_string()) style="color: red;">"Request Changes"</button>
+                    </div>
+                </div>
             </div>
         </div>
     }

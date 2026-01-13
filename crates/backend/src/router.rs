@@ -4,7 +4,7 @@ use axum::{
 };
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
-    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard
+    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -32,6 +32,7 @@ pub struct AppState {
     pub projects: Arc<RwLock<Vec<Project>>>,
     pub project_columns: Arc<RwLock<Vec<ProjectColumn>>>,
     pub project_cards: Arc<RwLock<Vec<ProjectCard>>>,
+    pub reviews: Arc<RwLock<Vec<Review>>>,
 }
 
 pub fn api_router() -> Router {
@@ -188,6 +189,7 @@ pub fn api_router() -> Router {
         projects: Arc::new(RwLock::new(vec![])),
         project_columns: Arc::new(RwLock::new(vec![])),
         project_cards: Arc::new(RwLock::new(vec![])),
+        reviews: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -198,6 +200,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/issues", get(list_issues).post(create_issue))
         .route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls).post(create_pull))
         .route("/api/v1/repos/:owner/:repo/pulls/:index", patch(update_pull))
+        .route("/api/v1/repos/:owner/:repo/pulls/:index/reviews", get(list_reviews).post(create_review))
         .route("/api/v1/user/issues", get(list_user_issues))
         .route("/api/v1/user/pulls", get(list_user_pulls))
         .route("/api/v1/repos/:owner/:repo/contents/*path", get(get_contents).put(update_file))

@@ -601,6 +601,22 @@ pub struct ReviewRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Review {
+    pub id: u64,
+    pub pull_request_id: u64,
+    pub user: User,
+    pub body: String,
+    pub state: String, // "APPROVED", "CHANGES_REQUESTED", "COMMENTED", "PENDING"
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateReviewOption {
+    pub body: String,
+    pub event: String, // "APPROVE", "REQUEST_CHANGES", "COMMENT"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AdminUserEditOption {
     pub email: Option<String>,
     pub password: Option<String>,
