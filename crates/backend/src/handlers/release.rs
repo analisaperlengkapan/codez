@@ -12,7 +12,9 @@ pub async fn list_releases(State(state): State<AppState>, Path((owner, repo_name
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
     let releases = state.releases.read().unwrap();
-    let filtered_releases: Vec<Release> = releases.iter().filter(|r| r.repo_id == repo_id).cloned().collect();
+    let mut filtered_releases: Vec<Release> = releases.iter().filter(|r| r.repo_id == repo_id).cloned().collect();
+    // Sort by ID descending (newest first)
+    filtered_releases.sort_by(|a, b| b.id.cmp(&a.id));
     Json(filtered_releases)
 }
 
@@ -24,6 +26,15 @@ pub async fn get_release(
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
     let releases = state.releases.read().unwrap();
+
+    if id_or_tag == "latest" {
+        // Find latest release (not draft, not prerelease)
+        let release = releases.iter()
+            .filter(|r| r.repo_id == repo_id && !r.draft && !r.prerelease)
+            .max_by_key(|r| r.id)
+            .cloned();
+        return Json(release);
+    }
 
     // Check if input is ID or Tag
     let release = if let Ok(id) = id_or_tag.parse::<u64>() {
