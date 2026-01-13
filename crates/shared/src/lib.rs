@@ -220,6 +220,24 @@ pub struct Organization {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateOrgOption {
+    pub username: String,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateTeamOption {
+    pub name: String,
+    pub description: Option<String>,
+    pub permission: String, // "read", "write", "admin"
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AddTeamMemberOption {
+    pub username: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Comment {
     pub id: u64,
     pub issue_id: u64,

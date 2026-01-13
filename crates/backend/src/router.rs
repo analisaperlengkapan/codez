@@ -4,7 +4,8 @@ use axum::{
 };
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
-    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review
+    Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
+    Organization, OrgMember
 };
 use std::sync::{Arc, RwLock};
 use tower_http::cors::CorsLayer;
@@ -33,6 +34,8 @@ pub struct AppState {
     pub project_columns: Arc<RwLock<Vec<ProjectColumn>>>,
     pub project_cards: Arc<RwLock<Vec<ProjectCard>>>,
     pub reviews: Arc<RwLock<Vec<Review>>>,
+    pub orgs: Arc<RwLock<Vec<Organization>>>,
+    pub org_members: Arc<RwLock<Vec<OrgMember>>>,
 }
 
 pub fn api_router() -> Router {
@@ -190,6 +193,15 @@ pub fn api_router() -> Router {
         project_columns: Arc::new(RwLock::new(vec![])),
         project_cards: Arc::new(RwLock::new(vec![])),
         reviews: Arc::new(RwLock::new(vec![])),
+        orgs: Arc::new(RwLock::new(vec![
+            Organization {
+                id: 1,
+                username: "codeza-org".to_string(),
+                description: Some("Codeza Organization".to_string()),
+                avatar_url: None,
+            }
+        ])),
+        org_members: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -209,6 +221,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/releases", get(list_releases).post(create_release))
         .route("/api/v1/users/login", post(login_user))
         .route("/api/v1/users/register", post(register_user))
+        .route("/api/v1/orgs", post(create_org))
         .route("/api/v1/orgs/:org", get(get_org))
         .route("/api/v1/orgs/:org/repos", get(list_org_repos))
         .route("/api/v1/repos/:owner/:repo/issues/:index", get(get_issue).patch(update_issue))
@@ -230,7 +243,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/notifications", get(list_notifications))
         .route("/api/v1/user/keys", get(list_keys).post(create_key))
         .route("/api/v1/repos/:owner/:repo/hooks", get(list_hooks).post(create_hook))
-        .route("/api/v1/orgs/:org/teams", get(list_teams))
+        .route("/api/v1/orgs/:org/teams", get(list_teams).post(create_team))
         .route("/api/v1/repos/:owner/:repo/projects", get(list_projects).post(create_project))
         .route("/api/v1/repos/:owner/:repo/projects/:id", get(get_project))
         .route("/api/v1/repos/:owner/:repo/projects/:id/close", post(close_project))

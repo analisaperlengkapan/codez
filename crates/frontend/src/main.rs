@@ -30,6 +30,7 @@ fn App() -> impl IntoView {
                     <Route path="/register" view=Register/>
                     <Route path="/repo/create" view=CreateRepo/>
                     <Route path="/repo/migrate" view=MigrateRepo/>
+                    <Route path="/org/create" view=CreateOrg/>
                     <Route path="/users/:username" view=UserProfile/>
                     <Route path="/users/:username/followers" view=UserFollowers/>
                     <Route path="/users/:username/following" view=UserFollowing/>
