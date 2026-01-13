@@ -89,9 +89,7 @@ impl User {
 pub struct CreateRepoOption {
     pub name: String,
     pub description: Option<String>,
-    #[serde(default)]
     pub private: bool,
-    #[serde(default)]
     pub auto_init: bool,
     pub gitignores: Option<String>,
     pub license: Option<String>,
@@ -196,9 +194,7 @@ pub struct CreateReleaseOption {
     pub tag_name: String,
     pub name: String,
     pub body: Option<String>,
-    #[serde(default)]
     pub draft: bool,
-    #[serde(default)]
     pub prerelease: bool,
 }
 
@@ -475,12 +471,7 @@ pub struct Branch {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CreateBranchOption {
     pub name: String,
-    #[serde(default = "default_base_branch")]
     pub base: String,
-}
-
-fn default_base_branch() -> String {
-    "main".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -692,6 +683,13 @@ pub struct LanguageStat {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProtectedBranch {
+    pub name: String,
+    pub enable_push: bool,
+    pub enable_force_push: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateProtectedBranchOption {
     pub name: String,
     pub enable_push: bool,
     pub enable_force_push: bool,

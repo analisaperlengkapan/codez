@@ -74,7 +74,7 @@ pub async fn update_user_settings(
             created: "now".to_string(),
         });
 
-        StatusCode::NO_CONTENT
+        StatusCode::OK
     } else {
         StatusCode::UNAUTHORIZED
     }
@@ -89,7 +89,7 @@ pub async fn mark_notification_read(State(state): State<AppState>, Path(id): Pat
     let mut notifications = state.notifications.write().unwrap();
     if let Some(n) = notifications.iter_mut().find(|n| n.id == id) {
         n.unread = false;
-        StatusCode::NO_CONTENT
+        StatusCode::RESET_CONTENT
     } else {
         StatusCode::NOT_FOUND
     }

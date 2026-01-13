@@ -11,7 +11,7 @@ use shared::{
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
-    Review, CreateReviewOption, WebhookDelivery
+    Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch
 };
 use crate::router::AppState;
 
@@ -890,8 +890,8 @@ pub async fn update_repo_settings(
             repo.private = private;
         }
         // Handle website update if Repo struct supported it, currently it doesn't in shared definition
-        // but we can at least return NO_CONTENT after modifying what we can.
-        StatusCode::NO_CONTENT
+        // but we can at least return OK after modifying what we can.
+        StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
     }
@@ -1359,4 +1359,58 @@ pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, 
         }
     ];
     Json(diffs)
+}
+
+pub async fn list_branch_protections(
+    State(state): State<AppState>,
+    Path((_owner, _repo)): Path<(String, String)>
+) -> Json<Vec<ProtectedBranch>> {
+    let branches = state.protected_branches.read().unwrap();
+    // In real impl we would filter by repo ID
+    Json(branches.clone())
+}
+
+pub async fn create_branch_protection(
+    State(state): State<AppState>,
+    Path((_owner, _repo)): Path<(String, String)>,
+    Json(payload): Json<CreateProtectedBranchOption>
+) -> (StatusCode, Json<ProtectedBranch>) {
+    let mut branches = state.protected_branches.write().unwrap();
+    if branches.iter().any(|b| b.name == payload.name) {
+         return (StatusCode::CONFLICT, Json(ProtectedBranch { name: "".to_string(), enable_push: false, enable_force_push: false }));
+    }
+    let protection = ProtectedBranch {
+        name: payload.name,
+        enable_push: payload.enable_push,
+        enable_force_push: payload.enable_force_push,
+    };
+    branches.push(protection.clone());
+    (StatusCode::CREATED, Json(protection))
+}
+
+pub async fn delete_branch_protection(
+    State(state): State<AppState>,
+    Path((_owner, _repo, name)): Path<(String, String, String)>
+) -> StatusCode {
+    let mut branches = state.protected_branches.write().unwrap();
+    if let Some(pos) = branches.iter().position(|b| b.name == name) {
+        branches.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn search_issues_global(
+    State(state): State<AppState>,
+    Query(filter): Query<IssueFilterOptions>
+) -> Json<Vec<Issue>> {
+    let issues = state.issues.read().unwrap();
+    let mut filtered_issues: Vec<Issue> = issues.clone();
+
+    if let Some(q) = filter.q {
+        let q_lower = q.to_lowercase();
+        filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
+    }
+    Json(filtered_issues)
 }

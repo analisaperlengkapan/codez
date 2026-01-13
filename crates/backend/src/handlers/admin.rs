@@ -179,8 +179,3 @@ pub async fn get_repo_languages(Path((_owner, _repo)): Path<(String, String)>) -
     ].into()
 }
 
-pub async fn list_branch_protections(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<ProtectedBranch>> {
-    vec![
-        ProtectedBranch { name: "main".to_string(), enable_push: false, enable_force_push: false }
-    ].into()
-}

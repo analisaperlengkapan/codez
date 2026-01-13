@@ -204,31 +204,85 @@ pub fn Explore() -> impl IntoView {
 #[component]
 pub fn Search() -> impl IntoView {
     let (query, set_query) = create_signal("".to_string());
-    let (results, set_results) = create_signal(vec![]);
+    let (search_type, set_search_type) = create_signal("repos".to_string()); // repos | issues
+
+    let (repo_results, set_repo_results) = create_signal(vec![]);
+    let (issue_results, set_issue_results) = create_signal(vec![]);
 
     let on_search = move |_| {
         let q = query.get();
-        if !q.is_empty() {
-            spawn_local(async move {
-                let res = Request::get("http://127.0.0.1:3000/api/v1/repos/search").send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default();
-                set_results.set(res);
-            });
-        }
+        let t = search_type.get();
+
+        spawn_local(async move {
+            if t == "repos" {
+                let url = if !q.is_empty() {
+                    format!("http://127.0.0.1:3000/api/v1/repos?q={}", q)
+                } else {
+                    "http://127.0.0.1:3000/api/v1/repos".to_string()
+                };
+
+                let res = Request::get(&url).send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default();
+                set_repo_results.set(res);
+                set_issue_results.set(vec![]);
+            } else {
+                let url = format!("http://127.0.0.1:3000/api/v1/search/issues?q={}", q);
+                let res = Request::get(&url).send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default();
+                set_issue_results.set(res);
+                set_repo_results.set(vec![]);
+            }
+        });
     };
 
     view! {
         <div class="search-page">
-            <h2>"Search Repositories"</h2>
-            <input type="text" placeholder="Search..."
-                prop:value=query
-                on:input=move |ev| set_query.set(event_target_value(&ev))
-            />
-            <button on:click=on_search>"Search"</button>
-            <ul>
-                <For each=move || results.get() key=|r| r.id children=move |r| {
-                    view! { <li>{r.owner} "/" {r.name}</li> }
-                }/>
-            </ul>
+            <h2>"Global Search"</h2>
+            <div class="search-controls" style="margin-bottom: 20px;">
+                <input type="text" placeholder="Search..."
+                    prop:value=query
+                    on:input=move |ev| set_query.set(event_target_value(&ev))
+                    style="padding: 5px; width: 300px;"
+                />
+                <select on:change=move |ev| set_search_type.set(event_target_value(&ev)) style="margin-left: 10px; padding: 5px;">
+                    <option value="repos">"Repositories"</option>
+                    <option value="issues">"Issues"</option>
+                </select>
+                <button on:click=on_search style="margin-left: 10px; padding: 5px 10px;">"Search"</button>
+            </div>
+
+            <div class="search-results">
+                {move || if search_type.get() == "repos" {
+                    view! {
+                        <ul>
+                            <For each=move || repo_results.get() key=|r| r.id children=move |r| {
+                                let href = format!("/repos/{}/{}", r.owner, r.name);
+                                view! {
+                                    <li style="margin-bottom: 10px;">
+                                        <a href=href style="font-weight: bold;">{r.owner} "/" {r.name}</a>
+                                        <p style="margin: 0; color: #666;">{r.description.clone().unwrap_or_default()}</p>
+                                        <small>"⭐ " {r.stars_count}</small>
+                                    </li>
+                                }
+                            }/>
+                        </ul>
+                    }.into_view()
+                } else {
+                    view! {
+                         <ul>
+                            <For each=move || issue_results.get() key=|i| i.id children=move |i| {
+                                // Since issue doesn't have repo info, we can't link correctly easily.
+                                // We'll just display info for now.
+                                view! {
+                                    <li style="margin-bottom: 10px;">
+                                        <span style="font-weight: bold;">"#" {i.number} " " {i.title}</span>
+                                        <span style="color: #666; margin-left: 10px;">" (" {i.state} ")"</span>
+                                        <p style="margin: 0;">{i.body.clone().unwrap_or_default().chars().take(100).collect::<String>()} "..."</p>
+                                    </li>
+                                }
+                            }/>
+                        </ul>
+                    }.into_view()
+                }}
+            </div>
         </div>
     }
 }
