@@ -14,7 +14,7 @@ pub fn OrgProfile() -> impl IntoView {
     let org = create_resource(
         org_name,
         |name| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/orgs/{}", name)).send().await.unwrap().json::<Option<Organization>>().await.unwrap_or(None)
+            Request::get(&format!("/api/v1/orgs/{}", name)).send().await.unwrap().json::<Option<Organization>>().await.unwrap_or(None)
         }
     );
 
@@ -22,7 +22,7 @@ pub fn OrgProfile() -> impl IntoView {
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "repos" {
-                Request::get(&format!("http://127.0.0.1:3000/api/v1/orgs/{}/repos", name)).send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
+                Request::get(&format!("/api/v1/orgs/{}/repos", name)).send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
             } else {
                 vec![]
             }
@@ -33,7 +33,7 @@ pub fn OrgProfile() -> impl IntoView {
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "teams" {
-                Request::get(&format!("http://127.0.0.1:3000/api/v1/orgs/{}/teams", name)).send().await.unwrap().json::<Vec<Team>>().await.unwrap_or_default()
+                Request::get(&format!("/api/v1/orgs/{}/teams", name)).send().await.unwrap().json::<Vec<Team>>().await.unwrap_or_default()
             } else {
                 vec![]
             }
@@ -44,7 +44,7 @@ pub fn OrgProfile() -> impl IntoView {
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "people" {
-                Request::get(&format!("http://127.0.0.1:3000/api/v1/orgs/{}/members", name)).send().await.unwrap().json::<Vec<OrgMember>>().await.unwrap_or_default()
+                Request::get(&format!("/api/v1/orgs/{}/members", name)).send().await.unwrap().json::<Vec<OrgMember>>().await.unwrap_or_default()
             } else {
                 vec![]
             }
@@ -61,7 +61,7 @@ pub fn OrgProfile() -> impl IntoView {
             permission: "read".to_string(),
         };
         spawn_local(async move {
-            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/orgs/{}/teams", name))
+            let _ = Request::post(&format!("/api/v1/orgs/{}/teams", name))
                 .json(&payload).unwrap().send().await;
             set_new_team_name.set("".to_string());
             set_refresh.update(|n| *n += 1);
@@ -153,7 +153,7 @@ pub fn CreateOrg() -> impl IntoView {
             description: if desc.get().is_empty() { None } else { Some(desc.get()) },
         };
         spawn_local(async move {
-            let _ = Request::post("http://127.0.0.1:3000/api/v1/orgs").json(&payload).unwrap().send().await;
+            let _ = Request::post("/api/v1/orgs").json(&payload).unwrap().send().await;
             // Redirect to org profile?
         });
     };
