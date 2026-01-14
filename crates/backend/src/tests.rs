@@ -927,4 +927,195 @@ mod tests {
         // Should have 1 delivery for "issues" event
         assert!(deliveries.iter().any(|d| d.event == "issues" && d.status == "success"));
     }
+
+    #[tokio::test]
+    async fn test_release_flow() {
+        let app = api_router();
+
+        // Create Release
+        let payload = shared::CreateReleaseOption {
+            tag_name: "v2.0.0".to_string(),
+            name: "New Release".to_string(),
+            body: Some("Release Body".to_string()),
+            draft: false,
+            prerelease: false,
+        };
+
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/releases")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let release: shared::Release = serde_json::from_slice(&body).unwrap();
+        assert_eq!(release.tag_name, "v2.0.0");
+
+        // List Releases
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/releases")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let releases: Vec<shared::Release> = serde_json::from_slice(&body).unwrap();
+        // Should have "Initial Release" (id 1) and "New Release" (id 2)
+        assert!(releases.len() >= 2);
+        // Sort order is desc by ID
+        assert_eq!(releases[0].tag_name, "v2.0.0");
+    }
+
+    #[tokio::test]
+    async fn test_wiki_flow() {
+        let app = api_router();
+
+        // Create Wiki Page
+        let payload = shared::CreateWikiPageOption {
+            title: "Docs".to_string(),
+            content: "Documentation content".to_string(),
+            message: Some("Init docs".to_string()),
+        };
+
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/wiki/pages")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // List Wiki Pages
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/wiki/pages")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        // Note: Logic in handler uses mock static list, so we just verify API contract here.
+    }
+
+    #[tokio::test]
+    async fn test_package_flow() {
+        let app = api_router();
+
+        // Upload Package (mock)
+        let payload = shared::CreatePackageOption {
+            name: "test-pkg".to_string(),
+            version: "0.1.0".to_string(),
+            package_type: "npm".to_string(),
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/packages/admin")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // List Packages
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/packages/admin")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let packages: Vec<shared::Package> = serde_json::from_slice(&body).unwrap();
+        // Init state has 1 package. So now 2.
+        assert_eq!(packages.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_action_flow() {
+        let app = api_router();
+
+        // List Workflows (mock)
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/actions/workflows")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Trigger Workflow
+        let payload = shared::CreateWorkflowRunOption {
+            ref_name: "main".to_string(),
+            workflow_id: 1,
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/actions/workflows/1/runs")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // List Workflow Runs
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/actions/workflows/1/runs")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let runs: Vec<shared::WorkflowRun> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].status, "queued");
+    }
 }

@@ -1,7 +1,7 @@
 use leptos::*;
 use leptos_router::*;
 use gloo_net::http::Request;
-use shared::{Release, CreateReleaseOption, ReleaseAsset};
+use shared::{Release, CreateReleaseOption};
 
 #[component]
 pub fn ReleaseList() -> impl IntoView {

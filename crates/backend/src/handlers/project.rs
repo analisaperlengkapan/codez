@@ -25,12 +25,13 @@ pub async fn create_project(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
-         return (StatusCode::NOT_FOUND, Json(Project {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
+        return (StatusCode::NOT_FOUND, Json(Project {
             id: 0, repo_id: 0, title: "".to_string(), description: None, is_closed: false
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut projects = state.projects.write().unwrap();
     let id = (projects.len() as u64) + 1;

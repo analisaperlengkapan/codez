@@ -54,12 +54,13 @@ pub async fn create_release(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
-         return (StatusCode::NOT_FOUND, Json(Release {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
+        return (StatusCode::NOT_FOUND, Json(Release {
             id: 0, repo_id: 0, tag_name: "".to_string(), name: "".to_string(), body: None, draft: false, prerelease: false, created_at: "".to_string(), author: User::new(0, "".to_string(), None), assets: vec![]
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut releases = state.releases.write().unwrap();
     // Generate safe ID

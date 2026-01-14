@@ -1201,7 +1201,7 @@ pub async fn update_file(
 
     (StatusCode::OK, Json(FileEntry {
         name: "updated_file".to_string(),
-        path: path,
+        path,
         kind: "file".to_string(),
         size: 123,
     }))

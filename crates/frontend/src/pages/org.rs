@@ -12,7 +12,7 @@ pub fn OrgProfile() -> impl IntoView {
     let (refresh, set_refresh) = create_signal(0);
 
     let org = create_resource(
-        move || org_name(),
+        org_name,
         |name| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/orgs/{}", name)).send().await.unwrap().json::<Option<Organization>>().await.unwrap_or(None)
         }
