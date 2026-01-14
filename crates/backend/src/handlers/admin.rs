@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Organization, Repository, Team, OrgMember, AdminStats, SystemNotice,
     LicenseTemplate, GitignoreTemplate,
-    AdminUserEditOption, User, LanguageStat, ProtectedBranch, CreateOrgOption, CreateTeamOption
+    AdminUserEditOption, User, LanguageStat, CreateOrgOption, CreateTeamOption
 };
 
 pub async fn create_org(

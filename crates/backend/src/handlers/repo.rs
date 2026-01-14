@@ -78,6 +78,10 @@ pub async fn list_issues(State(state): State<AppState>, Path((owner, repo_name))
     let repos = state.repos.read().unwrap();
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
+    if repo_id == 0 {
+        return Json(vec![]);
+    }
+
     let issues = state.issues.read().unwrap();
     let mut filtered_issues: Vec<Issue> = issues.iter().filter(|i| i.repo_id == repo_id).cloned().collect();
 
@@ -150,13 +154,14 @@ pub async fn create_issue(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
         return (StatusCode::NOT_FOUND, Json(Issue {
             id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
             user: User::new(0, "".to_string(), None), assignees: vec![], labels: vec![], milestone: None
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut issues = state.issues.write().unwrap();
     let id = (issues.len() as u64) + 1;
@@ -368,12 +373,13 @@ pub async fn create_comment(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(Comment {
             id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string(), reactions: vec![]
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let issues = state.issues.read().unwrap();
     let issue = issues.iter().find(|i| i.repo_id == repo_id && i.number == index);
@@ -442,12 +448,13 @@ pub async fn create_label(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(Label {
             id: 0, repo_id: 0, name: "".to_string(), color: "".to_string(), description: None
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut labels = state.labels.write().unwrap();
     let id = (labels.len() as u64) + 1;
@@ -479,12 +486,13 @@ pub async fn create_milestone(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(Milestone {
             id: 0, repo_id: 0, title: "".to_string(), description: None, due_on: None, state: "".to_string()
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut milestones = state.milestones.write().unwrap();
     let id = (milestones.len() as u64) + 1;
@@ -523,12 +531,13 @@ pub async fn create_hook(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(Webhook {
             id: 0, repo_id: 0, url: "".to_string(), events: vec![], active: false
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut hooks = state.hooks.write().unwrap();
     let id = (hooks.len() as u64) + 1;
@@ -586,12 +595,13 @@ pub async fn create_secret(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(Secret {
             name: "".to_string(), repo_id: 0, created_at: "".to_string()
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let secret = Secret {
         name: payload.name,
@@ -620,12 +630,13 @@ pub async fn create_deploy_key(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(DeployKey {
             id: 0, repo_id: 0, title: "".to_string(), key: "".to_string(), fingerprint: "".to_string()
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let key = DeployKey {
         id: 2,
@@ -670,10 +681,11 @@ pub async fn create_lfs_lock(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
         return StatusCode::NOT_FOUND;
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut locks = state.lfs_locks.write().unwrap();
     let id = (locks.len() as u64) + 1;
@@ -718,10 +730,11 @@ pub async fn update_topics(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
         return StatusCode::NOT_FOUND;
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let mut topics = state.topics.write().unwrap();
     // Remove old topics
@@ -1057,12 +1070,13 @@ pub async fn create_branch(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(Branch {
             repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), repo_id: 0, message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "def".to_string(), repo_id, message: "new branch".to_string(), author: user, date: "now".to_string() };
@@ -1161,10 +1175,11 @@ pub async fn update_file(
     let repos = state.repos.read().unwrap();
     let repo_obj = repos.iter().find(|r| r.owner == owner && r.name == repo);
 
-    if repo_obj.is_none() {
+    let repo_id = if let Some(r) = repo_obj {
+        r.id
+    } else {
         return (StatusCode::NOT_FOUND, Json(FileEntry { name: "".to_string(), path: "".to_string(), kind: "".to_string(), size: 0 }));
-    }
-    let repo_id = repo_obj.unwrap().id;
+    };
 
     // Create a commit for the file update
     let mut commits = state.commits.write().unwrap();
@@ -1201,7 +1216,7 @@ pub async fn update_file(
 
     (StatusCode::OK, Json(FileEntry {
         name: "updated_file".to_string(),
-        path: path,
+        path,
         kind: "file".to_string(),
         size: 123,
     }))
@@ -1267,12 +1282,13 @@ pub async fn create_review(
     let repos = state.repos.read().unwrap();
     let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
 
-    if repo.is_none() {
+    let repo_id = if let Some(r) = repo {
+        r.id
+    } else {
          return (StatusCode::NOT_FOUND, Json(Review {
             id: 0, pull_request_id: 0, user: User::new(0, "".to_string(), None), body: "".to_string(), state: "".to_string(), created_at: "".to_string()
         }));
-    }
-    let repo_id = repo.unwrap().id;
+    };
 
     let pulls = state.pulls.read().unwrap();
     let pr = pulls.iter().find(|p| p.repo_id == repo_id && p.number == index);
