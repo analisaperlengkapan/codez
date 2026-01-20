@@ -11,6 +11,7 @@ pub struct Repository {
     pub forks_count: u64,
     pub watchers_count: u64,
     pub is_mirror: bool,
+    pub parent_id: Option<u64>,
 }
 
 impl Repository {
@@ -25,8 +26,15 @@ impl Repository {
             forks_count: 0,
             watchers_count: 0,
             is_mirror: false,
+            parent_id: None,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RepoUserStatus {
+    pub starred: bool,
+    pub watching: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

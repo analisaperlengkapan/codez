@@ -11,9 +11,25 @@ use shared::{
     MigrateRepoOption, TransferRepoOption, LfsLock, User, FileEntry, MergePullRequestOption, Topic,
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
-    Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch
+    Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch,
+    RepoUserStatus
 };
 use crate::router::AppState;
+
+pub async fn get_user_repo_status(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>
+) -> Json<RepoUserStatus> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let user_id = 1; // Mock current user
+
+    let stars = state.stars.read().unwrap();
+    let starred = stars.get(&repo_id).map(|users| users.contains(&user_id)).unwrap_or(false);
+
+    Json(RepoUserStatus { starred, watching: false })
+}
 
 pub async fn list_repos(
     State(state): State<AppState>,
@@ -777,8 +793,22 @@ pub async fn star_repo(
     Path((owner, repo_name)): Path<(String, String)>
 ) -> StatusCode {
     let mut repos = state.repos.write().unwrap();
-    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
-        repo.stars_count += 1;
+    let repo = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name);
+
+    if let Some(r) = repo {
+        let repo_id = r.id;
+        let user_id = 1; // Mock current user
+
+        let mut stars = state.stars.write().unwrap();
+        let users = stars.entry(repo_id).or_insert(Vec::new());
+
+        if let Some(pos) = users.iter().position(|u| *u == user_id) {
+            users.remove(pos);
+            if r.stars_count > 0 { r.stars_count -= 1; }
+        } else {
+            users.push(user_id);
+            r.stars_count += 1;
+        }
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
@@ -817,25 +847,49 @@ pub async fn watch_repo(
 
 pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> Json<Repository> {
     let mut repos = state.repos.write().unwrap();
-    let id = (repos.len() as u64) + 1;
-    // Assuming forked to "admin" for now, or generating a new name
-    let new_repo = Repository::new(id, format!("{}-fork", repo), "admin".to_string());
-    repos.push(new_repo.clone());
 
-    // Log activity
-    let mut activities = state.activities.write().unwrap();
-    let activity_id = (activities.len() as u64) + 1;
-    activities.push(Activity {
-        id: activity_id,
-        repo_id: id,
-        user_id: 1,
-        user_name: "admin".to_string(),
-        op_type: "fork_repo".to_string(),
-        content: format!("forked {}/{} to admin/{}", owner, repo, new_repo.name),
-        created: "now".to_string(),
-    });
+    let original_repo = repos.iter().find(|r| r.owner == owner && r.name == repo).cloned();
 
-    Json(new_repo)
+    if let Some(orig) = original_repo {
+        let id = (repos.len() as u64) + 1;
+        let new_name = format!("{}-fork", repo);
+        let mut new_repo = Repository::new(id, new_name.clone(), "admin".to_string());
+        new_repo.parent_id = Some(orig.id);
+        repos.push(new_repo.clone());
+
+        // Copy files
+        {
+            let mut files = state.file_contents.write().unwrap();
+            let mut new_files = Vec::new();
+
+            for ((r_id, path), content) in files.iter() {
+                if *r_id == orig.id {
+                    new_files.push((path.clone(), content.clone()));
+                }
+            }
+
+            for (path, content) in new_files {
+                files.insert((id, path), content);
+            }
+        }
+
+        // Log activity
+        let mut activities = state.activities.write().unwrap();
+        let activity_id = (activities.len() as u64) + 1;
+        activities.push(Activity {
+            id: activity_id,
+            repo_id: id,
+            user_id: 1,
+            user_name: "admin".to_string(),
+            op_type: "fork_repo".to_string(),
+            content: format!("forked {}/{} to admin/{}", owner, repo, new_name),
+            created: "now".to_string(),
+        });
+
+        Json(new_repo)
+    } else {
+        Json(Repository::new(0, "error".to_string(), "error".to_string()))
+    }
 }
 
 pub async fn create_wiki_page(

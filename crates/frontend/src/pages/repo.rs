@@ -8,19 +8,30 @@ use shared::{
     CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
-    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery, CreateIssueOption
+    UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery, CreateIssueOption,
+    RepoUserStatus
 };
 
 #[component]
 pub fn RepoDetail() -> impl IntoView {
     let params = use_params_map();
+    let navigate = use_navigate();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let (trigger_refresh, set_trigger_refresh) = create_signal(0);
 
     let repo = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
+        move || (owner(), repo_name(), trigger_refresh.get()),
+        |(o, r, _)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}", o, r)).send().await.unwrap().json::<Option<Repository>>().await.unwrap_or(None)
+        }
+    );
+
+    let repo_status = create_resource(
+        move || (owner(), repo_name(), trigger_refresh.get()),
+        |(o, r, _)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/user_status", o, r))
+                .send().await.unwrap().json::<RepoUserStatus>().await.unwrap_or(RepoUserStatus { starred: false, watching: false })
         }
     );
 
@@ -45,6 +56,7 @@ pub fn RepoDetail() -> impl IntoView {
         let r = repo_name();
         spawn_local(async move {
             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/star", o, r)).send().await;
+            set_trigger_refresh.update(|n| *n += 1);
         });
     };
 
@@ -53,21 +65,33 @@ pub fn RepoDetail() -> impl IntoView {
         let r = repo_name();
         spawn_local(async move {
             let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/watch", o, r)).send().await;
+            set_trigger_refresh.update(|n| *n += 1);
         });
     };
 
     let on_fork = move |_| {
         let o = owner();
         let r = repo_name();
+        let navigate = navigate.clone();
         spawn_local(async move {
-            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/fork", o, r)).send().await;
+            let res = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/fork", o, r)).send().await;
+            if let Ok(resp) = res {
+                if let Ok(new_repo) = resp.json::<Repository>().await {
+                    navigate(&format!("/repos/{}/{}", new_repo.owner, new_repo.name), Default::default());
+                }
+            }
         });
     };
 
     view! {
         <div class="repo-detail">
             <div class="repo-actions" style="float: right; display: flex; gap: 5px;">
-                <button on:click=on_star>"Star"</button>
+                <Suspense fallback=move || view! { <button>"Star"</button> }>
+                    {move || repo_status.get().map(|status| {
+                        let label = if status.starred { "Unstar" } else { "Star" };
+                        view! { <button on:click=on_star>{label}</button> }
+                    })}
+                </Suspense>
                 <button on:click=on_watch>"Watch"</button>
                 <button on:click=on_fork>"Fork"</button>
             </div>
