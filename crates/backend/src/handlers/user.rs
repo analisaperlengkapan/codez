@@ -6,9 +6,25 @@ use axum::{
 use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
     GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application, TwoFactor, OAuth2Provider,
-    Contribution, Issue, PullRequest, IssueFilterOptions
+    Contribution, Issue, PullRequest, IssueFilterOptions, Repository
 };
 use crate::router::AppState;
+
+pub async fn list_starred_repos(State(state): State<AppState>) -> Json<Vec<Repository>> {
+    let user_id = 1; // Mock current user
+    let stars = state.stars.read().unwrap();
+    let repos = state.repos.read().unwrap();
+
+    let mut starred_repos = Vec::new();
+    for (repo_id, users) in stars.iter() {
+        if users.contains(&user_id) {
+            if let Some(repo) = repos.iter().find(|r| r.id == *repo_id) {
+                starred_repos.push(repo.clone());
+            }
+        }
+    }
+    Json(starred_repos)
+}
 
 pub async fn login_user(State(state): State<AppState>, Json(payload): Json<LoginOption>) -> (StatusCode, Json<Option<User>>) {
     let users = state.users.read().unwrap();

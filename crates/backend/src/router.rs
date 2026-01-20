@@ -41,6 +41,7 @@ pub struct AppState {
     pub workflow_runs: Arc<RwLock<Vec<WorkflowRun>>>,
     pub webhook_deliveries: Arc<RwLock<Vec<WebhookDelivery>>>,
     pub protected_branches: Arc<RwLock<Vec<shared::ProtectedBranch>>>,
+    pub stars: Arc<RwLock<HashMap<u64, Vec<u64>>>>,
 }
 
 pub fn api_router() -> Router {
@@ -219,6 +220,7 @@ pub fn api_router() -> Router {
         workflow_runs: Arc::new(RwLock::new(vec![])),
         webhook_deliveries: Arc::new(RwLock::new(vec![])),
         protected_branches: Arc::new(RwLock::new(vec![])),
+        stars: Arc::new(RwLock::new(HashMap::new())),
     };
 
     Router::new()
@@ -254,6 +256,8 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/topics", get(list_topics).put(update_topics))
         .route("/api/v1/repos/:owner/:repo/issues/comments/:id/reactions", post(add_reaction))
         .route("/api/v1/repos/:owner/:repo/star", post(star_repo))
+        .route("/api/v1/repos/:owner/:repo/user_status", get(get_user_repo_status))
+        .route("/api/v1/user/starred", get(list_starred_repos))
         .route("/api/v1/repos/:owner/:repo/watch", post(watch_repo))
         .route("/api/v1/repos/:owner/:repo/fork", post(fork_repo))
         .route("/api/v1/repos/search", get(search_repos))

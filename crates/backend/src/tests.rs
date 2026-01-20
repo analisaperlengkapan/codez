@@ -1118,4 +1118,122 @@ mod tests {
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].status, "queued");
     }
+
+    #[tokio::test]
+    async fn test_star_repo_flow() {
+        let app = api_router();
+
+        // 1. Star a repo
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/star")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // 2. Check User Status
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/user_status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let status: shared::RepoUserStatus = serde_json::from_slice(&body).unwrap();
+        assert!(status.starred);
+
+        // 3. List Starred Repos
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/user/starred")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let repos: Vec<Repository> = serde_json::from_slice(&body).unwrap();
+        assert!(repos.iter().any(|r| r.name == "codeza"));
+
+        // 4. Unstar
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/star")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        // 5. Verify Unstarred
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/user_status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let status: shared::RepoUserStatus = serde_json::from_slice(&body).unwrap();
+        assert!(!status.starred);
+    }
+
+    #[tokio::test]
+    async fn test_fork_repo_flow() {
+        let app = api_router();
+
+        // 1. Fork 'codeza'
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/fork")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let forked_repo: Repository = serde_json::from_slice(&body).unwrap();
+
+        assert_eq!(forked_repo.name, "codeza-fork");
+        // Verify parent_id is set (assuming codeza id is 1)
+        assert_eq!(forked_repo.parent_id, Some(1));
+
+        // 2. Verify files copied
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri(&format!("/api/v1/repos/{}/{}/raw/src/main.rs", forked_repo.owner, forked_repo.name))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let content = String::from_utf8(body.to_vec()).unwrap();
+        assert!(content.contains("Welcome to codeza"));
+    }
 }
