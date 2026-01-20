@@ -48,6 +48,15 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     let repo = Repository::new(id, payload.name.clone(), "admin".to_string());
     repos.push(repo.clone());
 
+    // Create initial files
+    {
+        let mut files = state.file_contents.write().unwrap();
+        files.insert((id, "README.md".to_string()), format!("# {}\n\n{}", payload.name, payload.description.clone().unwrap_or_default()));
+        if let Some(gitignores) = &payload.gitignores {
+            files.insert((id, ".gitignore".to_string()), format!("# {}\n\ntarget/\n", gitignores));
+        }
+    }
+
     // Create initial commit
     let mut commits = state.commits.write().unwrap();
     commits.push(Commit {
@@ -961,21 +970,63 @@ pub async fn get_wiki_page(Path((_owner, _repo, page_name)): Path<(String, Strin
     }
 }
 
-pub async fn get_contents(Path((_owner, _repo, path)): Path<(String, String, String)>) -> Json<Vec<FileEntry>> {
-    let mut files = vec![];
-    if path == "/" || path.is_empty() {
-        files.push(FileEntry { name: "src".to_string(), path: "src".to_string(), kind: "dir".to_string(), size: 0 });
-        files.push(FileEntry { name: "README.md".to_string(), path: "README.md".to_string(), kind: "file".to_string(), size: 1024 });
-        files.push(FileEntry { name: "Cargo.toml".to_string(), path: "Cargo.toml".to_string(), kind: "file".to_string(), size: 256 });
-    } else if path == "src" {
-        files.push(FileEntry { name: "main.rs".to_string(), path: "src/main.rs".to_string(), kind: "file".to_string(), size: 512 });
-        files.push(FileEntry { name: "lib.rs".to_string(), path: "src/lib.rs".to_string(), kind: "file".to_string(), size: 1024 });
+pub async fn get_contents(
+    State(state): State<AppState>,
+    Path((owner, repo_name, path)): Path<(String, String, String)>
+) -> Json<Vec<FileEntry>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return Json(vec![]);
     }
-    Json(files)
+
+    let all_files = state.file_contents.read().unwrap();
+    let mut entries = Vec::new();
+    let mut dirs = std::collections::HashSet::new();
+
+    let prefix = if path.is_empty() || path == "/" {
+        "".to_string()
+    } else {
+        format!("{}/", path.trim_matches('/'))
+    };
+
+    for (k_repo_id, k_path) in all_files.keys() {
+        if *k_repo_id == repo_id && k_path.starts_with(&prefix) {
+            let relative_path = &k_path[prefix.len()..];
+            if relative_path.is_empty() { continue; }
+
+            if let Some(idx) = relative_path.find('/') {
+                // It's a directory
+                let dir_name = &relative_path[..idx];
+                if dirs.insert(dir_name.to_string()) {
+                    entries.push(FileEntry {
+                        name: dir_name.to_string(),
+                        path: format!("{}{}", prefix, dir_name),
+                        kind: "dir".to_string(),
+                        size: 0,
+                    });
+                }
+            } else {
+                // It's a file
+                let size = all_files.get(&(*k_repo_id, k_path.clone())).map(|s| s.len()).unwrap_or(0) as u64;
+                entries.push(FileEntry {
+                    name: relative_path.to_string(),
+                    path: k_path.clone(),
+                    kind: "file".to_string(),
+                    size,
+                });
+            }
+        }
+    }
+    Json(entries)
 }
 
-pub async fn get_root_contents(Path((owner, repo)): Path<(String, String)>) -> Json<Vec<FileEntry>> {
-    get_contents(Path((owner, repo, "".to_string()))).await
+pub async fn get_root_contents(
+    State(state): State<AppState>,
+    Path((owner, repo)): Path<(String, String)>
+) -> Json<Vec<FileEntry>> {
+    get_contents(State(state), Path((owner, repo, "".to_string()))).await
 }
 
 pub async fn merge_pull(
@@ -1136,35 +1187,55 @@ pub async fn list_commits(State(state): State<AppState>, Path((owner, repo_name)
     Json(filtered_commits)
 }
 
-pub async fn search_repo_code(Path((_owner, _repo)): Path<(String, String)>, Query(params): Query<RepoSearchOptions>) -> Json<Vec<CodeSearchResult>> {
+pub async fn search_repo_code(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
+    Query(params): Query<RepoSearchOptions>
+) -> Json<Vec<CodeSearchResult>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
     let q = params.q.to_lowercase();
-    let all_files = vec![
-        CodeSearchResult {
-            name: "main.rs".to_string(),
-            path: "src/main.rs".to_string(),
-            sha: "abc".to_string(),
-            url: "http://...".to_string(),
-            content: Some("fn main() {}".to_string()),
-        },
-        CodeSearchResult {
-            name: "lib.rs".to_string(),
-            path: "src/lib.rs".to_string(),
-            sha: "def".to_string(),
-            url: "http://...".to_string(),
-            content: Some("pub fn add() {}".to_string()),
-        }
-    ];
 
-    if q.is_empty() {
-        Json(all_files)
-    } else {
-        let filtered: Vec<CodeSearchResult> = all_files.into_iter().filter(|f| f.name.to_lowercase().contains(&q) || f.path.to_lowercase().contains(&q)).collect();
-        Json(filtered)
+    if repo_id == 0 {
+        return Json(vec![]);
     }
+
+    let files = state.file_contents.read().unwrap();
+    let mut results = Vec::new();
+
+    for ((r_id, path), content) in files.iter() {
+        if *r_id == repo_id {
+             if q.is_empty() || path.to_lowercase().contains(&q) || content.to_lowercase().contains(&q) {
+                 results.push(CodeSearchResult {
+                     name: path.split('/').last().unwrap_or(path).to_string(),
+                     path: path.clone(),
+                     sha: "mocksha".to_string(),
+                     url: format!("/repos/{}/{}/src/{}", owner, repo_name, path),
+                     content: Some(content.chars().take(100).collect()),
+                 });
+             }
+        }
+    }
+    Json(results)
 }
 
-pub async fn get_raw_file(Path((_owner, _repo, _path)): Path<(String, String, String)>) -> String {
-    "fn main() { println!(\"Hello World\"); }".to_string()
+pub async fn get_raw_file(
+    State(state): State<AppState>,
+    Path((owner, repo_name, path)): Path<(String, String, String)>
+) -> impl IntoResponse {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, "".to_string());
+    }
+
+    let files = state.file_contents.read().unwrap();
+    if let Some(content) = files.get(&(repo_id, path)) {
+        (StatusCode::OK, content.clone())
+    } else {
+        (StatusCode::NOT_FOUND, "".to_string())
+    }
 }
 
 pub async fn update_file(
@@ -1180,6 +1251,12 @@ pub async fn update_file(
     } else {
         return (StatusCode::NOT_FOUND, Json(FileEntry { name: "".to_string(), path: "".to_string(), kind: "".to_string(), size: 0 }));
     };
+
+    // Update file content in state
+    {
+        let mut files = state.file_contents.write().unwrap();
+        files.insert((repo_id, path.clone()), payload.content.clone());
+    }
 
     // Create a commit for the file update
     let mut commits = state.commits.write().unwrap();
