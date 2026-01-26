@@ -1,0 +1,6 @@
+[serve]
+port = 8080
+
+[[proxy]]
+rewrite = "/api/v1/"
+backend = "http://127.0.0.1:3000/api/v1/"

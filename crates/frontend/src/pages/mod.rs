@@ -7,6 +7,7 @@ pub mod projects;
 pub mod packages;
 pub mod actions;
 pub mod release;
+pub mod discussions;
 
 pub use dashboard::*;
 pub use admin::*;
@@ -17,3 +18,4 @@ pub use projects::*;
 pub use packages::*;
 pub use actions::*;
 pub use release::*;
+pub use discussions::*;

@@ -5,6 +5,7 @@ use crate::pages::*;
 
 mod components;
 mod pages;
+mod api;
 
 fn main() {
     mount_to_body(|| view! { <App/> })
@@ -56,6 +57,8 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/milestones/:index" view=MilestoneDetail/>
                     <Route path="/repos/:owner/:repo/projects" view=ProjectList/>
                     <Route path="/repos/:owner/:repo/projects/:id" view=ProjectDetail/>
+                    <Route path="/repos/:owner/:repo/discussions" view=DiscussionList/>
+                    <Route path="/repos/:owner/:repo/discussions/:id" view=DiscussionDetail/>
                     <Route path="/repos/:owner/:repo/wiki" view=Wiki/>
                     <Route path="/repos/:owner/:repo/wiki/pages/:page_name" view=Wiki/>
                     <Route path="/repos/:owner/:repo/wiki/pages/:page_name/edit" view=WikiEdit/>

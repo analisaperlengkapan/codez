@@ -774,6 +774,27 @@ pub struct LfsLock {
     pub locked_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Discussion {
+    pub id: u64,
+    pub repo_id: u64,
+    pub number: u64,
+    pub title: String,
+    pub body: String,
+    pub user: User,
+    pub created_at: String,
+    pub updated_at: String,
+    pub is_locked: bool,
+    pub category: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateDiscussionOption {
+    pub title: String,
+    pub body: String,
+    pub category: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

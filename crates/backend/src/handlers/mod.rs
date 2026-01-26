@@ -13,3 +13,5 @@ pub use project::*;
 pub use package::*;
 pub use action::*;
 pub use release::*;
+pub mod discussion;
+pub use discussion::*;
