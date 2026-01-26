@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember, WorkflowRun, WebhookDelivery
+    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion
 };
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
@@ -42,6 +42,7 @@ pub struct AppState {
     pub webhook_deliveries: Arc<RwLock<Vec<WebhookDelivery>>>,
     pub protected_branches: Arc<RwLock<Vec<shared::ProtectedBranch>>>,
     pub stars: Arc<RwLock<HashMap<u64, Vec<u64>>>>,
+    pub discussions: Arc<RwLock<Vec<Discussion>>>,
 }
 
 pub fn api_router() -> Router {
@@ -221,6 +222,7 @@ pub fn api_router() -> Router {
         webhook_deliveries: Arc::new(RwLock::new(vec![])),
         protected_branches: Arc::new(RwLock::new(vec![])),
         stars: Arc::new(RwLock::new(HashMap::new())),
+        discussions: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -324,6 +326,8 @@ pub fn api_router() -> Router {
         .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail))
         .route("/api/v1/repos/:owner/:repo/wiki/pages", get(list_wiki_pages).post(create_wiki_page))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))
+        .route("/api/v1/repos/:owner/:repo/discussions", get(list_discussions).post(create_discussion))
+        .route("/api/v1/repos/:owner/:repo/discussions/:id", get(get_discussion))
         .route("/api/v1/repos/:owner/:repo/git/lfs/locks", get(list_lfs_locks).post(create_lfs_lock))
         .route("/api/v1/user/gpg_keys/:id/verify", post(verify_gpg_key))
         .route("/api/v1/notifications/threads/:id", patch(mark_notification_read))

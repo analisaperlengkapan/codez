@@ -151,6 +151,7 @@ pub fn RepoDetail() -> impl IntoView {
                             <a href="milestones">"Milestones"</a> " | "
                             <a href="wiki">"Wiki"</a> " | "
                             <a href="projects">"Projects"</a> " | "
+                            <a href="discussions">"Discussions"</a> " | "
                             <a href="actions">"Actions"</a> " | "
                             <a href="settings">"Settings"</a>
                         </p>
