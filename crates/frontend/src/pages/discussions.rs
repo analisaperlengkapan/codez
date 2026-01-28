@@ -1,7 +1,7 @@
 use leptos::*;
 use gloo_net::http::Request;
 use leptos_router::*;
-use shared::{Discussion, CreateDiscussionOption};
+use shared::{Discussion, CreateDiscussionOption, DiscussionComment, CreateDiscussionCommentOption};
 use crate::api::api_url;
 
 #[component]
@@ -105,6 +105,9 @@ pub fn DiscussionDetail() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
     let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
 
+    let (refresh_comments, set_refresh_comments) = create_signal(0);
+    let (new_comment_body, set_new_comment_body) = create_signal("".to_string());
+
     let discussion = create_resource(
         move || (owner(), repo_name(), id()),
         |(o, r, i)| async move {
@@ -113,6 +116,32 @@ pub fn DiscussionDetail() -> impl IntoView {
                 .send().await.unwrap().json::<Option<Discussion>>().await.unwrap_or(None)
         }
     );
+
+    let comments = create_resource(
+        move || (owner(), repo_name(), id(), refresh_comments.get()),
+        |(o, r, i, _)| async move {
+            let url = api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i));
+            Request::get(&url)
+                .send().await.unwrap().json::<Vec<DiscussionComment>>().await.unwrap_or_default()
+        }
+    );
+
+    let on_submit_comment = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateDiscussionCommentOption {
+            body: new_comment_body.get(),
+        };
+        let o = owner();
+        let r = repo_name();
+        let i = id();
+
+        spawn_local(async move {
+            let url = api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i));
+            let _ = Request::post(&url).json(&payload).unwrap().send().await;
+            set_new_comment_body.set("".to_string());
+            set_refresh_comments.update(|n| *n += 1);
+        });
+    };
 
     view! {
         <div class="discussion-detail">
@@ -129,6 +158,39 @@ pub fn DiscussionDetail() -> impl IntoView {
                             </div>
                             <div class="discussion-body" style="margin-top: 20px; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
                                 <p>{disc.body}</p>
+                            </div>
+
+                            <div class="discussion-comments" style="margin-top: 30px;">
+                                <h3>"Comments"</h3>
+                                <ul style="list-style: none; padding: 0;">
+                                    <Suspense fallback=move || view! { <li>"Loading comments..."</li> }>
+                                        {move || comments.get().map(|list| {
+                                            view! {
+                                                <For each=move || list.clone() key=|c| c.id children=move |c| {
+                                                    view! {
+                                                        <li style="margin-bottom: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+                                                            <div style="font-size: 0.9em; font-weight: bold;">{c.user.username} " commented:"</div>
+                                                            <p style="margin: 5px 0;">{c.body}</p>
+                                                            <div style="font-size: 0.8em; color: #888;">{c.created_at}</div>
+                                                        </li>
+                                                    }
+                                                }/>
+                                            }
+                                        })}
+                                    </Suspense>
+                                </ul>
+
+                                <form on:submit=on_submit_comment style="margin-top: 20px; border-top: 1px solid #ddd; padding-top: 10px;">
+                                    <h4>"Add a Comment"</h4>
+                                    <textarea
+                                        prop:value=new_comment_body
+                                        on:input=move |ev| set_new_comment_body.set(event_target_value(&ev))
+                                        style="width: 100%; height: 100px; margin-bottom: 10px;"
+                                        placeholder="Write your comment here..."
+                                        required
+                                    ></textarea>
+                                    <button type="submit">"Post Comment"</button>
+                                </form>
                             </div>
                         }.into_view()
                     },
