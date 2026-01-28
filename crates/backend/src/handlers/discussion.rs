@@ -2,7 +2,7 @@ use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
-use shared::{Discussion, CreateDiscussionOption, User};
+use shared::{Discussion, CreateDiscussionOption, User, DiscussionComment, CreateDiscussionCommentOption};
 use crate::router::AppState;
 use chrono::Utc;
 
@@ -70,4 +70,49 @@ pub async fn get_discussion(
     let discussions = state.discussions.read().unwrap();
     let discussion = discussions.iter().find(|d| d.id == id).cloned();
     Json(discussion)
+}
+
+pub async fn list_discussion_comments(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> Json<Vec<DiscussionComment>> {
+    let comments = state.discussion_comments.read().unwrap();
+    let filtered: Vec<DiscussionComment> = comments.iter().filter(|c| c.discussion_id == id).cloned().collect();
+    Json(filtered)
+}
+
+pub async fn create_discussion_comment(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Json(payload): Json<CreateDiscussionCommentOption>
+) -> (StatusCode, Json<DiscussionComment>) {
+    {
+        let discussions = state.discussions.read().unwrap();
+        if !discussions.iter().any(|d| d.id == id) {
+            return (StatusCode::NOT_FOUND, Json(DiscussionComment {
+                id: 0, discussion_id: 0, body: "".to_string(),
+                user: User::new(0, "".to_string(), None),
+                created_at: "".to_string(), updated_at: "".to_string()
+            }));
+        }
+    }
+
+    let mut comments = state.discussion_comments.write().unwrap();
+    let comment_id = (comments.len() as u64) + 1;
+
+    let user_name = "admin";
+    let users = state.users.read().unwrap();
+    let user = users.iter().find(|u| u.username == user_name).cloned()
+        .unwrap_or_else(|| User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string())));
+
+    let comment = DiscussionComment {
+        id: comment_id,
+        discussion_id: id,
+        body: payload.body,
+        user,
+        created_at: Utc::now().to_rfc3339(),
+        updated_at: Utc::now().to_rfc3339(),
+    };
+    comments.push(comment.clone());
+    (StatusCode::CREATED, Json(comment))
 }

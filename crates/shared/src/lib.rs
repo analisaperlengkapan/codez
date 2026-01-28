@@ -795,6 +795,21 @@ pub struct CreateDiscussionOption {
     pub category: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DiscussionComment {
+    pub id: u64,
+    pub discussion_id: u64,
+    pub body: String,
+    pub user: User,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateDiscussionCommentOption {
+    pub body: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
