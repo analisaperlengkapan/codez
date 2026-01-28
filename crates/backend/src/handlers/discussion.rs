@@ -86,6 +86,17 @@ pub async fn create_discussion_comment(
     Path((_owner, _repo, id)): Path<(String, String, u64)>,
     Json(payload): Json<CreateDiscussionCommentOption>
 ) -> (StatusCode, Json<DiscussionComment>) {
+    {
+        let discussions = state.discussions.read().unwrap();
+        if !discussions.iter().any(|d| d.id == id) {
+            return (StatusCode::NOT_FOUND, Json(DiscussionComment {
+                id: 0, discussion_id: 0, body: "".to_string(),
+                user: User::new(0, "".to_string(), None),
+                created_at: "".to_string(), updated_at: "".to_string()
+            }));
+        }
+    }
+
     let mut comments = state.discussion_comments.write().unwrap();
     let comment_id = (comments.len() as u64) + 1;
 

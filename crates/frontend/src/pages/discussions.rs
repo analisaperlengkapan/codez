@@ -137,9 +137,13 @@ pub fn DiscussionDetail() -> impl IntoView {
 
         spawn_local(async move {
             let url = api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i));
-            let _ = Request::post(&url).json(&payload).unwrap().send().await;
-            set_new_comment_body.set("".to_string());
-            set_refresh_comments.update(|n| *n += 1);
+            let res = Request::post(&url).json(&payload).unwrap().send().await;
+            if let Ok(resp) = res {
+                if resp.ok() {
+                    set_new_comment_body.set("".to_string());
+                    set_refresh_comments.update(|n| *n += 1);
+                }
+            }
         });
     };
 
