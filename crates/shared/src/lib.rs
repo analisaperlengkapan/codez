@@ -762,6 +762,13 @@ pub struct OAuth2Application {
     pub id: u64,
     pub name: String,
     pub client_id: String,
+    pub client_secret: String,
+    pub redirect_uris: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateOAuth2AppOption {
+    pub name: String,
     pub redirect_uris: Vec<String>,
 }
 
@@ -1305,7 +1312,13 @@ mod tests {
         let e = EmailAddress { email: "e".to_string(), verified: true, primary: true };
         assert!(e.primary);
 
-        let app = OAuth2Application { id: 1, name: "app".to_string(), client_id: "cid".to_string(), redirect_uris: vec![] };
+        let app = OAuth2Application {
+            id: 1,
+            name: "app".to_string(),
+            client_id: "cid".to_string(),
+            client_secret: "secret".to_string(),
+            redirect_uris: vec![],
+        };
         assert_eq!(app.client_id, "cid");
     }
 

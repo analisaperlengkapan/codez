@@ -5,7 +5,7 @@ use axum::{
 };
 use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
-    GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application, TwoFactor, OAuth2Provider,
+    GpgKey, CreateGpgKeyOption, Activity, EmailAddress, TwoFactor, OAuth2Provider,
     Contribution, Issue, PullRequest, IssueFilterOptions, Repository
 };
 use crate::router::AppState;
@@ -195,10 +195,42 @@ pub async fn list_emails() -> Json<Vec<EmailAddress>> {
     ].into()
 }
 
-pub async fn list_oauth2_apps() -> Json<Vec<OAuth2Application>> {
-    vec![
-        OAuth2Application { id: 1, name: "MyApp".to_string(), client_id: "client-id".to_string(), redirect_uris: vec![] }
-    ].into()
+use shared::{CreateOAuth2AppOption, OAuth2Application};
+use uuid::Uuid;
+
+pub async fn list_oauth2_apps(State(state): State<AppState>) -> Json<Vec<OAuth2Application>> {
+    let apps = state.oauth2_apps.read().unwrap();
+    Json(apps.clone())
+}
+
+pub async fn create_oauth2_app(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateOAuth2AppOption>
+) -> (StatusCode, Json<OAuth2Application>) {
+    let mut apps = state.oauth2_apps.write().unwrap();
+    let id = (apps.len() as u64) + 1;
+    let app = OAuth2Application {
+        id,
+        name: payload.name,
+        client_id: Uuid::new_v4().to_string(),
+        client_secret: Uuid::new_v4().to_string(),
+        redirect_uris: payload.redirect_uris,
+    };
+    apps.push(app.clone());
+    (StatusCode::CREATED, Json(app))
+}
+
+pub async fn delete_oauth2_app(
+    State(state): State<AppState>,
+    Path(id): Path<u64>
+) -> StatusCode {
+    let mut apps = state.oauth2_apps.write().unwrap();
+    if let Some(pos) = apps.iter().position(|a| a.id == id) {
+        apps.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_followers(

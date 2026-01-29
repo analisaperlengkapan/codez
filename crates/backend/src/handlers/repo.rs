@@ -1047,8 +1047,37 @@ pub async fn migrate_repo(Json(payload): Json<MigrateRepoOption>) -> (StatusCode
     (StatusCode::CREATED, Json(repo))
 }
 
-pub async fn transfer_repo(Path((_owner, _repo)): Path<(String, String)>, Json(_payload): Json<TransferRepoOption>) -> StatusCode {
-    StatusCode::ACCEPTED
+pub async fn transfer_repo(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
+    Json(payload): Json<TransferRepoOption>
+) -> StatusCode {
+    let mut repos = state.repos.write().unwrap();
+    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
+        // Validate new owner exists (mock)
+        let users = state.users.read().unwrap();
+        if !users.iter().any(|u| u.username == payload.new_owner) {
+             return StatusCode::BAD_REQUEST;
+        }
+
+        repo.owner = payload.new_owner.clone();
+
+        let mut activities = state.activities.write().unwrap();
+        let activity_id = (activities.len() as u64) + 1;
+        activities.push(Activity {
+            id: activity_id,
+            repo_id: repo.id,
+            user_id: 1, // mock admin
+            user_name: "admin".to_string(),
+            op_type: "transfer_repo".to_string(),
+            content: format!("transferred repository {} from {} to {}", repo.name, owner, payload.new_owner),
+            created: "now".to_string(),
+        });
+
+        StatusCode::ACCEPTED
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn add_issue_label(

@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, Collaborator, DeployKey, Secret, GpgKey
+    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, Collaborator, DeployKey, Secret, GpgKey, OAuth2Application
 };
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
@@ -49,6 +49,7 @@ pub struct AppState {
     pub watchers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // repo_id -> user_ids
     pub followers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> follower_ids
     pub following: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> following_ids
+    pub oauth2_apps: Arc<RwLock<Vec<OAuth2Application>>>,
 }
 
 pub fn api_router() -> Router {
@@ -235,6 +236,7 @@ pub fn api_router() -> Router {
         watchers: Arc::new(RwLock::new(HashMap::new())),
         followers: Arc::new(RwLock::new(HashMap::new())),
         following: Arc::new(RwLock::new(HashMap::new())),
+        oauth2_apps: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -328,7 +330,8 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/branch_protections/:name", delete(delete_branch_protection))
         .route("/api/v1/search/issues", get(search_issues_global))
         .route("/api/v1/user/emails", get(list_emails))
-        .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps))
+        .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps).post(create_oauth2_app))
+        .route("/api/v1/user/applications/oauth2/:id", delete(delete_oauth2_app))
         .route("/api/v1/repos/migrate", post(migrate_repo))
         .route("/api/v1/repos/:owner/:repo/transfer", post(transfer_repo))
         .route("/api/v1/user/keys/:id", delete(delete_ssh_key))
