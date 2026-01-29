@@ -721,6 +721,8 @@ pub struct LanguageStat {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProtectedBranch {
+    pub id: u64,
+    pub repo_id: u64,
     pub name: String,
     pub enable_push: bool,
     pub enable_force_push: bool,
@@ -1201,6 +1203,13 @@ mod tests {
             gitignores: Some("Rust".to_string()),
             license: Some("MIT".to_string()),
             readme: Some("Default".to_string()),
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
         assert_eq!(opts.name, "new-repo");
         assert!(opts.private);
@@ -1261,7 +1270,13 @@ mod tests {
         let l = LanguageStat { language: "Rust".to_string(), percentage: 100, color: "#dea584".to_string() };
         assert_eq!(l.percentage, 100);
 
-        let pb = ProtectedBranch { name: "main".to_string(), enable_push: false, enable_force_push: false };
+        let pb = ProtectedBranch {
+            id: 1,
+            repo_id: 1,
+            name: "main".to_string(),
+            enable_push: false,
+            enable_force_push: false,
+        };
         assert!(!pb.enable_push);
 
         let e = EmailAddress { email: "e".to_string(), verified: true, primary: true };

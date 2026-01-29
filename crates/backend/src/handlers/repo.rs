@@ -1470,23 +1470,37 @@ pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, 
 
 pub async fn list_branch_protections(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>
+    Path((owner, repo_name)): Path<(String, String)>
 ) -> Json<Vec<ProtectedBranch>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let branches = state.protected_branches.read().unwrap();
-    // In real impl we would filter by repo ID
-    Json(branches.clone())
+    let filtered: Vec<ProtectedBranch> = branches.iter().filter(|b| b.repo_id == repo_id).cloned().collect();
+    Json(filtered)
 }
 
 pub async fn create_branch_protection(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateProtectedBranchOption>
 ) -> (StatusCode, Json<ProtectedBranch>) {
-    let mut branches = state.protected_branches.write().unwrap();
-    if branches.iter().any(|b| b.name == payload.name) {
-         return (StatusCode::CONFLICT, Json(ProtectedBranch { name: "".to_string(), enable_push: false, enable_force_push: false }));
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+         return (StatusCode::NOT_FOUND, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false }));
     }
+
+    let mut branches = state.protected_branches.write().unwrap();
+    if branches.iter().any(|b| b.repo_id == repo_id && b.name == payload.name) {
+         return (StatusCode::CONFLICT, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false }));
+    }
+
+    let id = (branches.len() as u64) + 1;
     let protection = ProtectedBranch {
+        id,
+        repo_id,
         name: payload.name,
         enable_push: payload.enable_push,
         enable_force_push: payload.enable_force_push,
@@ -1497,10 +1511,17 @@ pub async fn create_branch_protection(
 
 pub async fn delete_branch_protection(
     State(state): State<AppState>,
-    Path((_owner, _repo, name)): Path<(String, String, String)>
+    Path((owner, repo_name, name)): Path<(String, String, String)>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
     let mut branches = state.protected_branches.write().unwrap();
-    if let Some(pos) = branches.iter().position(|b| b.name == name) {
+    if let Some(pos) = branches.iter().position(|b| b.repo_id == repo_id && b.name == name) {
         branches.remove(pos);
         StatusCode::NO_CONTENT
     } else {
