@@ -757,13 +757,27 @@ pub struct EmailAddress {
     pub primary: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+use std::fmt;
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct OAuth2Application {
     pub id: u64,
     pub name: String,
     pub client_id: String,
     pub client_secret: String,
     pub redirect_uris: Vec<String>,
+}
+
+impl fmt::Debug for OAuth2Application {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OAuth2Application")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"***REDACTED***")
+            .field("redirect_uris", &self.redirect_uris)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
