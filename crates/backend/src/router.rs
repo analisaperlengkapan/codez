@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment
+    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, Collaborator, DeployKey, Secret, GpgKey
 };
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
@@ -45,6 +45,7 @@ pub struct AppState {
     pub discussions: Arc<RwLock<Vec<Discussion>>>,
     pub discussion_comments: Arc<RwLock<Vec<DiscussionComment>>>,
     pub release_assets_data: Arc<RwLock<HashMap<(u64, u64), Vec<u8>>>>,
+    pub gpg_keys: Arc<RwLock<Vec<GpgKey>>>,
 }
 
 pub fn api_router() -> Router {
@@ -227,6 +228,7 @@ pub fn api_router() -> Router {
         discussions: Arc::new(RwLock::new(vec![])),
         discussion_comments: Arc::new(RwLock::new(vec![])),
         release_assets_data: Arc::new(RwLock::new(HashMap::new())),
+        gpg_keys: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -291,6 +293,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/admin/notices", get(list_notices))
         .route("/api/v1/user/2fa", get(get_2fa).post(update_2fa))
         .route("/api/v1/user/gpg_keys", get(list_gpg_keys).post(create_gpg_key))
+        .route("/api/v1/user/gpg_keys/:id", delete(delete_gpg_key))
         .route("/api/v1/repos/:owner/:repo/mirror-sync", post(mirror_sync))
         .route("/api/v1/repos/:owner/:repo/collaborators", get(list_collaborators))
         .route("/api/v1/repos/:owner/:repo/collaborators/:collaborator", get(get_collaborator).put(add_collaborator))
@@ -321,7 +324,6 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/migrate", post(migrate_repo))
         .route("/api/v1/repos/:owner/:repo/transfer", post(transfer_repo))
         .route("/api/v1/user/keys/:id", delete(delete_ssh_key))
-        .route("/api/v1/user/gpg_keys/:id", delete(delete_gpg_key))
         .route("/api/v1/repos/:owner/:repo/milestones/:id/stats", get(get_milestone_stats))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/files", get(get_pr_files))
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels", post(add_issue_label))

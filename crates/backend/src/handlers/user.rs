@@ -137,27 +137,25 @@ pub async fn list_feeds(State(state): State<AppState>) -> Json<Vec<Activity>> {
     Json(feeds)
 }
 
-pub async fn list_gpg_keys() -> Json<Vec<GpgKey>> {
-    let keys = vec![
-        GpgKey {
-            id: 1,
-            key_id: "ID".to_string(),
-            primary_key_id: "PID".to_string(),
-            public_key: "PUB".to_string(),
-            emails: vec![],
-        }
-    ];
-    Json(keys)
+pub async fn list_gpg_keys(State(state): State<AppState>) -> Json<Vec<GpgKey>> {
+    let keys = state.gpg_keys.read().unwrap();
+    Json(keys.clone())
 }
 
-pub async fn create_gpg_key(Json(payload): Json<CreateGpgKeyOption>) -> (StatusCode, Json<GpgKey>) {
+pub async fn create_gpg_key(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateGpgKeyOption>
+) -> (StatusCode, Json<GpgKey>) {
+    let mut keys = state.gpg_keys.write().unwrap();
+    let id = (keys.len() as u64) + 1;
     let key = GpgKey {
-        id: 2,
-        key_id: "NEWID".to_string(),
-        primary_key_id: "NEWPID".to_string(),
+        id,
+        key_id: format!("KEY-{}", id),
+        primary_key_id: format!("PRIM-{}", id),
         public_key: payload.armored_public_key,
         emails: vec![],
     };
+    keys.push(key.clone());
     (StatusCode::CREATED, Json(key))
 }
 
@@ -165,12 +163,30 @@ pub async fn verify_gpg_key(Path(_id): Path<u64>) -> StatusCode {
     StatusCode::OK
 }
 
-pub async fn delete_ssh_key(Path(_id): Path<u64>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn delete_ssh_key(
+    State(state): State<AppState>,
+    Path(id): Path<u64>
+) -> StatusCode {
+    let mut keys = state.keys.write().unwrap();
+    if let Some(pos) = keys.iter().position(|k| k.id == id) {
+        keys.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
-pub async fn delete_gpg_key(Path(_id): Path<u64>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn delete_gpg_key(
+    State(state): State<AppState>,
+    Path(id): Path<u64>
+) -> StatusCode {
+    let mut keys = state.gpg_keys.write().unwrap();
+    if let Some(pos) = keys.iter().position(|k| k.id == id) {
+        keys.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_emails() -> Json<Vec<EmailAddress>> {
