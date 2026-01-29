@@ -1,7 +1,7 @@
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
-use shared::{CreateReleaseOption, Release};
+use gloo_net::http::Request;
+use shared::{Release, CreateReleaseOption};
 
 #[component]
 pub fn ReleaseList() -> impl IntoView {
@@ -13,13 +13,8 @@ pub fn ReleaseList() -> impl IntoView {
         move || (owner(), repo_name()),
         |(o, r)| async move {
             Request::get(&format!("/api/v1/repos/{}/{}/releases", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Release>>()
-                .await
-                .unwrap_or_default()
-        },
+                .send().await.unwrap().json::<Vec<Release>>().await.unwrap_or_default()
+        }
     );
 
     view! {
@@ -80,41 +75,32 @@ pub fn ReleaseDetail() -> impl IntoView {
         move || (owner(), repo_name(), id(), trigger.get()),
         |(o, r, i, _)| async move {
             Request::get(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
-                .send()
-                .await
-                .unwrap()
-                .json::<Option<Release>>()
-                .await
-                .unwrap_or(None)
-        },
+                .send().await.unwrap().json::<Option<Release>>().await.unwrap_or(None)
+        }
     );
 
     let on_upload_asset = move |_| {
-        let o = owner();
-        let r = repo_name();
-        let i = id();
-        spawn_local(async move {
+         let o = owner();
+         let r = repo_name();
+         let i = id();
+         spawn_local(async move {
             let _ = Request::post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i))
-                .send()
-                .await;
+                .send().await;
             set_trigger.update(|n| *n += 1);
-        });
+         });
     };
 
     let on_delete = move |_| {
-        let o = owner();
-        let r = repo_name();
-        let i = id();
-        spawn_local(async move {
+         let o = owner();
+         let r = repo_name();
+         let i = id();
+         spawn_local(async move {
             let _ = Request::delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
-                .send()
-                .await;
+                .send().await;
             // Redirect to list would be good here, simplistic mock for now
             let window = web_sys::window().unwrap();
-            let _ = window
-                .location()
-                .set_href(&format!("/repos/{}/{}/releases", o, r));
-        });
+            let _ = window.location().set_href(&format!("/repos/{}/{}/releases", o, r));
+         });
     };
 
     view! {
@@ -185,17 +171,12 @@ pub fn ReleaseCreate() -> impl IntoView {
 
         spawn_local(async move {
             let res = Request::post(&format!("/api/v1/repos/{}/{}/releases", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+                .json(&payload).unwrap().send().await;
 
             if res.is_ok() {
                 // Redirect
                 let window = web_sys::window().unwrap();
-                let _ = window
-                    .location()
-                    .set_href(&format!("/repos/{}/{}/releases", o, r));
+                let _ = window.location().set_href(&format!("/repos/{}/{}/releases", o, r));
             }
         });
     };

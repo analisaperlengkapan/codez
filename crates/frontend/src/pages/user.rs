@@ -1,9 +1,9 @@
-use gloo_net::http::Request;
 use leptos::*;
-use leptos_router::*;
+use gloo_net::http::Request;
 use shared::{
-    Contribution, GpgKey, LoginOption, PublicKey, RegisterOption, User, UserSettingsOption,
+    User, LoginOption, RegisterOption, Contribution, UserSettingsOption, PublicKey, GpgKey
 };
+use leptos_router::*;
 
 #[component]
 pub fn Login() -> impl IntoView {
@@ -17,11 +17,7 @@ pub fn Login() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("http://127.0.0.1:3000/api/v1/users/login")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = Request::post("http://127.0.0.1:3000/api/v1/users/login").json(&payload).unwrap().send().await;
             leptos::logging::log!("Logged in");
         });
     };
@@ -52,11 +48,7 @@ pub fn Register() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("http://127.0.0.1:3000/api/v1/users/register")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = Request::post("http://127.0.0.1:3000/api/v1/users/register").json(&payload).unwrap().send().await;
             leptos::logging::log!("Registered");
         });
     };
@@ -77,17 +69,10 @@ pub fn Register() -> impl IntoView {
 #[component]
 pub fn UserProfile() -> impl IntoView {
     let params = use_params_map();
-    let username =
-        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
 
     let user = create_resource(username, |u| async move {
-        Request::get(&format!("http://127.0.0.1:3000/api/v1/users/{}", u))
-            .send()
-            .await
-            .unwrap()
-            .json::<Option<User>>()
-            .await
-            .unwrap_or(None)
+        Request::get(&format!("http://127.0.0.1:3000/api/v1/users/{}", u)).send().await.unwrap().json::<Option<User>>().await.unwrap_or(None)
     });
 
     view! {
@@ -114,16 +99,9 @@ pub fn UserProfile() -> impl IntoView {
 #[component]
 pub fn UserHeatmap() -> impl IntoView {
     let params = use_params_map();
-    let username =
-        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let data = create_resource(username, |u| async move {
-        Request::get(&format!("http://127.0.0.1:3000/api/v1/users/{}/heatmap", u))
-            .send()
-            .await
-            .unwrap()
-            .json::<Vec<Contribution>>()
-            .await
-            .unwrap_or_default()
+        Request::get(&format!("http://127.0.0.1:3000/api/v1/users/{}/heatmap", u)).send().await.unwrap().json::<Vec<Contribution>>().await.unwrap_or_default()
     });
 
     view! {
@@ -146,19 +124,9 @@ pub fn UserHeatmap() -> impl IntoView {
 #[component]
 pub fn UserFollowers() -> impl IntoView {
     let params = use_params_map();
-    let username =
-        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let users = create_resource(username, |u| async move {
-        Request::get(&format!(
-            "http://127.0.0.1:3000/api/v1/users/{}/followers",
-            u
-        ))
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<User>>()
-        .await
-        .unwrap_or_default()
+        Request::get(&format!("http://127.0.0.1:3000/api/v1/users/{}/followers", u)).send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
     });
 
     view! {
@@ -180,19 +148,9 @@ pub fn UserFollowers() -> impl IntoView {
 #[component]
 pub fn UserFollowing() -> impl IntoView {
     let params = use_params_map();
-    let username =
-        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let users = create_resource(username, |u| async move {
-        Request::get(&format!(
-            "http://127.0.0.1:3000/api/v1/users/{}/following",
-            u
-        ))
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<User>>()
-        .await
-        .unwrap_or_default()
+        Request::get(&format!("http://127.0.0.1:3000/api/v1/users/{}/following", u)).send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
     });
 
     view! {
@@ -213,49 +171,19 @@ pub fn UserFollowing() -> impl IntoView {
 
 #[component]
 pub fn UserSettings() -> impl IntoView {
-    let settings = create_resource(
-        || (),
-        |_| async move {
-            Request::get("http://127.0.0.1:3000/api/v1/user/settings")
-                .send()
-                .await
-                .unwrap()
-                .json::<UserSettingsOption>()
-                .await
-                .unwrap_or(UserSettingsOption {
-                    full_name: None,
-                    website: None,
-                    description: None,
-                    location: None,
-                })
-        },
-    );
+    let settings = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/user/settings").send().await.unwrap().json::<UserSettingsOption>().await.unwrap_or(UserSettingsOption {
+            full_name: None, website: None, description: None, location: None
+        })
+    });
 
-    let keys = create_resource(
-        || (),
-        |_| async move {
-            Request::get("http://127.0.0.1:3000/api/v1/user/keys")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<PublicKey>>()
-                .await
-                .unwrap_or_default()
-        },
-    );
+    let keys = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/user/keys").send().await.unwrap().json::<Vec<PublicKey>>().await.unwrap_or_default()
+    });
 
-    let gpg_keys = create_resource(
-        || (),
-        |_| async move {
-            Request::get("http://127.0.0.1:3000/api/v1/user/gpg_keys")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<GpgKey>>()
-                .await
-                .unwrap_or_default()
-        },
-    );
+    let gpg_keys = create_resource(|| (), |_| async move {
+        Request::get("http://127.0.0.1:3000/api/v1/user/gpg_keys").send().await.unwrap().json::<Vec<GpgKey>>().await.unwrap_or_default()
+    });
 
     let (full_name, set_full_name) = create_signal("".to_string());
 
@@ -268,11 +196,7 @@ pub fn UserSettings() -> impl IntoView {
             location: None,
         };
         spawn_local(async move {
-            let _ = Request::patch("http://127.0.0.1:3000/api/v1/user/settings")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = Request::patch("http://127.0.0.1:3000/api/v1/user/settings").json(&payload).unwrap().send().await;
         });
     };
 

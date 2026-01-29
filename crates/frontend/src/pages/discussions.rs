@@ -1,10 +1,8 @@
-use crate::api::api_url;
-use gloo_net::http::Request;
 use leptos::*;
+use gloo_net::http::Request;
 use leptos_router::*;
-use shared::{
-    CreateDiscussionCommentOption, CreateDiscussionOption, Discussion, DiscussionComment,
-};
+use shared::{Discussion, CreateDiscussionOption, DiscussionComment, CreateDiscussionCommentOption};
+use crate::api::api_url;
 
 #[component]
 pub fn DiscussionList() -> impl IntoView {
@@ -23,13 +21,8 @@ pub fn DiscussionList() -> impl IntoView {
         |(o, r, _)| async move {
             let url = api_url(&format!("/repos/{}/{}/discussions", o, r));
             Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Discussion>>()
-                .await
-                .unwrap_or_default()
-        },
+                .send().await.unwrap().json::<Vec<Discussion>>().await.unwrap_or_default()
+        }
     );
 
     let on_create = move |ev: leptos::ev::SubmitEvent| {
@@ -110,16 +103,7 @@ pub fn DiscussionDetail() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-    let id = move || {
-        params.with(|params| {
-            params
-                .get("id")
-                .cloned()
-                .unwrap_or_default()
-                .parse::<u64>()
-                .unwrap_or_default()
-        })
-    };
+    let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
 
     let (refresh_comments, set_refresh_comments) = create_signal(0);
     let (new_comment_body, set_new_comment_body) = create_signal("".to_string());
@@ -129,13 +113,8 @@ pub fn DiscussionDetail() -> impl IntoView {
         |(o, r, i)| async move {
             let url = api_url(&format!("/repos/{}/{}/discussions/{}", o, r, i));
             Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Option<Discussion>>()
-                .await
-                .unwrap_or(None)
-        },
+                .send().await.unwrap().json::<Option<Discussion>>().await.unwrap_or(None)
+        }
     );
 
     let comments = create_resource(
@@ -143,13 +122,8 @@ pub fn DiscussionDetail() -> impl IntoView {
         |(o, r, i, _)| async move {
             let url = api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i));
             Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<DiscussionComment>>()
-                .await
-                .unwrap_or_default()
-        },
+                .send().await.unwrap().json::<Vec<DiscussionComment>>().await.unwrap_or_default()
+        }
     );
 
     let on_submit_comment = move |ev: leptos::ev::SubmitEvent| {

@@ -1,17 +1,17 @@
-pub mod action;
-pub mod admin;
-pub mod package;
-pub mod project;
-pub mod release;
 pub mod repo;
 pub mod user;
+pub mod admin;
+pub mod project;
+pub mod package;
+pub mod action;
+pub mod release;
 
-pub use action::*;
-pub use admin::*;
-pub use package::*;
-pub use project::*;
-pub use release::*;
 pub use repo::*;
 pub use user::*;
+pub use admin::*;
+pub use project::*;
+pub use package::*;
+pub use action::*;
+pub use release::*;
 pub mod discussion;
 pub use discussion::*;

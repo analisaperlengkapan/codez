@@ -1,14 +1,14 @@
-use crate::router::AppState;
 use axum::{
-    extract::{Json, Path, Query, State},
+    extract::{Json, Path, State, Query},
     http::StatusCode,
     response::IntoResponse,
 };
 use shared::{
-    Activity, Contribution, CreateGpgKeyOption, CreateKeyOption, EmailAddress, GpgKey, Issue,
-    IssueFilterOptions, LoginOption, Notification, OAuth2Application, OAuth2Provider, PublicKey,
-    PullRequest, RegisterOption, Repository, TwoFactor, User, UserSettingsOption,
+    LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
+    GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application, TwoFactor, OAuth2Provider,
+    Contribution, Issue, PullRequest, IssueFilterOptions, Repository
 };
+use crate::router::AppState;
 
 pub async fn list_starred_repos(State(state): State<AppState>) -> Json<Vec<Repository>> {
     let user_id = 1; // Mock current user
@@ -26,32 +26,20 @@ pub async fn list_starred_repos(State(state): State<AppState>) -> Json<Vec<Repos
     Json(starred_repos)
 }
 
-pub async fn login_user(
-    State(state): State<AppState>,
-    Json(payload): Json<LoginOption>,
-) -> (StatusCode, Json<Option<User>>) {
+pub async fn login_user(State(state): State<AppState>, Json(payload): Json<LoginOption>) -> (StatusCode, Json<Option<User>>) {
     let users = state.users.read().unwrap();
     if let Some(user) = users.iter().find(|u| u.username == payload.username) {
         if payload.password == "password" {
-            return (StatusCode::OK, Json(Some(user.clone())));
+             return (StatusCode::OK, Json(Some(user.clone())));
         }
     }
     (StatusCode::UNAUTHORIZED, Json(None))
 }
 
-pub async fn register_user(
-    State(state): State<AppState>,
-    Json(payload): Json<RegisterOption>,
-) -> impl IntoResponse {
+pub async fn register_user(State(state): State<AppState>, Json(payload): Json<RegisterOption>) -> impl IntoResponse {
     let mut users = state.users.write().unwrap();
-    if users
-        .iter()
-        .any(|u| u.username == payload.username || u.email == Some(payload.email.clone()))
-    {
-        return (
-            StatusCode::CONFLICT,
-            Json(User::new(0, "".to_string(), None)),
-        );
+    if users.iter().any(|u| u.username == payload.username || u.email == Some(payload.email.clone())) {
+        return (StatusCode::CONFLICT, Json(User::new(0, "".to_string(), None)));
     }
     let id = (users.len() as u64) + 1;
     let user = User::new(id, payload.username, Some(payload.email));
@@ -59,10 +47,7 @@ pub async fn register_user(
     (StatusCode::CREATED, Json(user))
 }
 
-pub async fn get_user(
-    State(state): State<AppState>,
-    Path(username): Path<String>,
-) -> Json<Option<User>> {
+pub async fn get_user(State(state): State<AppState>, Path(username): Path<String>) -> Json<Option<User>> {
     let users = state.users.read().unwrap();
     let user = users.iter().find(|u| u.username == username).cloned();
     Json(user)
@@ -79,7 +64,7 @@ pub async fn get_user_settings() -> Json<UserSettingsOption> {
 
 pub async fn update_user_settings(
     State(state): State<AppState>,
-    Json(_payload): Json<UserSettingsOption>,
+    Json(_payload): Json<UserSettingsOption>
 ) -> StatusCode {
     // In a real app we'd identify the user via token/session.
     // Here we assume "admin" (id=1) for the mock state update.
@@ -116,10 +101,7 @@ pub async fn list_notifications(State(state): State<AppState>) -> Json<Vec<Notif
     Json(notifications.clone())
 }
 
-pub async fn mark_notification_read(
-    State(state): State<AppState>,
-    Path(id): Path<u64>,
-) -> StatusCode {
+pub async fn mark_notification_read(State(state): State<AppState>, Path(id): Path<u64>) -> StatusCode {
     let mut notifications = state.notifications.write().unwrap();
     if let Some(n) = notifications.iter_mut().find(|n| n.id == id) {
         n.unread = false;
@@ -134,10 +116,7 @@ pub async fn list_keys(State(state): State<AppState>) -> Json<Vec<PublicKey>> {
     Json(keys.clone())
 }
 
-pub async fn create_key(
-    State(state): State<AppState>,
-    Json(payload): Json<CreateKeyOption>,
-) -> (StatusCode, Json<PublicKey>) {
+pub async fn create_key(State(state): State<AppState>, Json(payload): Json<CreateKeyOption>) -> (StatusCode, Json<PublicKey>) {
     let mut keys = state.keys.write().unwrap();
     let id = (keys.len() as u64) + 1;
     let key = PublicKey {
@@ -159,13 +138,15 @@ pub async fn list_feeds(State(state): State<AppState>) -> Json<Vec<Activity>> {
 }
 
 pub async fn list_gpg_keys() -> Json<Vec<GpgKey>> {
-    let keys = vec![GpgKey {
-        id: 1,
-        key_id: "ID".to_string(),
-        primary_key_id: "PID".to_string(),
-        public_key: "PUB".to_string(),
-        emails: vec![],
-    }];
+    let keys = vec![
+        GpgKey {
+            id: 1,
+            key_id: "ID".to_string(),
+            primary_key_id: "PID".to_string(),
+            public_key: "PUB".to_string(),
+            emails: vec![],
+        }
+    ];
     Json(keys)
 }
 
@@ -193,22 +174,15 @@ pub async fn delete_gpg_key(Path(_id): Path<u64>) -> StatusCode {
 }
 
 pub async fn list_emails() -> Json<Vec<EmailAddress>> {
-    vec![EmailAddress {
-        email: "admin@codeza.com".to_string(),
-        verified: true,
-        primary: true,
-    }]
-    .into()
+    vec![
+        EmailAddress { email: "admin@codeza.com".to_string(), verified: true, primary: true }
+    ].into()
 }
 
 pub async fn list_oauth2_apps() -> Json<Vec<OAuth2Application>> {
-    vec![OAuth2Application {
-        id: 1,
-        name: "MyApp".to_string(),
-        client_id: "client-id".to_string(),
-        redirect_uris: vec![],
-    }]
-    .into()
+    vec![
+        OAuth2Application { id: 1, name: "MyApp".to_string(), client_id: "client-id".to_string(), redirect_uris: vec![] }
+    ].into()
 }
 
 pub async fn list_followers(Path(_username): Path<String>) -> Json<Vec<User>> {
@@ -219,11 +193,9 @@ pub async fn list_following(Path(_username): Path<String>) -> Json<Vec<User>> {
     vec![User::new(3, "following".to_string(), None)].into()
 }
 
+
 pub async fn get_2fa() -> Json<TwoFactor> {
-    Json(TwoFactor {
-        enabled: false,
-        method: "totp".to_string(),
-    })
+    Json(TwoFactor { enabled: false, method: "totp".to_string() })
 }
 
 pub async fn update_2fa(Json(_payload): Json<TwoFactor>) -> StatusCode {
@@ -231,45 +203,39 @@ pub async fn update_2fa(Json(_payload): Json<TwoFactor>) -> StatusCode {
 }
 
 pub async fn list_oauth2_providers() -> Json<Vec<OAuth2Provider>> {
-    let providers = vec![OAuth2Provider {
-        name: "github".to_string(),
-        display_name: "GitHub".to_string(),
-        url: "http://github.com/login".to_string(),
-    }];
+    let providers = vec![
+        OAuth2Provider {
+            name: "github".to_string(),
+            display_name: "GitHub".to_string(),
+            url: "http://github.com/login".to_string(),
+        }
+    ];
     Json(providers)
 }
 
 pub async fn get_user_heatmap(Path(_username): Path<String>) -> Json<Vec<Contribution>> {
     vec![
-        Contribution {
-            date: "2023-01-01".to_string(),
-            count: 5,
-        },
-        Contribution {
-            date: "2023-01-02".to_string(),
-            count: 2,
-        },
-    ]
-    .into()
+        Contribution { date: "2023-01-01".to_string(), count: 5 },
+        Contribution { date: "2023-01-02".to_string(), count: 2 },
+    ].into()
 }
 
 pub async fn list_user_issues(
     State(state): State<AppState>,
-    Query(filter): Query<IssueFilterOptions>,
+    Query(filter): Query<IssueFilterOptions>
 ) -> Json<Vec<Issue>> {
     // Mock user ID for current user is 1 (admin)
     let current_user_id = 1;
     let issues = state.issues.read().unwrap();
 
-    let mut filtered_issues: Vec<Issue> = issues
-        .iter()
+    let mut filtered_issues: Vec<Issue> = issues.iter()
         .filter(|i| i.assignees.iter().any(|u| u.id == current_user_id))
         .cloned()
         .collect();
 
     if let Some(state_filter) = filter.state {
         if state_filter != "all" {
-            filtered_issues.retain(|i| i.state == state_filter);
+             filtered_issues.retain(|i| i.state == state_filter);
         }
     }
 
@@ -278,21 +244,20 @@ pub async fn list_user_issues(
 
 pub async fn list_user_pulls(
     State(state): State<AppState>,
-    Query(filter): Query<IssueFilterOptions>, // Reusing IssueFilterOptions as it has 'state'
+    Query(filter): Query<IssueFilterOptions> // Reusing IssueFilterOptions as it has 'state'
 ) -> Json<Vec<PullRequest>> {
     // Mock user ID for current user is 1 (admin)
     let current_user_id = 1;
     let pulls = state.pulls.read().unwrap();
 
-    let mut filtered_pulls: Vec<PullRequest> = pulls
-        .iter()
+    let mut filtered_pulls: Vec<PullRequest> = pulls.iter()
         .filter(|p| p.user.id == current_user_id)
         .cloned()
         .collect();
 
     if let Some(state_filter) = filter.state {
         if state_filter != "all" {
-            filtered_pulls.retain(|p| p.state == state_filter);
+             filtered_pulls.retain(|p| p.state == state_filter);
         }
     }
 

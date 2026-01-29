@@ -1,7 +1,7 @@
-use gloo_net::http::Request;
 use leptos::*;
+use gloo_net::http::Request;
 use leptos_router::*;
-use shared::{CreateOrgOption, CreateTeamOption, OrgMember, Organization, Repository, Team};
+use shared::{Organization, Repository, Team, OrgMember, CreateOrgOption, CreateTeamOption};
 
 #[component]
 pub fn OrgProfile() -> impl IntoView {
@@ -11,65 +11,44 @@ pub fn OrgProfile() -> impl IntoView {
     let (active_tab, set_active_tab) = create_signal("repos".to_string());
     let (refresh, set_refresh) = create_signal(0);
 
-    let org = create_resource(org_name, |name| async move {
-        Request::get(&format!("/api/v1/orgs/{}", name))
-            .send()
-            .await
-            .unwrap()
-            .json::<Option<Organization>>()
-            .await
-            .unwrap_or(None)
-    });
+    let org = create_resource(
+        org_name,
+        |name| async move {
+            Request::get(&format!("/api/v1/orgs/{}", name)).send().await.unwrap().json::<Option<Organization>>().await.unwrap_or(None)
+        }
+    );
 
     let repos = create_resource(
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "repos" {
-                Request::get(&format!("/api/v1/orgs/{}/repos", name))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<Repository>>()
-                    .await
-                    .unwrap_or_default()
+                Request::get(&format!("/api/v1/orgs/{}/repos", name)).send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
             } else {
                 vec![]
             }
-        },
+        }
     );
 
     let teams = create_resource(
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "teams" {
-                Request::get(&format!("/api/v1/orgs/{}/teams", name))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<Team>>()
-                    .await
-                    .unwrap_or_default()
+                Request::get(&format!("/api/v1/orgs/{}/teams", name)).send().await.unwrap().json::<Vec<Team>>().await.unwrap_or_default()
             } else {
                 vec![]
             }
-        },
+        }
     );
 
     let members = create_resource(
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "people" {
-                Request::get(&format!("/api/v1/orgs/{}/members", name))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<OrgMember>>()
-                    .await
-                    .unwrap_or_default()
+                Request::get(&format!("/api/v1/orgs/{}/members", name)).send().await.unwrap().json::<Vec<OrgMember>>().await.unwrap_or_default()
             } else {
                 vec![]
             }
-        },
+        }
     );
 
     // Create Team Logic
@@ -83,10 +62,7 @@ pub fn OrgProfile() -> impl IntoView {
         };
         spawn_local(async move {
             let _ = Request::post(&format!("/api/v1/orgs/{}/teams", name))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+                .json(&payload).unwrap().send().await;
             set_new_team_name.set("".to_string());
             set_refresh.update(|n| *n += 1);
         });
@@ -174,22 +150,10 @@ pub fn CreateOrg() -> impl IntoView {
         ev.prevent_default();
         let payload = CreateOrgOption {
             username: name.get(),
-            description: if desc.get().is_empty() {
-                None
-            } else {
-                Some(desc.get())
-            },
-            website: None,
-            location: None,
-            email: None,
-            visibility: Some("public".to_string()),
+            description: if desc.get().is_empty() { None } else { Some(desc.get()) },
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/orgs")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = Request::post("/api/v1/orgs").json(&payload).unwrap().send().await;
             // Redirect to org profile?
         });
     };

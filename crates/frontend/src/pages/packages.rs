@@ -1,7 +1,7 @@
-use gloo_net::http::Request;
 use leptos::*;
+use gloo_net::http::Request;
 use leptos_router::*;
-use shared::{CreatePackageOption, Package};
+use shared::{Package, CreatePackageOption};
 
 #[component]
 pub fn PackageList() -> impl IntoView {
@@ -14,17 +14,8 @@ pub fn PackageList() -> impl IntoView {
     let packages = create_resource(
         move || (owner(), refresh.get()),
         |(owner_name, _)| async move {
-            Request::get(&format!(
-                "http://127.0.0.1:3000/api/v1/packages/{}",
-                owner_name
-            ))
-            .send()
-            .await
-            .unwrap()
-            .json::<Vec<Package>>()
-            .await
-            .unwrap_or_default()
-        },
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/packages/{}", owner_name)).send().await.unwrap().json::<Vec<Package>>().await.unwrap_or_default()
+        }
     );
 
     view! {
@@ -63,8 +54,7 @@ pub fn PackageList() -> impl IntoView {
 
 #[component]
 fn UploadPackageForm<F>(owner: String, on_success: F) -> impl IntoView
-where
-    F: Fn() + Clone + 'static,
+where F: Fn() + Clone + 'static
 {
     let (name, set_name) = create_signal("".to_string());
     let (version, set_version) = create_signal("".to_string());
@@ -81,10 +71,7 @@ where
         let on_success_clone = on_success.clone();
         spawn_local(async move {
             let res = Request::post(&format!("http://127.0.0.1:3000/api/v1/packages/{}", o))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+                .json(&payload).unwrap().send().await;
             if let Ok(r) = res {
                 if r.ok() {
                     on_success_clone();
@@ -126,17 +113,9 @@ pub fn PackageDetail() -> impl IntoView {
     let package = create_resource(
         move || (owner(), pkg_type(), name(), version()),
         |(o, t, n, v)| async move {
-            Request::get(&format!(
-                "http://127.0.0.1:3000/api/v1/packages/{}/{}/{}/{}",
-                o, t, n, v
-            ))
-            .send()
-            .await
-            .unwrap()
-            .json::<Option<Package>>()
-            .await
-            .unwrap_or(None)
-        },
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/packages/{}/{}/{}/{}", o, t, n, v))
+                .send().await.unwrap().json::<Option<Package>>().await.unwrap_or(None)
+        }
     );
 
     view! {
