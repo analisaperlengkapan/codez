@@ -1165,19 +1165,80 @@ pub async fn search_repos(
     }
 }
 
-pub async fn list_collaborators(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Collaborator>> {
-    let user = User::new(2, "collab_user".to_string(), None);
-    vec![
-        Collaborator { user, repo_id: 1, permissions: "write".to_string() }
-    ].into()
+pub async fn list_collaborators(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>
+) -> Json<Vec<Collaborator>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let collaborators = state.collaborators.read().unwrap();
+    let filtered: Vec<Collaborator> = collaborators.iter().filter(|c| c.repo_id == repo_id).cloned().collect();
+    Json(filtered)
 }
 
-pub async fn get_collaborator(Path((_owner, _repo, _collaborator)): Path<(String, String, String)>) -> Json<Option<Collaborator>> {
-    Json(None)
+pub async fn get_collaborator(
+    State(state): State<AppState>,
+    Path((owner, repo_name, username)): Path<(String, String, String)>
+) -> Json<Option<Collaborator>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let collaborators = state.collaborators.read().unwrap();
+    let collaborator = collaborators.iter().find(|c| c.repo_id == repo_id && c.user.username == username).cloned();
+    Json(collaborator)
 }
 
-pub async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String, String, String)>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn add_collaborator(
+    State(state): State<AppState>,
+    Path((owner, repo_name, username)): Path<(String, String, String)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
+    // Check if user exists (mock check, but looking in state.users)
+    let users = state.users.read().unwrap();
+    let user = users.iter().find(|u| u.username == username);
+
+    if let Some(u) = user {
+        let mut collaborators = state.collaborators.write().unwrap();
+        // Check if already exists
+        if !collaborators.iter().any(|c| c.repo_id == repo_id && c.user.username == username) {
+            collaborators.push(Collaborator {
+                repo_id,
+                user: u.clone(),
+                permissions: "write".to_string(), // Default permission
+            });
+        }
+        StatusCode::NO_CONTENT
+    } else {
+        // In Gitea/GitHub, you can invite by email, but here we enforce existing user
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn remove_collaborator(
+    State(state): State<AppState>,
+    Path((owner, repo_name, username)): Path<(String, String, String)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
+    let mut collaborators = state.collaborators.write().unwrap();
+    if let Some(pos) = collaborators.iter().position(|c| c.repo_id == repo_id && c.user.username == username) {
+        collaborators.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
