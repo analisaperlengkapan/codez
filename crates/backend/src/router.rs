@@ -325,7 +325,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels", post(add_issue_label))
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels/:id", delete(remove_issue_label))
         .route("/api/v1/repos/:owner/:repo/search", get(search_repo_code))
-        .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail))
+        .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail).delete(delete_package))
         .route("/api/v1/repos/:owner/:repo/wiki/pages", get(list_wiki_pages).post(create_wiki_page))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))
         .route("/api/v1/repos/:owner/:repo/discussions", get(list_discussions).post(create_discussion))
