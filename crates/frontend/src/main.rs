@@ -1,11 +1,11 @@
-use leptos::*;
-use leptos_router::*;
 use crate::components::*;
 use crate::pages::*;
+use leptos::*;
+use leptos_router::*;
 
+mod api;
 mod components;
 mod pages;
-mod api;
 
 fn main() {
     mount_to_body(|| view! { <App/> })

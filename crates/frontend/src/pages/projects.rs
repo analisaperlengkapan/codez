@@ -1,9 +1,9 @@
-use leptos::*;
 use gloo_net::http::Request;
+use leptos::*;
 use leptos_router::*;
 use shared::{
-    Project, CreateProjectOption, ProjectColumn, CreateProjectColumnOption,
-    ProjectCard, CreateProjectCardOption
+    CreateProjectCardOption, CreateProjectColumnOption, CreateProjectOption, Project, ProjectCard,
+    ProjectColumn,
 };
 
 #[component]
@@ -19,22 +19,40 @@ pub fn ProjectList() -> impl IntoView {
     let projects = create_resource(
         move || (owner(), repo_name(), show_create.get()), // refresh on create toggle/submit
         |(o, r, _)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects", o, r))
-                .send().await.unwrap().json::<Vec<Project>>().await.unwrap_or_default()
-        }
+            Request::get(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects",
+                o, r
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<Project>>()
+            .await
+            .unwrap_or_default()
+        },
     );
 
     let on_create = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let payload = CreateProjectOption {
             title: new_title.get(),
-            description: if new_desc.get().is_empty() { None } else { Some(new_desc.get()) },
+            description: if new_desc.get().is_empty() {
+                None
+            } else {
+                Some(new_desc.get())
+            },
         };
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects", o, r))
-                .json(&payload).unwrap().send().await;
+            let _ = Request::post(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects",
+                o, r
+            ))
+            .json(&payload)
+            .unwrap()
+            .send()
+            .await;
             set_new_title.set("".to_string());
             set_new_desc.set("".to_string());
             set_show_create.set(false);
@@ -92,24 +110,49 @@ pub fn ProjectDetail() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-    let id = move || params.with(|params| params.get("id").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
+    let id = move || {
+        params.with(|params| {
+            params
+                .get("id")
+                .cloned()
+                .unwrap_or_default()
+                .parse::<u64>()
+                .unwrap_or_default()
+        })
+    };
 
     let (refresh, set_refresh) = create_signal(0);
 
     let project = create_resource(
         move || (owner(), repo_name(), id()),
         |(o, r, i)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}", o, r, i))
-                .send().await.unwrap().json::<Option<Project>>().await.unwrap_or(None)
-        }
+            Request::get(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}",
+                o, r, i
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Option<Project>>()
+            .await
+            .unwrap_or(None)
+        },
     );
 
     let columns = create_resource(
         move || (owner(), repo_name(), id(), refresh.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}/columns", o, r, i))
-                .send().await.unwrap().json::<Vec<ProjectColumn>>().await.unwrap_or_default()
-        }
+            Request::get(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}/columns",
+                o, r, i
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<ProjectColumn>>()
+            .await
+            .unwrap_or_default()
+        },
     );
 
     let (new_col_title, set_new_col_title) = create_signal("".to_string());
@@ -118,11 +161,19 @@ pub fn ProjectDetail() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         let i = id();
-        let payload = CreateProjectColumnOption { title: new_col_title.get() };
+        let payload = CreateProjectColumnOption {
+            title: new_col_title.get(),
+        };
         if !payload.title.is_empty() {
             spawn_local(async move {
-                let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}/columns", o, r, i))
-                    .json(&payload).unwrap().send().await;
+                let _ = Request::post(&format!(
+                    "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}/columns",
+                    o, r, i
+                ))
+                .json(&payload)
+                .unwrap()
+                .send()
+                .await;
                 set_new_col_title.set("".to_string());
                 set_refresh.update(|n| *n += 1);
             });
@@ -135,8 +186,12 @@ pub fn ProjectDetail() -> impl IntoView {
         let i = id();
         let action = if is_closed { "reopen" } else { "close" };
         spawn_local(async move {
-            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}/{}", o, r, i, action))
-                .send().await;
+            let _ = Request::post(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/{}/{}",
+                o, r, i, action
+            ))
+            .send()
+            .await;
             set_refresh.update(|n| *n += 1); // Trigger resource reload
         });
     };
@@ -187,7 +242,7 @@ fn ProjectColumnView(
     repo_owner: String,
     repo_name: String,
     _project_id: u64,
-    _refresh_signal: WriteSignal<i32>
+    _refresh_signal: WriteSignal<i32>,
 ) -> impl IntoView {
     let (refresh_cards, set_refresh_cards) = create_signal(0);
     let (new_card_content, set_new_card_content) = create_signal("".to_string());
@@ -200,9 +255,17 @@ fn ProjectColumnView(
     let cards = create_resource(
         move || (o.clone(), r.clone(), column_id, refresh_cards.get()), // also depends on global refresh? No, local is enough unless moved
         move |(o, r, c, _)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/columns/{}/cards", o, r, c))
-                .send().await.unwrap().json::<Vec<ProjectCard>>().await.unwrap_or_default()
-        }
+            Request::get(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/columns/{}/cards",
+                o, r, c
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<ProjectCard>>()
+            .await
+            .unwrap_or_default()
+        },
     );
 
     let on_add_card = move |_| {
@@ -214,15 +277,25 @@ fn ProjectColumnView(
         let content = new_card_content.get();
 
         let payload = CreateProjectCardOption {
-            content: if content.is_empty() { None } else { Some(content) },
+            content: if content.is_empty() {
+                None
+            } else {
+                Some(content)
+            },
             note: None,
             issue_id,
         };
 
         if payload.content.is_some() || payload.issue_id.is_some() {
-             spawn_local(async move {
-                let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/columns/{}/cards", o, r, c))
-                    .json(&payload).unwrap().send().await;
+            spawn_local(async move {
+                let _ = Request::post(&format!(
+                    "http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/columns/{}/cards",
+                    o, r, c
+                ))
+                .json(&payload)
+                .unwrap()
+                .send()
+                .await;
                 set_new_card_content.set("".to_string());
                 set_issue_id_input.set("".to_string());
                 set_refresh_cards.update(|n| *n += 1);

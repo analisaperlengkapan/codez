@@ -5,12 +5,14 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
-    use tower::ServiceExt; // for `oneshot`
     use shared::{
-        CreateRepoOption, Repository, Activity, CreateIssueOption, Issue, UpdateFileOption, FileEntry, UpdateIssueOption,
-        CreateCommentOption, Comment, UpdateCommentOption, CreatePullRequestOption, UpdatePullRequestOption, PullRequest,
-        CreateProjectOption, Project, CreateProjectColumnOption, ProjectColumn, CreateProjectCardOption, ProjectCard, MoveProjectCardOption
+        Activity, Comment, CreateCommentOption, CreateIssueOption, CreateProjectCardOption,
+        CreateProjectColumnOption, CreateProjectOption, CreatePullRequestOption, CreateRepoOption,
+        FileEntry, Issue, MoveProjectCardOption, Project, ProjectCard, ProjectColumn, PullRequest,
+        Repository, UpdateCommentOption, UpdateFileOption, UpdateIssueOption,
+        UpdatePullRequestOption,
     };
+    use tower::ServiceExt; // for `oneshot`
 
     #[tokio::test]
     async fn test_create_repo_flow() {
@@ -26,7 +28,8 @@ mod tests {
             readme: None,
         };
 
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -40,12 +43,15 @@ mod tests {
 
         assert_eq!(response.status(), StatusCode::CREATED);
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let repo: Repository = serde_json::from_slice(&body).unwrap();
         assert_eq!(repo.name, "test-repo");
 
         // Verify Activity Log
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -57,10 +63,14 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
 
-        let found = activities.iter().any(|a| a.content.contains("created repository test-repo"));
+        let found = activities
+            .iter()
+            .any(|a| a.content.contains("created repository test-repo"));
         assert!(found, "Should find creation activity in feed");
     }
 
@@ -74,7 +84,8 @@ mod tests {
             body: Some("Description".to_string()),
         };
 
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -87,12 +98,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let issue: Issue = serde_json::from_slice(&body).unwrap();
         assert_eq!(issue.title, "Test Bug");
 
         // Verify Activity
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -103,9 +117,13 @@ mod tests {
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
-        let found = activities.iter().any(|a| a.op_type == "create_issue" && a.content.contains("opened issue"));
+        let found = activities
+            .iter()
+            .any(|a| a.op_type == "create_issue" && a.content.contains("opened issue"));
         assert!(found);
     }
 
@@ -121,7 +139,8 @@ mod tests {
             milestone_id: None,
         };
 
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("PATCH")
@@ -134,7 +153,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let issue: Option<Issue> = serde_json::from_slice(&body).unwrap();
         let issue = issue.unwrap();
         assert_eq!(issue.title, "Updated Title");
@@ -148,7 +169,8 @@ mod tests {
         // Add assignee first (mocked user is already in Assignees? No, init is empty)
         // Add User 2
         let payload = shared::User::new(2, "user".to_string(), None);
-        let _ = app.clone()
+        let _ = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -161,7 +183,8 @@ mod tests {
             .unwrap();
 
         // Remove User 2
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("DELETE")
@@ -183,8 +206,13 @@ mod tests {
         // Actually mock state init has no labels/assignees on issue 1.
         // Let's add them via API first or assume test starts fresh.
         // We'll add a label to issue 1
-        let payload = shared::CreateLabelOption { name: "bug".to_string(), color: "#f00".to_string(), description: None };
-        let _ = app.clone()
+        let payload = shared::CreateLabelOption {
+            name: "bug".to_string(),
+            color: "#f00".to_string(),
+            description: None,
+        };
+        let _ = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -197,7 +225,8 @@ mod tests {
             .unwrap();
 
         // Filter by label (mock label id 100 from handler)
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -209,13 +238,16 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
         assert_eq!(issues.len(), 1);
         assert_eq!(issues[0].number, 1);
 
         // Filter by wrong label
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -226,7 +258,9 @@ mod tests {
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
         assert_eq!(issues.len(), 0);
     }
@@ -241,7 +275,8 @@ mod tests {
                 title: format!("Issue {}", i),
                 body: None,
             };
-            let _ = app.clone()
+            let _ = app
+                .clone()
                 .oneshot(
                     Request::builder()
                         .method("POST")
@@ -255,7 +290,8 @@ mod tests {
         }
 
         // Test Pagination: Limit 1
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -266,12 +302,15 @@ mod tests {
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
         assert_eq!(issues.len(), 1);
 
         // Test Sort Desc (Default) - Issue 2 should be first
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -282,7 +321,9 @@ mod tests {
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
         // Since we created 2 new issues, plus the initial 1, we have 3 total.
         // Order desc by ID: Issue 3 (created 2nd here), Issue 2 (created 1st here), Issue 1 (initial).
@@ -295,8 +336,11 @@ mod tests {
         let app = api_router();
 
         // Create comment first
-        let payload = CreateCommentOption { body: "Initial comment".to_string() };
-        let response = app.clone()
+        let payload = CreateCommentOption {
+            body: "Initial comment".to_string(),
+        };
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -308,17 +352,25 @@ mod tests {
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let comment: Comment = serde_json::from_slice(&body).unwrap();
         let comment_id = comment.id;
 
         // Update comment
-        let update_payload = UpdateCommentOption { body: "Updated comment".to_string() };
-        let response = app.clone()
+        let update_payload = UpdateCommentOption {
+            body: "Updated comment".to_string(),
+        };
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("PATCH")
-                    .uri(&format!("/api/v1/repos/admin/codeza/issues/comments/{}", comment_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/issues/comments/{}",
+                        comment_id
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&update_payload).unwrap()))
                     .unwrap(),
@@ -327,16 +379,22 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let updated_comment: Option<Comment> = serde_json::from_slice(&body).unwrap();
         assert_eq!(updated_comment.unwrap().body, "Updated comment");
 
         // Delete comment
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("DELETE")
-                    .uri(&format!("/api/v1/repos/admin/codeza/issues/comments/{}", comment_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/issues/comments/{}",
+                        comment_id
+                    ))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -357,7 +415,8 @@ mod tests {
             head: "feature".to_string(),
             base: "main".to_string(),
         };
-        let _ = app.clone()
+        let _ = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -375,7 +434,8 @@ mod tests {
             body: None,
             state: Some("closed".to_string()),
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("PATCH")
@@ -389,7 +449,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let pr: Option<PullRequest> = serde_json::from_slice(&body).unwrap();
         let pr = pr.unwrap();
         assert_eq!(pr.title, "Updated PR Title");
@@ -401,8 +463,11 @@ mod tests {
         let app = api_router();
 
         // Add reaction to comment 1 (mock init state)
-        let payload = shared::CreateReactionOption { content: "+1".to_string() };
-        let response = app.clone()
+        let payload = shared::CreateReactionOption {
+            content: "+1".to_string(),
+        };
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -415,7 +480,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let reaction: shared::Reaction = serde_json::from_slice(&body).unwrap();
         assert_eq!(reaction.content, "+1");
     }
@@ -431,7 +498,8 @@ mod tests {
             branch: Some("main".to_string()),
         };
 
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("PUT")
@@ -444,12 +512,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let file: FileEntry = serde_json::from_slice(&body).unwrap();
         assert_eq!(file.path, "src/main.rs");
 
         // Verify Commit (via Activity or Commit List)
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -460,9 +531,13 @@ mod tests {
             .await
             .unwrap();
 
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
-        let found = activities.iter().any(|a| a.op_type == "update_file" && a.content.contains("updated file src/main.rs"));
+        let found = activities
+            .iter()
+            .any(|a| a.op_type == "update_file" && a.content.contains("updated file src/main.rs"));
         assert!(found);
     }
 
@@ -477,7 +552,8 @@ mod tests {
             title: "Assigned Task".to_string(),
             body: None,
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -488,17 +564,23 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let issue: Issue = serde_json::from_slice(&body).unwrap();
         let issue_id = issue.id;
 
         // Step 1.2 Assign to admin (username "admin")
         let user_payload = shared::User::new(1, "admin".to_string(), None);
-        let _ = app.clone()
+        let _ = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/issues/{}/assignees", issue_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/issues/{}/assignees",
+                        issue_id
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&user_payload).unwrap()))
                     .unwrap(),
@@ -513,7 +595,8 @@ mod tests {
             head: "f".to_string(),
             base: "m".to_string(),
         };
-        let _ = app.clone()
+        let _ = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -526,7 +609,8 @@ mod tests {
             .unwrap();
 
         // 3. Verify list_user_issues
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -537,13 +621,16 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let my_issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
         // Should find "Assigned Task"
         assert!(my_issues.iter().any(|i| i.title == "Assigned Task"));
 
         // 4. Verify list_user_pulls
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -554,7 +641,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let my_pulls: Vec<PullRequest> = serde_json::from_slice(&body).unwrap();
         // Should find "My PR" (or "First PR" from init)
         assert!(my_pulls.iter().any(|p| p.title == "My PR"));
@@ -569,7 +658,8 @@ mod tests {
             title: "My Project".to_string(),
             description: Some("Kanban Board".to_string()),
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -581,18 +671,26 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let project: Project = serde_json::from_slice(&body).unwrap();
         let project_id = project.id;
         assert_eq!(project.title, "My Project");
 
         // 2. Create Column
-        let payload = CreateProjectColumnOption { title: "To Do".to_string() };
-        let response = app.clone()
+        let payload = CreateProjectColumnOption {
+            title: "To Do".to_string(),
+        };
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}/columns", project_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/projects/{}/columns",
+                        project_id
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&payload).unwrap()))
                     .unwrap(),
@@ -600,7 +698,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let column: ProjectColumn = serde_json::from_slice(&body).unwrap();
         let column_id = column.id;
         assert_eq!(column.title, "To Do");
@@ -611,11 +711,15 @@ mod tests {
             note: None,
             issue_id: None,
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/projects/columns/{}/cards", column_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/projects/columns/{}/cards",
+                        column_id
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&payload).unwrap()))
                     .unwrap(),
@@ -623,34 +727,51 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let card: ProjectCard = serde_json::from_slice(&body).unwrap();
         let card_id = card.id;
         assert_eq!(card.content, Some("Task 1".to_string()));
 
         // 4. Move Card (to same column just index change, or assume 2nd column exists)
         // Let's just create a second column to be sure
-        let payload = CreateProjectColumnOption { title: "Done".to_string() };
-        let response = app.clone()
+        let payload = CreateProjectColumnOption {
+            title: "Done".to_string(),
+        };
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}/columns", project_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/projects/{}/columns",
+                        project_id
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&payload).unwrap()))
                     .unwrap(),
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let col2: ProjectColumn = serde_json::from_slice(&body).unwrap();
 
-        let payload = MoveProjectCardOption { column_id: col2.id, new_index: 0 };
-        let response = app.clone()
+        let payload = MoveProjectCardOption {
+            column_id: col2.id,
+            new_index: 0,
+        };
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/projects/cards/{}/move", card_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/projects/cards/{}/move",
+                        card_id
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&payload).unwrap()))
                     .unwrap(),
@@ -660,11 +781,15 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // 5. Close Project
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}/close", project_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/projects/{}/close",
+                        project_id
+                    ))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -673,24 +798,34 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // Verify closed
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(&format!("/api/v1/repos/admin/codeza/projects/{}", project_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/projects/{}",
+                        project_id
+                    ))
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let p: Option<Project> = serde_json::from_slice(&body).unwrap();
         assert!(p.unwrap().is_closed);
 
         // 6. Create Card Linked to Issue
         // Create Issue first to check if we can link it
-        let issue_payload = CreateIssueOption { title: "Issue for card".to_string(), body: None };
-        let _ = app.clone()
+        let issue_payload = CreateIssueOption {
+            title: "Issue for card".to_string(),
+            body: None,
+        };
+        let _ = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -708,11 +843,15 @@ mod tests {
             issue_id: Some(1), // Assuming ID 1 or we should fetch it. Since tests run in parallel or sequence,
                                // ID prediction is brittle. Let's assume ID is > 0.
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/projects/columns/{}/cards", column_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/projects/columns/{}/cards",
+                        column_id
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&payload).unwrap()))
                     .unwrap(),
@@ -722,7 +861,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // Verify Activity Log for card creation
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -732,9 +872,13 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
-        assert!(activities.iter().any(|a| a.op_type == "create_project_card"));
+        assert!(activities
+            .iter()
+            .any(|a| a.op_type == "create_project_card"));
         assert!(activities.iter().any(|a| a.op_type == "move_project_card"));
     }
 
@@ -749,7 +893,8 @@ mod tests {
             head: "f".to_string(),
             base: "m".to_string(),
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -760,7 +905,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let pr: PullRequest = serde_json::from_slice(&body).unwrap();
         let pr_number = pr.number;
 
@@ -769,11 +916,15 @@ mod tests {
             body: "Looks good to me".to_string(),
             event: "APPROVE".to_string(),
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
-                    .uri(&format!("/api/v1/repos/admin/codeza/pulls/{}/reviews", pr_number))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/pulls/{}/reviews",
+                        pr_number
+                    ))
                     .header("Content-Type", "application/json")
                     .body(Body::from(serde_json::to_string(&review_payload).unwrap()))
                     .unwrap(),
@@ -782,17 +933,23 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let review: shared::Review = serde_json::from_slice(&body).unwrap();
         assert_eq!(review.state, "APPROVED");
         assert_eq!(review.body, "Looks good to me");
 
         // List Reviews
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(&format!("/api/v1/repos/admin/codeza/pulls/{}/reviews", pr_number))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/pulls/{}/reviews",
+                        pr_number
+                    ))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -800,7 +957,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let reviews: Vec<shared::Review> = serde_json::from_slice(&body).unwrap();
         assert_eq!(reviews.len(), 1);
         assert_eq!(reviews[0].state, "APPROVED");
@@ -815,7 +974,8 @@ mod tests {
             username: "new-org".to_string(),
             description: Some("New Org".to_string()),
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -834,7 +994,8 @@ mod tests {
             description: None,
             permission: "write".to_string(),
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -848,7 +1009,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // 3. List Teams
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -859,7 +1021,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let teams: Vec<shared::Team> = serde_json::from_slice(&body).unwrap();
         assert_eq!(teams.len(), 1);
         assert_eq!(teams[0].name, "Devs");
@@ -875,7 +1039,8 @@ mod tests {
             events: vec!["issues".to_string()],
             active: true,
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -887,7 +1052,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let hook: shared::Webhook = serde_json::from_slice(&body).unwrap();
         let hook_id = hook.id;
 
@@ -896,7 +1063,8 @@ mod tests {
             title: "Webhook Test Issue".to_string(),
             body: None,
         };
-        let _ = app.clone()
+        let _ = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -909,11 +1077,15 @@ mod tests {
             .unwrap();
 
         // 3. Verify Delivery
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(&format!("/api/v1/repos/admin/codeza/hooks/{}/deliveries", hook_id))
+                    .uri(&format!(
+                        "/api/v1/repos/admin/codeza/hooks/{}/deliveries",
+                        hook_id
+                    ))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -921,11 +1093,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let deliveries: Vec<shared::WebhookDelivery> = serde_json::from_slice(&body).unwrap();
 
         // Should have 1 delivery for "issues" event
-        assert!(deliveries.iter().any(|d| d.event == "issues" && d.status == "success"));
+        assert!(deliveries
+            .iter()
+            .any(|d| d.event == "issues" && d.status == "success"));
     }
 
     #[tokio::test]
@@ -941,7 +1117,8 @@ mod tests {
             prerelease: false,
         };
 
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -954,12 +1131,15 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::CREATED);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let release: shared::Release = serde_json::from_slice(&body).unwrap();
         assert_eq!(release.tag_name, "v2.0.0");
 
         // List Releases
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -971,7 +1151,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let releases: Vec<shared::Release> = serde_json::from_slice(&body).unwrap();
         // Should have "Initial Release" (id 1) and "New Release" (id 2)
         assert!(releases.len() >= 2);
@@ -990,7 +1172,8 @@ mod tests {
             message: Some("Init docs".to_string()),
         };
 
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1005,7 +1188,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // List Wiki Pages
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -1030,7 +1214,8 @@ mod tests {
             version: "0.1.0".to_string(),
             package_type: "npm".to_string(),
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1045,7 +1230,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // List Packages
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -1057,7 +1243,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let packages: Vec<shared::Package> = serde_json::from_slice(&body).unwrap();
         // Init state has 1 package. So now 2.
         assert_eq!(packages.len(), 2);
@@ -1068,7 +1256,8 @@ mod tests {
         let app = api_router();
 
         // List Workflows (mock)
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -1086,7 +1275,8 @@ mod tests {
             ref_name: "main".to_string(),
             workflow_id: 1,
         };
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1101,7 +1291,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // List Workflow Runs
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -1113,7 +1304,9 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let runs: Vec<shared::WorkflowRun> = serde_json::from_slice(&body).unwrap();
         assert_eq!(runs.len(), 1);
         assert_eq!(runs[0].status, "queued");
@@ -1124,7 +1317,8 @@ mod tests {
         let app = api_router();
 
         // 1. Star a repo
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1137,7 +1331,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
         // 2. Check User Status
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -1148,12 +1343,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let status: shared::RepoUserStatus = serde_json::from_slice(&body).unwrap();
         assert!(status.starred);
 
         // 3. List Starred Repos
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -1164,12 +1362,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let repos: Vec<Repository> = serde_json::from_slice(&body).unwrap();
         assert!(repos.iter().any(|r| r.name == "codeza"));
 
         // 4. Unstar
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1182,7 +1383,8 @@ mod tests {
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
         // 5. Verify Unstarred
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -1192,7 +1394,9 @@ mod tests {
             )
             .await
             .unwrap();
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let status: shared::RepoUserStatus = serde_json::from_slice(&body).unwrap();
         assert!(!status.starred);
     }
@@ -1202,7 +1406,8 @@ mod tests {
         let app = api_router();
 
         // 1. Fork 'codeza'
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
@@ -1213,7 +1418,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let forked_repo: Repository = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(forked_repo.name, "codeza-fork");
@@ -1221,18 +1428,24 @@ mod tests {
         assert_eq!(forked_repo.parent_id, Some(1));
 
         // 2. Verify files copied
-        let response = app.clone()
+        let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
-                    .uri(&format!("/api/v1/repos/{}/{}/raw/src/main.rs", forked_repo.owner, forked_repo.name))
+                    .uri(&format!(
+                        "/api/v1/repos/{}/{}/raw/src/main.rs",
+                        forked_repo.owner, forked_repo.name
+                    ))
                     .body(Body::empty())
                     .unwrap(),
             )
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let content = String::from_utf8(body.to_vec()).unwrap();
         assert!(content.contains("Welcome to codeza"));
     }

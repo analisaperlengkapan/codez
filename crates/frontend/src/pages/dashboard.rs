@@ -1,29 +1,52 @@
-use leptos::*;
 use gloo_net::http::Request;
-use shared::{Repository, Notification, Activity, Issue, PullRequest};
+use leptos::*;
+use shared::{Activity, Issue, Notification, PullRequest, Repository};
 
 #[component]
 pub fn UserDashboard() -> impl IntoView {
     let (active_tab, set_active_tab) = create_signal("feed".to_string());
 
-    let repos = create_resource(|| (), |_| async move {
-        Request::get("http://127.0.0.1:3000/api/v1/repos").send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
-    });
+    let repos = create_resource(
+        || (),
+        |_| async move {
+            Request::get("http://127.0.0.1:3000/api/v1/repos")
+                .send()
+                .await
+                .unwrap()
+                .json::<Vec<Repository>>()
+                .await
+                .unwrap_or_default()
+        },
+    );
 
-    let feeds = create_resource(|| (), |_| async move {
-        Request::get("http://127.0.0.1:3000/api/v1/user/feeds").send().await.unwrap().json::<Vec<Activity>>().await.unwrap_or_default()
-    });
+    let feeds = create_resource(
+        || (),
+        |_| async move {
+            Request::get("http://127.0.0.1:3000/api/v1/user/feeds")
+                .send()
+                .await
+                .unwrap()
+                .json::<Vec<Activity>>()
+                .await
+                .unwrap_or_default()
+        },
+    );
 
     let assigned_issues = create_resource(
         move || active_tab.get(),
         |tab| async move {
             if tab == "issues" {
                 Request::get("http://127.0.0.1:3000/api/v1/user/issues?state=open")
-                    .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
+                    .send()
+                    .await
+                    .unwrap()
+                    .json::<Vec<Issue>>()
+                    .await
+                    .unwrap_or_default()
             } else {
                 vec![]
             }
-        }
+        },
     );
 
     let my_pulls = create_resource(
@@ -31,11 +54,16 @@ pub fn UserDashboard() -> impl IntoView {
         |tab| async move {
             if tab == "pulls" {
                 Request::get("http://127.0.0.1:3000/api/v1/user/pulls?state=open")
-                    .send().await.unwrap().json::<Vec<PullRequest>>().await.unwrap_or_default()
+                    .send()
+                    .await
+                    .unwrap()
+                    .json::<Vec<PullRequest>>()
+                    .await
+                    .unwrap_or_default()
             } else {
                 vec![]
             }
-        }
+        },
     );
 
     view! {
@@ -172,9 +200,18 @@ pub fn UserDashboard() -> impl IntoView {
 
 #[component]
 pub fn Explore() -> impl IntoView {
-    let repos = create_resource(|| (), |_| async move {
-        Request::get("http://127.0.0.1:3000/api/v1/repos").send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
-    });
+    let repos = create_resource(
+        || (),
+        |_| async move {
+            Request::get("http://127.0.0.1:3000/api/v1/repos")
+                .send()
+                .await
+                .unwrap()
+                .json::<Vec<Repository>>()
+                .await
+                .unwrap_or_default()
+        },
+    );
 
     view! {
         <div class="explore">
@@ -221,12 +258,24 @@ pub fn Search() -> impl IntoView {
                     "http://127.0.0.1:3000/api/v1/repos".to_string()
                 };
 
-                let res = Request::get(&url).send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default();
+                let res = Request::get(&url)
+                    .send()
+                    .await
+                    .unwrap()
+                    .json::<Vec<Repository>>()
+                    .await
+                    .unwrap_or_default();
                 set_repo_results.set(res);
                 set_issue_results.set(vec![]);
             } else {
                 let url = format!("http://127.0.0.1:3000/api/v1/search/issues?q={}", q);
-                let res = Request::get(&url).send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default();
+                let res = Request::get(&url)
+                    .send()
+                    .await
+                    .unwrap()
+                    .json::<Vec<Issue>>()
+                    .await
+                    .unwrap_or_default();
                 set_issue_results.set(res);
                 set_repo_results.set(vec![]);
             }
@@ -289,13 +338,27 @@ pub fn Search() -> impl IntoView {
 
 #[component]
 pub fn NotificationList() -> impl IntoView {
-    let notifs = create_resource(|| (), |_| async move {
-        Request::get("http://127.0.0.1:3000/api/v1/notifications").send().await.unwrap().json::<Vec<Notification>>().await.unwrap_or_default()
-    });
+    let notifs = create_resource(
+        || (),
+        |_| async move {
+            Request::get("http://127.0.0.1:3000/api/v1/notifications")
+                .send()
+                .await
+                .unwrap()
+                .json::<Vec<Notification>>()
+                .await
+                .unwrap_or_default()
+        },
+    );
 
     let on_mark_read = move |id: u64| {
         spawn_local(async move {
-            let _ = Request::patch(&format!("http://127.0.0.1:3000/api/v1/notifications/threads/{}", id)).send().await;
+            let _ = Request::patch(&format!(
+                "http://127.0.0.1:3000/api/v1/notifications/threads/{}",
+                id
+            ))
+            .send()
+            .await;
         });
     };
 

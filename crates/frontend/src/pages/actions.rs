@@ -1,7 +1,7 @@
-use leptos::*;
 use gloo_net::http::Request;
+use leptos::*;
 use leptos_router::*;
-use shared::{ActionWorkflow, WorkflowRun, CreateWorkflowRunOption};
+use shared::{ActionWorkflow, CreateWorkflowRunOption, WorkflowRun};
 
 #[component]
 pub fn ActionsList() -> impl IntoView {
@@ -12,9 +12,17 @@ pub fn ActionsList() -> impl IntoView {
     let workflows = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows", o, r))
-                .send().await.unwrap().json::<Vec<ActionWorkflow>>().await.unwrap_or_default()
-        }
+            Request::get(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows",
+                o, r
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<ActionWorkflow>>()
+            .await
+            .unwrap_or_default()
+        },
     );
 
     view! {
@@ -44,16 +52,33 @@ pub fn WorkflowRunsList() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-    let workflow_id = move || params.with(|params| params.get("id").cloned().unwrap_or_default().parse::<u64>().unwrap_or_default());
+    let workflow_id = move || {
+        params.with(|params| {
+            params
+                .get("id")
+                .cloned()
+                .unwrap_or_default()
+                .parse::<u64>()
+                .unwrap_or_default()
+        })
+    };
 
     let (refresh, set_refresh) = create_signal(0);
 
     let runs = create_resource(
         move || (owner(), repo_name(), workflow_id(), refresh.get()),
         |(o, r, id, _)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows/{}/runs", o, r, id))
-                .send().await.unwrap().json::<Vec<WorkflowRun>>().await.unwrap_or_default()
-        }
+            Request::get(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows/{}/runs",
+                o, r, id
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<WorkflowRun>>()
+            .await
+            .unwrap_or_default()
+        },
     );
 
     let on_run_workflow = move |_| {
@@ -65,8 +90,14 @@ pub fn WorkflowRunsList() -> impl IntoView {
             ref_name: "main".to_string(), // hardcoded for MVP
         };
         spawn_local(async move {
-            let _ = Request::post(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows/{}/runs", o, r, id))
-                .json(&payload).unwrap().send().await;
+            let _ = Request::post(&format!(
+                "http://127.0.0.1:3000/api/v1/repos/{}/{}/actions/workflows/{}/runs",
+                o, r, id
+            ))
+            .json(&payload)
+            .unwrap()
+            .send()
+            .await;
             set_refresh.update(|n| *n += 1);
         });
     };

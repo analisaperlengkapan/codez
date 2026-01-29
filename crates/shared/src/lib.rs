@@ -59,7 +59,7 @@ pub struct IssueFilterOptions {
     pub assignee_username: Option<String>,
     pub page: Option<u64>,
     pub limit: Option<u64>,
-    pub sort: Option<String>, // "created", "updated", "comments"
+    pub sort: Option<String>,      // "created", "updated", "comments"
     pub direction: Option<String>, // "asc", "desc"
 }
 
@@ -852,7 +852,11 @@ mod tests {
 
     #[test]
     fn test_user_creation() {
-        let user = User::new(1, "jules".to_string(), Some("jules@example.com".to_string()));
+        let user = User::new(
+            1,
+            "jules".to_string(),
+            Some("jules@example.com".to_string()),
+        );
         assert_eq!(user.username, "jules");
         assert_eq!(user.email, Some("jules@example.com".to_string()));
     }
@@ -860,40 +864,82 @@ mod tests {
     #[test]
     fn test_collab_branch_tag() {
         let user = User::new(1, "u".to_string(), None);
-        let commit = Commit { sha: "s".to_string(), repo_id: 1, message: "m".to_string(), author: user.clone(), date: "d".to_string() };
+        let commit = Commit {
+            sha: "s".to_string(),
+            repo_id: 1,
+            message: "m".to_string(),
+            author: user.clone(),
+            date: "d".to_string(),
+        };
 
-        let c = Collaborator { user: user.clone(), repo_id: 1, permissions: "read".to_string() };
+        let c = Collaborator {
+            user: user.clone(),
+            repo_id: 1,
+            permissions: "read".to_string(),
+        };
         assert_eq!(c.permissions, "read");
 
-        let b = Branch { name: "main".to_string(), repo_id: 1, commit: commit.clone(), protected: true };
+        let b = Branch {
+            name: "main".to_string(),
+            repo_id: 1,
+            commit: commit.clone(),
+            protected: true,
+        };
         assert!(b.protected);
 
-        let t = Tag { name: "v1".to_string(), repo_id: 1, id: "1".to_string(), commit: commit.clone() };
+        let t = Tag {
+            name: "v1".to_string(),
+            repo_id: 1,
+            id: "1".to_string(),
+            commit: commit.clone(),
+        };
         assert_eq!(t.name, "v1");
     }
 
     #[test]
     fn test_system_notices_2fa() {
-        let notice = SystemNotice { id: 1, type_: "alert".to_string(), description: "System update".to_string() };
+        let notice = SystemNotice {
+            id: 1,
+            type_: "alert".to_string(),
+            description: "System update".to_string(),
+        };
         assert_eq!(notice.type_, "alert");
 
-        let two_fa = TwoFactor { enabled: true, method: "totp".to_string() };
+        let two_fa = TwoFactor {
+            enabled: true,
+            method: "totp".to_string(),
+        };
         assert!(two_fa.enabled);
     }
 
     #[test]
     fn test_lfs_oauth_reaction() {
-        let lfs = LfsObject { oid: "oid".to_string(), size: 100, created_at: "now".to_string() };
+        let lfs = LfsObject {
+            oid: "oid".to_string(),
+            size: 100,
+            created_at: "now".to_string(),
+        };
         assert_eq!(lfs.size, 100);
 
-        let oauth = OAuth2Provider { name: "github".to_string(), display_name: "GitHub".to_string(), url: "http".to_string() };
+        let oauth = OAuth2Provider {
+            name: "github".to_string(),
+            display_name: "GitHub".to_string(),
+            url: "http".to_string(),
+        };
         assert_eq!(oauth.name, "github");
 
         let user = User::new(1, "u".to_string(), None);
-        let react = Reaction { id: 1, user, content: "heart".to_string(), created_at: "now".to_string() };
+        let react = Reaction {
+            id: 1,
+            user,
+            content: "heart".to_string(),
+            created_at: "now".to_string(),
+        };
         assert_eq!(react.content, "heart");
 
-        let opt = CreateReactionOption { content: "+1".to_string() };
+        let opt = CreateReactionOption {
+            content: "+1".to_string(),
+        };
         assert_eq!(opt.content, "+1");
     }
 
@@ -921,59 +967,121 @@ mod tests {
 
     #[test]
     fn test_contribution_org_member() {
-        let c = Contribution { date: "2023-01-01".to_string(), count: 5 };
+        let c = Contribution {
+            date: "2023-01-01".to_string(),
+            count: 5,
+        };
         assert_eq!(c.count, 5);
 
         let user = User::new(1, "u".to_string(), None);
-        let m = OrgMember { user, role: "owner".to_string() };
+        let m = OrgMember {
+            user,
+            role: "owner".to_string(),
+        };
         assert_eq!(m.role, "owner");
     }
 
     #[test]
     fn test_secret_deploykey() {
-        let s = Secret { name: "TOKEN".to_string(), repo_id: 1, created_at: "now".to_string() };
+        let s = Secret {
+            name: "TOKEN".to_string(),
+            repo_id: 1,
+            created_at: "now".to_string(),
+        };
         assert_eq!(s.name, "TOKEN");
 
-        let k = DeployKey { id: 1, repo_id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
+        let k = DeployKey {
+            id: 1,
+            repo_id: 1,
+            title: "deploy".to_string(),
+            key: "k".to_string(),
+            fingerprint: "f".to_string(),
+        };
         assert_eq!(k.title, "deploy");
     }
 
     #[test]
     fn test_actions_packages_structs() {
-        let wf = ActionWorkflow { id: 1, name: "build".to_string(), status: "success".to_string() };
+        let wf = ActionWorkflow {
+            id: 1,
+            name: "build".to_string(),
+            status: "success".to_string(),
+        };
         assert_eq!(wf.name, "build");
 
-        let pkg = Package { id: 1, owner: "admin".to_string(), name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() };
+        let pkg = Package {
+            id: 1,
+            owner: "admin".to_string(),
+            name: "pkg".to_string(),
+            version: "1.0".to_string(),
+            package_type: "npm".to_string(),
+        };
         assert_eq!(pkg.package_type, "npm");
     }
 
     #[test]
     fn test_activity_struct() {
-        let act = Activity { id: 1, repo_id: 1, user_id: 1, user_name: "u".to_string(), op_type: "push".to_string(), content: "c".to_string(), created: "d".to_string() };
+        let act = Activity {
+            id: 1,
+            repo_id: 1,
+            user_id: 1,
+            user_name: "u".to_string(),
+            op_type: "push".to_string(),
+            content: "c".to_string(),
+            created: "d".to_string(),
+        };
         assert_eq!(act.op_type, "push");
     }
 
     #[test]
     fn test_admin_stats() {
-        let stats = AdminStats { users: 10, repos: 20, orgs: 5, issues: 100 };
+        let stats = AdminStats {
+            users: 10,
+            repos: 20,
+            orgs: 5,
+            issues: 100,
+        };
         assert_eq!(stats.users, 10);
     }
 
     #[test]
     fn test_team_project_structs() {
-        let team = Team { id: 1, org_name: "org".to_string(), name: "dev".to_string(), description: None, permission: "write".to_string() };
+        let team = Team {
+            id: 1,
+            org_name: "org".to_string(),
+            name: "dev".to_string(),
+            description: None,
+            permission: "write".to_string(),
+        };
         assert_eq!(team.name, "dev");
 
-        let project = Project { id: 1, repo_id: 1, title: "v1".to_string(), description: None, is_closed: false };
+        let project = Project {
+            id: 1,
+            repo_id: 1,
+            title: "v1".to_string(),
+            description: None,
+            is_closed: false,
+        };
         assert!(!project.is_closed);
     }
 
     #[test]
     fn test_keys_hooks_structs() {
-        let key = PublicKey { id: 1, title: "Laptop".to_string(), key: "ssh-rsa...".to_string(), fingerprint: "sha256...".to_string() };
+        let key = PublicKey {
+            id: 1,
+            title: "Laptop".to_string(),
+            key: "ssh-rsa...".to_string(),
+            fingerprint: "sha256...".to_string(),
+        };
         assert_eq!(key.title, "Laptop");
 
-        let hook = Webhook { id: 1, repo_id: 1, url: "http://example.com".to_string(), events: vec!["push".to_string()], active: true };
+        let hook = Webhook {
+            id: 1,
+            repo_id: 1,
+            url: "http://example.com".to_string(),
+            events: vec!["push".to_string()],
+            active: true,
+        };
         assert!(hook.active);
     }
 
@@ -1014,16 +1122,26 @@ mod tests {
 
     #[test]
     fn test_topic_structs() {
-        let topic = Topic { id: 1, repo_id: 1, name: "rust".to_string(), created: "date".to_string() };
+        let topic = Topic {
+            id: 1,
+            repo_id: 1,
+            name: "rust".to_string(),
+            created: "date".to_string(),
+        };
         assert_eq!(topic.name, "rust");
 
-        let opts = RepoTopicOptions { topics: vec!["rust".to_string(), "gitea".to_string()] };
+        let opts = RepoTopicOptions {
+            topics: vec!["rust".to_string(), "gitea".to_string()],
+        };
         assert_eq!(opts.topics.len(), 2);
     }
 
     #[test]
     fn test_search_struct() {
-        let search = RepoSearchOptions { q: "test".to_string(), uid: Some(1) };
+        let search = RepoSearchOptions {
+            q: "test".to_string(),
+            uid: Some(1),
+        };
         assert_eq!(search.q, "test");
     }
 
@@ -1279,13 +1397,21 @@ mod tests {
 
     #[test]
     fn test_gpg_key() {
-        let key = GpgKey { id: 1, key_id: "ID".to_string(), primary_key_id: "PID".to_string(), public_key: "PUB".to_string(), emails: vec![] };
+        let key = GpgKey {
+            id: 1,
+            key_id: "ID".to_string(),
+            primary_key_id: "PID".to_string(),
+            public_key: "PUB".to_string(),
+            emails: vec![],
+        };
         assert_eq!(key.key_id, "ID");
     }
 
     #[test]
     fn test_repo_action() {
-        let act = RepoActionOption { action: "star".to_string() };
+        let act = RepoActionOption {
+            action: "star".to_string(),
+        };
         assert_eq!(act.action, "star");
     }
 
@@ -1299,34 +1425,66 @@ mod tests {
 
     #[test]
     fn test_templates() {
-        let l = LicenseTemplate { key: "mit".to_string(), name: "MIT".to_string(), url: "u".to_string() };
+        let l = LicenseTemplate {
+            key: "mit".to_string(),
+            name: "MIT".to_string(),
+            url: "u".to_string(),
+        };
         assert_eq!(l.key, "mit");
-        let g = GitignoreTemplate { name: "Rust".to_string(), source: "target/".to_string() };
+        let g = GitignoreTemplate {
+            name: "Rust".to_string(),
+            source: "target/".to_string(),
+        };
         assert_eq!(g.name, "Rust");
     }
 
     #[test]
     fn test_review_admin_structs() {
         let u = User::new(1, "u".to_string(), None);
-        let rr = ReviewRequest { reviewer: u, status: "s".to_string() };
+        let rr = ReviewRequest {
+            reviewer: u,
+            status: "s".to_string(),
+        };
         assert_eq!(rr.status, "s");
 
-        let a = AdminUserEditOption { email: Some("e".to_string()), password: None, active: Some(true), admin: None };
+        let a = AdminUserEditOption {
+            email: Some("e".to_string()),
+            password: None,
+            active: Some(true),
+            admin: None,
+        };
         assert!(a.active.unwrap());
     }
 
     #[test]
     fn test_lang_prot_email_app() {
-        let l = LanguageStat { language: "Rust".to_string(), percentage: 100, color: "#dea584".to_string() };
+        let l = LanguageStat {
+            language: "Rust".to_string(),
+            percentage: 100,
+            color: "#dea584".to_string(),
+        };
         assert_eq!(l.percentage, 100);
 
-        let pb = ProtectedBranch { name: "main".to_string(), enable_push: false, enable_force_push: false };
+        let pb = ProtectedBranch {
+            name: "main".to_string(),
+            enable_push: false,
+            enable_force_push: false,
+        };
         assert!(!pb.enable_push);
 
-        let e = EmailAddress { email: "e".to_string(), verified: true, primary: true };
+        let e = EmailAddress {
+            email: "e".to_string(),
+            verified: true,
+            primary: true,
+        };
         assert!(e.primary);
 
-        let app = OAuth2Application { id: 1, name: "app".to_string(), client_id: "cid".to_string(), redirect_uris: vec![] };
+        let app = OAuth2Application {
+            id: 1,
+            name: "app".to_string(),
+            client_id: "cid".to_string(),
+            redirect_uris: vec![],
+        };
         assert_eq!(app.client_id, "cid");
     }
 
@@ -1340,13 +1498,18 @@ mod tests {
         };
         assert!(m.mirror);
 
-        let t = TransferRepoOption { new_owner: "new".to_string() };
+        let t = TransferRepoOption {
+            new_owner: "new".to_string(),
+        };
         assert_eq!(t.new_owner, "new");
     }
 
     #[test]
     fn test_milestone_stats() {
-        let stats = MilestoneStats { open_issues: 10, closed_issues: 5 };
+        let stats = MilestoneStats {
+            open_issues: 10,
+            closed_issues: 5,
+        };
         assert_eq!(stats.open_issues, 10);
     }
 
@@ -1365,7 +1528,13 @@ mod tests {
     #[test]
     fn test_lfs_lock() {
         let u = User::new(1, "u".to_string(), None);
-        let l = LfsLock { id: "1".to_string(), repo_id: 1, path: "p".to_string(), owner: u, locked_at: "t".to_string() };
+        let l = LfsLock {
+            id: "1".to_string(),
+            repo_id: 1,
+            path: "p".to_string(),
+            owner: u,
+            locked_at: "t".to_string(),
+        };
         assert_eq!(l.path, "p");
     }
 }

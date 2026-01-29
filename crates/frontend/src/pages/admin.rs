@@ -1,12 +1,21 @@
-use leptos::*;
 use gloo_net::http::Request;
-use shared::{AdminStats, User, SystemNotice};
+use leptos::*;
+use shared::{AdminStats, SystemNotice, User};
 
 #[component]
 pub fn AdminDashboard() -> impl IntoView {
-    let stats = create_resource(|| (), |_| async move {
-        Request::get("http://127.0.0.1:3000/api/v1/admin/stats").send().await.unwrap().json::<AdminStats>().await.ok()
-    });
+    let stats = create_resource(
+        || (),
+        |_| async move {
+            Request::get("http://127.0.0.1:3000/api/v1/admin/stats")
+                .send()
+                .await
+                .unwrap()
+                .json::<AdminStats>()
+                .await
+                .ok()
+        },
+    );
 
     view! {
         <div class="admin-dashboard">
@@ -32,13 +41,27 @@ pub fn AdminDashboard() -> impl IntoView {
 
 #[component]
 pub fn AdminUsers() -> impl IntoView {
-    let users = create_resource(|| (), |_| async move {
-        Request::get("http://127.0.0.1:3000/api/v1/admin/users").send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
-    });
+    let users = create_resource(
+        || (),
+        |_| async move {
+            Request::get("http://127.0.0.1:3000/api/v1/admin/users")
+                .send()
+                .await
+                .unwrap()
+                .json::<Vec<User>>()
+                .await
+                .unwrap_or_default()
+        },
+    );
 
     let on_delete = move |username: String| {
         spawn_local(async move {
-            let _ = Request::delete(&format!("http://127.0.0.1:3000/api/v1/admin/users/{}", username)).send().await;
+            let _ = Request::delete(&format!(
+                "http://127.0.0.1:3000/api/v1/admin/users/{}",
+                username
+            ))
+            .send()
+            .await;
             // ideally refetch users here
         });
     };
@@ -77,9 +100,18 @@ pub fn AdminUsers() -> impl IntoView {
 
 #[component]
 pub fn AdminNotices() -> impl IntoView {
-    let notices = create_resource(|| (), |_| async move {
-        Request::get("http://127.0.0.1:3000/api/v1/admin/notices").send().await.unwrap().json::<Vec<SystemNotice>>().await.unwrap_or_default()
-    });
+    let notices = create_resource(
+        || (),
+        |_| async move {
+            Request::get("http://127.0.0.1:3000/api/v1/admin/notices")
+                .send()
+                .await
+                .unwrap()
+                .json::<Vec<SystemNotice>>()
+                .await
+                .unwrap_or_default()
+        },
+    );
 
     view! {
         <div class="admin-notices">
