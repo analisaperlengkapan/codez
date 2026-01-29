@@ -12,7 +12,7 @@ use shared::{
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
     Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch,
-    RepoUserStatus
+    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption
 };
 use crate::router::AppState;
 
@@ -497,6 +497,34 @@ pub async fn create_label(
     (StatusCode::CREATED, Json(label))
 }
 
+pub async fn update_label(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateLabelOption>
+) -> (StatusCode, Json<Option<Label>>) {
+    let mut labels = state.labels.write().unwrap();
+    if let Some(label) = labels.iter_mut().find(|l| l.id == id) {
+        if let Some(name) = payload.name { label.name = name; }
+        if let Some(color) = payload.color { label.color = color; }
+        if let Some(description) = payload.description { label.description = Some(description); }
+        return (StatusCode::OK, Json(Some(label.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn delete_label(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let mut labels = state.labels.write().unwrap();
+    if let Some(pos) = labels.iter().position(|l| l.id == id) {
+        labels.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
 pub async fn list_milestones(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Milestone>> {
     let repos = state.repos.read().unwrap();
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
@@ -540,6 +568,35 @@ pub async fn get_milestone(State(state): State<AppState>, Path((_owner, _repo, i
     let milestones = state.milestones.read().unwrap();
     let m = milestones.iter().find(|m| m.id == id).cloned();
     Json(m)
+}
+
+pub async fn update_milestone(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateMilestoneOption>
+) -> (StatusCode, Json<Option<Milestone>>) {
+    let mut milestones = state.milestones.write().unwrap();
+    if let Some(m) = milestones.iter_mut().find(|m| m.id == id) {
+        if let Some(title) = payload.title { m.title = title; }
+        if let Some(desc) = payload.description { m.description = Some(desc); }
+        if let Some(due) = payload.due_on { m.due_on = Some(due); }
+        if let Some(state) = payload.state { m.state = state; }
+        return (StatusCode::OK, Json(Some(m.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn delete_milestone(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let mut milestones = state.milestones.write().unwrap();
+    if let Some(pos) = milestones.iter().position(|m| m.id == id) {
+        milestones.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_hooks(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Webhook>> {

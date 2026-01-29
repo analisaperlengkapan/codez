@@ -320,6 +320,13 @@ pub struct CreateLabelOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateLabelOption {
+    pub name: Option<String>,
+    pub color: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Milestone {
     pub id: u64,
     pub repo_id: u64,
@@ -334,6 +341,14 @@ pub struct CreateMilestoneOption {
     pub title: String,
     pub description: Option<String>,
     pub due_on: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateMilestoneOption {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub due_on: Option<String>,
+    pub state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
