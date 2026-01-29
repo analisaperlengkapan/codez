@@ -199,7 +199,7 @@ use shared::{CreateOAuth2AppOption, OAuth2Application};
 use uuid::Uuid;
 
 pub async fn list_oauth2_apps(State(state): State<AppState>) -> Json<Vec<OAuth2Application>> {
-    let apps = state.oauth2_apps.read().unwrap();
+    let apps = state.oauth2_apps.lock().unwrap();
     // Redact client_secret for listing
     let safe_apps = apps.iter().map(|app| {
         let mut a = app.clone();
@@ -213,7 +213,7 @@ pub async fn create_oauth2_app(
     State(state): State<AppState>,
     Json(payload): Json<CreateOAuth2AppOption>
 ) -> (StatusCode, Json<OAuth2Application>) {
-    let mut apps = state.oauth2_apps.write().unwrap();
+    let mut apps = state.oauth2_apps.lock().unwrap();
     let id = (apps.len() as u64) + 1;
     let app = OAuth2Application {
         id,
@@ -230,7 +230,7 @@ pub async fn delete_oauth2_app(
     State(state): State<AppState>,
     Path(id): Path<u64>
 ) -> StatusCode {
-    let mut apps = state.oauth2_apps.write().unwrap();
+    let mut apps = state.oauth2_apps.lock().unwrap();
     if let Some(pos) = apps.iter().position(|a| a.id == id) {
         apps.remove(pos);
         StatusCode::NO_CONTENT

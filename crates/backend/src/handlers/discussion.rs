@@ -65,20 +65,33 @@ pub async fn create_discussion(
 
 pub async fn get_discussion(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
 ) -> Json<Option<Discussion>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let discussions = state.discussions.read().unwrap();
-    let discussion = discussions.iter().find(|d| d.id == id).cloned();
-    Json(discussion)
+    if let Some(discussion) = discussions.iter().find(|d| d.id == id) {
+        if discussion.repo_id == repo_id {
+            return Json(Some(discussion.clone()));
+        }
+    }
+    Json(None)
 }
 
 pub async fn update_discussion(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>,
     Json(payload): Json<UpdateDiscussionOption>
 ) -> (StatusCode, Json<Option<Discussion>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let mut discussions = state.discussions.write().unwrap();
     if let Some(discussion) = discussions.iter_mut().find(|d| d.id == id) {
+        if discussion.repo_id != repo_id {
+            return (StatusCode::NOT_FOUND, Json(None));
+        }
         if let Some(title) = payload.title { discussion.title = title; }
         if let Some(body) = payload.body { discussion.body = body; }
         if let Some(category) = payload.category { discussion.category = category; }
@@ -91,11 +104,22 @@ pub async fn update_discussion(
 
 pub async fn delete_discussion(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let mut discussions = state.discussions.write().unwrap();
     if let Some(pos) = discussions.iter().position(|d| d.id == id) {
+        if discussions[pos].repo_id != repo_id {
+            return StatusCode::NOT_FOUND;
+        }
         discussions.remove(pos);
+
+        // Cleanup comments
+        let mut comments = state.discussion_comments.write().unwrap();
+        comments.retain(|c| c.discussion_id != id);
+
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND

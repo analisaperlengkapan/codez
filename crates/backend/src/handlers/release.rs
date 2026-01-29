@@ -114,6 +114,11 @@ pub async fn delete_release(
 
     let mut releases = state.releases.write().unwrap();
     if let Some(pos) = releases.iter().position(|r| r.repo_id == repo_id && r.id == id) {
+        let release = &releases[pos];
+        let mut assets_data = state.release_assets_data.write().unwrap();
+        for asset in &release.assets {
+            assets_data.remove(&(release.id, asset.id));
+        }
         releases.remove(pos);
         StatusCode::NO_CONTENT
     } else {

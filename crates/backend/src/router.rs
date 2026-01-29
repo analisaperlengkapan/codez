@@ -5,9 +5,9 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, Collaborator, DeployKey, Secret, GpgKey, OAuth2Application
+    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, GpgKey, OAuth2Application
 };
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 use std::collections::HashMap;
 use tower_http::cors::CorsLayer;
 use crate::handlers::*;
@@ -49,7 +49,7 @@ pub struct AppState {
     pub watchers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // repo_id -> user_ids
     pub followers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> follower_ids
     pub following: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> following_ids
-    pub oauth2_apps: Arc<RwLock<Vec<OAuth2Application>>>,
+    pub oauth2_apps: Arc<Mutex<Vec<OAuth2Application>>>,
 }
 
 pub fn api_router() -> Router {
@@ -236,7 +236,7 @@ pub fn api_router() -> Router {
         watchers: Arc::new(RwLock::new(HashMap::new())),
         followers: Arc::new(RwLock::new(HashMap::new())),
         following: Arc::new(RwLock::new(HashMap::new())),
-        oauth2_apps: Arc::new(RwLock::new(vec![])),
+        oauth2_apps: Arc::new(Mutex::new(vec![])),
     };
 
     Router::new()

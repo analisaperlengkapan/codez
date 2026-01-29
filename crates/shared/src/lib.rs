@@ -12,6 +12,7 @@ pub struct Repository {
     pub watchers_count: u64,
     pub is_mirror: bool,
     pub parent_id: Option<u64>,
+    pub website: Option<String>,
 }
 
 impl Repository {
@@ -27,6 +28,7 @@ impl Repository {
             watchers_count: 0,
             is_mirror: false,
             parent_id: None,
+            website: None,
         }
     }
 }
@@ -596,6 +598,7 @@ pub struct Secret {
     pub name: String,
     pub repo_id: u64,
     pub created_at: String,
+    pub data: String, // In real app this would be encrypted
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
