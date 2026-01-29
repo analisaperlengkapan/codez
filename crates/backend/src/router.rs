@@ -332,6 +332,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/discussions/:id", get(get_discussion))
         .route("/api/v1/repos/:owner/:repo/discussions/:id/comments", get(list_discussion_comments).post(create_discussion_comment))
         .route("/api/v1/repos/:owner/:repo/git/lfs/locks", get(list_lfs_locks).post(create_lfs_lock))
+        .route("/api/v1/repos/:owner/:repo/git/lfs/locks/:id/unlock", post(delete_lfs_lock))
         .route("/api/v1/user/gpg_keys/:id/verify", post(verify_gpg_key))
         .route("/api/v1/notifications/threads/:id", patch(mark_notification_read))
         .layer(CorsLayer::permissive())

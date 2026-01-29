@@ -699,30 +699,61 @@ pub async fn list_lfs_locks(
     Json(filtered_locks)
 }
 
+#[derive(serde::Deserialize)]
+pub struct LfsLockRequest {
+    pub path: String,
+}
+
 pub async fn create_lfs_lock(
     State(state): State<AppState>,
-    Path((owner, repo_name)): Path<(String, String)>
-) -> StatusCode {
+    Path((owner, repo_name)): Path<(String, String)>,
+    Json(payload): Json<LfsLockRequest>,
+) -> (StatusCode, Json<LfsLock>) {
     let repos = state.repos.read().unwrap();
-    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
-    let repo_id = if let Some(r) = repo {
-        r.id
-    } else {
-        return StatusCode::NOT_FOUND;
-    };
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(LfsLock { id: "".to_string(), repo_id: 0, path: "".to_string(), owner: User::new(0, "".to_string(), None), locked_at: "".to_string() }));
+    }
 
     let mut locks = state.lfs_locks.write().unwrap();
+    if locks.iter().any(|l| l.repo_id == repo_id && l.path == payload.path) {
+        return (StatusCode::CONFLICT, Json(LfsLock { id: "".to_string(), repo_id: 0, path: "".to_string(), owner: User::new(0, "".to_string(), None), locked_at: "".to_string() }));
+    }
+
     let id = (locks.len() as u64) + 1;
+    // Mock user for now, or ideally extract from auth
     let user = User::new(1, "admin".to_string(), None);
-    locks.push(LfsLock {
+
+    let lock = LfsLock {
         id: id.to_string(),
         repo_id,
-        path: format!("file{}.bin", id),
+        path: payload.path,
         owner: user,
         locked_at: "now".to_string(),
-    });
-    StatusCode::CREATED
+    };
+    locks.push(lock.clone());
+    (StatusCode::CREATED, Json(lock))
+}
+
+pub async fn delete_lfs_lock(
+    State(state): State<AppState>,
+    Path((owner, repo_name, id)): Path<(String, String, String)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
+    let mut locks = state.lfs_locks.write().unwrap();
+    if let Some(pos) = locks.iter().position(|l| l.repo_id == repo_id && l.id == id) {
+        locks.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn add_reaction(
