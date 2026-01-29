@@ -44,6 +44,7 @@ pub struct AppState {
     pub stars: Arc<RwLock<HashMap<u64, Vec<u64>>>>,
     pub discussions: Arc<RwLock<Vec<Discussion>>>,
     pub discussion_comments: Arc<RwLock<Vec<DiscussionComment>>>,
+    pub release_assets_data: Arc<RwLock<HashMap<(u64, u64), Vec<u8>>>>,
 }
 
 pub fn api_router() -> Router {
@@ -225,6 +226,7 @@ pub fn api_router() -> Router {
         stars: Arc::new(RwLock::new(HashMap::new())),
         discussions: Arc::new(RwLock::new(vec![])),
         discussion_comments: Arc::new(RwLock::new(vec![])),
+        release_assets_data: Arc::new(RwLock::new(HashMap::new())),
     };
 
     Router::new()
