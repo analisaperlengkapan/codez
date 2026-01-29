@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, Collaborator
+    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, Collaborator, DeployKey, Secret
 };
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
@@ -45,6 +45,8 @@ pub struct AppState {
     pub discussions: Arc<RwLock<Vec<Discussion>>>,
     pub discussion_comments: Arc<RwLock<Vec<DiscussionComment>>>,
     pub collaborators: Arc<RwLock<Vec<Collaborator>>>,
+    pub deploy_keys: Arc<RwLock<Vec<DeployKey>>>,
+    pub secrets: Arc<RwLock<Vec<Secret>>>,
 }
 
 pub fn api_router() -> Router {
@@ -231,6 +233,8 @@ pub fn api_router() -> Router {
         discussions: Arc::new(RwLock::new(vec![])),
         discussion_comments: Arc::new(RwLock::new(vec![])),
         collaborators: Arc::new(RwLock::new(vec![])),
+        deploy_keys: Arc::new(RwLock::new(vec![])),
+        secrets: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -291,7 +295,9 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/actions/workflows/:id/runs", get(list_workflow_runs).post(trigger_workflow))
         .route("/api/v1/packages/:owner", get(list_packages).post(upload_package))
         .route("/api/v1/repos/:owner/:repo/secrets", get(list_secrets).post(create_secret))
+        .route("/api/v1/repos/:owner/:repo/secrets/:name", delete(delete_secret))
         .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))
+        .route("/api/v1/repos/:owner/:repo/keys/:id", delete(delete_deploy_key))
         .route("/api/v1/admin/notices", get(list_notices))
         .route("/api/v1/user/2fa", get(get_2fa).post(update_2fa))
         .route("/api/v1/user/gpg_keys", get(list_gpg_keys).post(create_gpg_key))
