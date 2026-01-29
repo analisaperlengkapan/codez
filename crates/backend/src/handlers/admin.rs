@@ -14,7 +14,7 @@ pub async fn create_org(
 ) -> (StatusCode, Json<Organization>) {
     let mut orgs = state.orgs.write().unwrap();
     if orgs.iter().any(|o| o.username == payload.username) {
-        return (StatusCode::CONFLICT, Json(Organization { id: 0, username: "".to_string(), description: None, avatar_url: None }));
+        return (StatusCode::CONFLICT, Json(Organization { id: 0, username: "".to_string(), description: None, avatar_url: None, website: None, location: None, email: None, visibility: None }));
     }
     let id = (orgs.len() as u64) + 1;
     let org = Organization {
@@ -22,6 +22,10 @@ pub async fn create_org(
         username: payload.username,
         description: payload.description,
         avatar_url: None,
+        website: payload.website,
+        location: payload.location,
+        email: payload.email,
+        visibility: payload.visibility,
     };
     orgs.push(org.clone());
     (StatusCode::CREATED, Json(org))

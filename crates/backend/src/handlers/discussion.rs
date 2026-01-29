@@ -128,8 +128,18 @@ pub async fn delete_discussion(
 
 pub async fn list_discussion_comments(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
 ) -> Json<Vec<DiscussionComment>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let discussions = state.discussions.read().unwrap();
+    let discussion_valid = discussions.iter().any(|d| d.id == id && d.repo_id == repo_id);
+
+    if !discussion_valid {
+        return Json(vec![]);
+    }
+
     let comments = state.discussion_comments.read().unwrap();
     let filtered: Vec<DiscussionComment> = comments.iter().filter(|c| c.discussion_id == id).cloned().collect();
     Json(filtered)
@@ -137,12 +147,15 @@ pub async fn list_discussion_comments(
 
 pub async fn create_discussion_comment(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>,
     Json(payload): Json<CreateDiscussionCommentOption>
 ) -> (StatusCode, Json<DiscussionComment>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     {
         let discussions = state.discussions.read().unwrap();
-        if !discussions.iter().any(|d| d.id == id) {
+        if !discussions.iter().any(|d| d.id == id && d.repo_id == repo_id) {
             return (StatusCode::NOT_FOUND, Json(DiscussionComment {
                 id: 0, discussion_id: 0, body: "".to_string(),
                 user: User::new(0, "".to_string(), None),

@@ -67,6 +67,13 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     let mut repo = Repository::new(id, payload.name.clone(), "admin".to_string());
     repo.private = payload.private;
     repo.description = payload.description.clone();
+    repo.default_branch = payload.default_branch.clone();
+    if let Some(val) = payload.allow_rebase_merge { repo.allow_rebase_merge = val; }
+    if let Some(val) = payload.allow_squash_merge { repo.allow_squash_merge = val; }
+    if let Some(val) = payload.allow_merge_commit { repo.allow_merge_commit = val; }
+    if let Some(val) = payload.has_issues { repo.has_issues = val; }
+    if let Some(val) = payload.has_wiki { repo.has_wiki = val; }
+    if let Some(val) = payload.has_projects { repo.has_projects = val; }
     repos.push(repo.clone());
 
     // Create initial files
@@ -1063,12 +1070,26 @@ pub async fn get_repo_settings(
             description: repo.description.clone(),
             private: Some(repo.private),
             website: repo.website.clone(),
+            default_branch: repo.default_branch.clone(),
+            allow_rebase_merge: Some(repo.allow_rebase_merge),
+            allow_squash_merge: Some(repo.allow_squash_merge),
+            allow_merge_commit: Some(repo.allow_merge_commit),
+            has_issues: Some(repo.has_issues),
+            has_wiki: Some(repo.has_wiki),
+            has_projects: Some(repo.has_projects),
         })
     } else {
         Json(RepoSettingsOption {
             description: None,
             private: None,
             website: None,
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         })
     }
 }
@@ -1080,15 +1101,16 @@ pub async fn update_repo_settings(
 ) -> StatusCode {
     let mut repos = state.repos.write().unwrap();
     if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
-        if let Some(desc) = payload.description {
-            repo.description = Some(desc);
-        }
-        if let Some(private) = payload.private {
-            repo.private = private;
-        }
-        if let Some(website) = payload.website {
-            repo.website = Some(website);
-        }
+        if let Some(desc) = payload.description { repo.description = Some(desc); }
+        if let Some(private) = payload.private { repo.private = private; }
+        if let Some(website) = payload.website { repo.website = Some(website); }
+        if let Some(branch) = payload.default_branch { repo.default_branch = Some(branch); }
+        if let Some(val) = payload.allow_rebase_merge { repo.allow_rebase_merge = val; }
+        if let Some(val) = payload.allow_squash_merge { repo.allow_squash_merge = val; }
+        if let Some(val) = payload.allow_merge_commit { repo.allow_merge_commit = val; }
+        if let Some(val) = payload.has_issues { repo.has_issues = val; }
+        if let Some(val) = payload.has_wiki { repo.has_wiki = val; }
+        if let Some(val) = payload.has_projects { repo.has_projects = val; }
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -1109,25 +1131,31 @@ pub async fn transfer_repo(
     Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<TransferRepoOption>
 ) -> StatusCode {
+    let users = state.users.read().unwrap();
+    if !users.iter().any(|u| u.username == payload.new_owner) {
+         return StatusCode::BAD_REQUEST;
+    }
+    drop(users); // Release user lock
+
     let mut repos = state.repos.write().unwrap();
     if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
-        // Validate new owner exists (mock)
-        let users = state.users.read().unwrap();
-        if !users.iter().any(|u| u.username == payload.new_owner) {
-             return StatusCode::BAD_REQUEST;
-        }
-
         repo.owner = payload.new_owner.clone();
+        let repo_id = repo.id;
+        let r_name = repo.name.clone();
+
+        // Drop repo lock before activity lock if possible, though repo->activity order is generally consistent.
+        // But to be safe and avoid holding lock unnecessarily:
+        drop(repos);
 
         let mut activities = state.activities.write().unwrap();
         let activity_id = (activities.len() as u64) + 1;
         activities.push(Activity {
             id: activity_id,
-            repo_id: repo.id,
+            repo_id,
             user_id: 1, // mock admin
             user_name: "admin".to_string(),
             op_type: "transfer_repo".to_string(),
-            content: format!("transferred repository {} from {} to {}", repo.name, owner, payload.new_owner),
+            content: format!("transferred repository {} from {} to {}", r_name, owner, payload.new_owner),
             created: "now".to_string(),
         });
 
@@ -1279,11 +1307,20 @@ pub async fn merge_pull(
     Path((owner, repo, index)): Path<(String, String, u64)>,
     Json(_payload): Json<MergePullRequestOption>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
     let mut pulls = state.pulls.write().unwrap();
     let pr_opt = pulls.iter_mut().find(|p| p.number == index);
 
     if let Some(pr) = pr_opt {
-        let repo_id = pr.repo_id;
+        if pr.repo_id != repo_id {
+            return StatusCode::NOT_FOUND;
+        }
         pr.merged = true;
         pr.state = "closed".to_string();
 
@@ -1688,7 +1725,7 @@ pub async fn create_branch_protection(
          return (StatusCode::CONFLICT, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false }));
     }
 
-    let id = (branches.len() as u64) + 1;
+    let id = branches.iter().map(|b| b.id).max().unwrap_or(0) + 1;
     let protection = ProtectedBranch {
         id,
         repo_id,

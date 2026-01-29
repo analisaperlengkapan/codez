@@ -222,6 +222,10 @@ pub fn api_router() -> Router {
                 username: "codeza-org".to_string(),
                 description: Some("Codeza Organization".to_string()),
                 avatar_url: None,
+                website: None,
+                location: None,
+                email: None,
+                visibility: None,
             }
         ])),
         org_members: Arc::new(RwLock::new(vec![])),

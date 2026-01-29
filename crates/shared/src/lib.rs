@@ -13,6 +13,13 @@ pub struct Repository {
     pub is_mirror: bool,
     pub parent_id: Option<u64>,
     pub website: Option<String>,
+    pub default_branch: Option<String>,
+    pub allow_rebase_merge: bool,
+    pub allow_squash_merge: bool,
+    pub allow_merge_commit: bool,
+    pub has_issues: bool,
+    pub has_wiki: bool,
+    pub has_projects: bool,
 }
 
 impl Repository {
@@ -29,6 +36,13 @@ impl Repository {
             is_mirror: false,
             parent_id: None,
             website: None,
+            default_branch: Some("main".to_string()),
+            allow_rebase_merge: true,
+            allow_squash_merge: true,
+            allow_merge_commit: true,
+            has_issues: true,
+            has_wiki: true,
+            has_projects: true,
         }
     }
 }
@@ -253,6 +267,10 @@ pub struct Organization {
     pub username: String,
     pub description: Option<String>,
     pub avatar_url: Option<String>,
+    pub website: Option<String>,
+    pub location: Option<String>,
+    pub email: Option<String>,
+    pub visibility: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -397,6 +415,13 @@ pub struct RepoSettingsOption {
     pub description: Option<String>,
     pub private: Option<bool>,
     pub website: Option<String>,
+    pub default_branch: Option<String>,
+    pub allow_rebase_merge: Option<bool>,
+    pub allow_squash_merge: Option<bool>,
+    pub allow_merge_commit: Option<bool>,
+    pub has_issues: Option<bool>,
+    pub has_wiki: Option<bool>,
+    pub has_projects: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -955,7 +980,7 @@ mod tests {
 
     #[test]
     fn test_secret_deploykey() {
-        let s = Secret { name: "TOKEN".to_string(), repo_id: 1, created_at: "now".to_string() };
+        let s = Secret { name: "TOKEN".to_string(), repo_id: 1, created_at: "now".to_string(), data: "d".to_string() };
         assert_eq!(s.name, "TOKEN");
 
         let k = DeployKey { id: 1, repo_id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
