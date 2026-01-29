@@ -2,7 +2,7 @@ use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
-use shared::{Discussion, CreateDiscussionOption, User, DiscussionComment, CreateDiscussionCommentOption};
+use shared::{Discussion, CreateDiscussionOption, User, DiscussionComment, CreateDiscussionCommentOption, UpdateDiscussionOption};
 use crate::router::AppState;
 use chrono::Utc;
 
@@ -70,6 +70,36 @@ pub async fn get_discussion(
     let discussions = state.discussions.read().unwrap();
     let discussion = discussions.iter().find(|d| d.id == id).cloned();
     Json(discussion)
+}
+
+pub async fn update_discussion(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateDiscussionOption>
+) -> (StatusCode, Json<Option<Discussion>>) {
+    let mut discussions = state.discussions.write().unwrap();
+    if let Some(discussion) = discussions.iter_mut().find(|d| d.id == id) {
+        if let Some(title) = payload.title { discussion.title = title; }
+        if let Some(body) = payload.body { discussion.body = body; }
+        if let Some(category) = payload.category { discussion.category = category; }
+        if let Some(is_locked) = payload.is_locked { discussion.is_locked = is_locked; }
+        discussion.updated_at = Utc::now().to_rfc3339();
+        return (StatusCode::OK, Json(Some(discussion.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn delete_discussion(
+    State(state): State<AppState>,
+    Path((_owner, _repo, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let mut discussions = state.discussions.write().unwrap();
+    if let Some(pos) = discussions.iter().position(|d| d.id == id) {
+        discussions.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_discussion_comments(

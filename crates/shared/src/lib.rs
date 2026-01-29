@@ -809,6 +809,14 @@ pub struct CreateDiscussionOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateDiscussionOption {
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub category: Option<String>,
+    pub is_locked: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DiscussionComment {
     pub id: u64,
     pub discussion_id: u64,

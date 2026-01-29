@@ -331,7 +331,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/wiki/pages", get(list_wiki_pages).post(create_wiki_page))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))
         .route("/api/v1/repos/:owner/:repo/discussions", get(list_discussions).post(create_discussion))
-        .route("/api/v1/repos/:owner/:repo/discussions/:id", get(get_discussion))
+        .route("/api/v1/repos/:owner/:repo/discussions/:id", get(get_discussion).patch(update_discussion).delete(delete_discussion))
         .route("/api/v1/repos/:owner/:repo/discussions/:id/comments", get(list_discussion_comments).post(create_discussion_comment))
         .route("/api/v1/repos/:owner/:repo/git/lfs/locks", get(list_lfs_locks).post(create_lfs_lock))
         .route("/api/v1/repos/:owner/:repo/git/lfs/locks/:id/unlock", post(delete_lfs_lock))
