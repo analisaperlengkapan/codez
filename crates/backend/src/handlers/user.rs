@@ -201,12 +201,117 @@ pub async fn list_oauth2_apps() -> Json<Vec<OAuth2Application>> {
     ].into()
 }
 
-pub async fn list_followers(Path(_username): Path<String>) -> Json<Vec<User>> {
-    vec![User::new(2, "follower".to_string(), None)].into()
+pub async fn list_followers(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> Json<Vec<User>> {
+    let users = state.users.read().unwrap();
+    let target_user_id = users.iter().find(|u| u.username == username).map(|u| u.id).unwrap_or(0);
+
+    if target_user_id == 0 {
+        return Json(vec![]);
+    }
+
+    let followers_map = state.followers.read().unwrap();
+    let follower_ids = followers_map.get(&target_user_id).cloned().unwrap_or_default();
+
+    let mut result = Vec::new();
+    for id in follower_ids {
+        if let Some(u) = users.iter().find(|u| u.id == id) {
+            result.push(u.clone());
+        }
+    }
+    Json(result)
 }
 
-pub async fn list_following(Path(_username): Path<String>) -> Json<Vec<User>> {
-    vec![User::new(3, "following".to_string(), None)].into()
+pub async fn list_following(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> Json<Vec<User>> {
+    let users = state.users.read().unwrap();
+    let target_user_id = users.iter().find(|u| u.username == username).map(|u| u.id).unwrap_or(0);
+
+    if target_user_id == 0 {
+        return Json(vec![]);
+    }
+
+    let following_map = state.following.read().unwrap();
+    let following_ids = following_map.get(&target_user_id).cloned().unwrap_or_default();
+
+    let mut result = Vec::new();
+    for id in following_ids {
+        if let Some(u) = users.iter().find(|u| u.id == id) {
+            result.push(u.clone());
+        }
+    }
+    Json(result)
+}
+
+pub async fn follow_user(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> StatusCode {
+    let current_user_id = 1; // Mock current user
+    let users = state.users.read().unwrap();
+    let target_user = users.iter().find(|u| u.username == username);
+
+    if let Some(target) = target_user {
+        let target_id = target.id;
+        if target_id == current_user_id {
+             return StatusCode::BAD_REQUEST; // Cannot follow self
+        }
+
+        // Add current_user to target's followers
+        let mut followers = state.followers.write().unwrap();
+        let f_list = followers.entry(target_id).or_insert(Vec::new());
+        if !f_list.contains(&current_user_id) {
+            f_list.push(current_user_id);
+        }
+
+        // Add target to current_user's following
+        let mut following = state.following.write().unwrap();
+        let f_ing_list = following.entry(current_user_id).or_insert(Vec::new());
+        if !f_ing_list.contains(&target_id) {
+            f_ing_list.push(target_id);
+        }
+
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn unfollow_user(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> StatusCode {
+    let current_user_id = 1; // Mock current user
+    let users = state.users.read().unwrap();
+    let target_user = users.iter().find(|u| u.username == username);
+
+    if let Some(target) = target_user {
+        let target_id = target.id;
+
+        // Remove current_user from target's followers
+        let mut followers = state.followers.write().unwrap();
+        if let Some(f_list) = followers.get_mut(&target_id) {
+            if let Some(pos) = f_list.iter().position(|id| *id == current_user_id) {
+                f_list.remove(pos);
+            }
+        }
+
+        // Remove target from current_user's following
+        let mut following = state.following.write().unwrap();
+        if let Some(f_ing_list) = following.get_mut(&current_user_id) {
+             if let Some(pos) = f_ing_list.iter().position(|id| *id == target_id) {
+                f_ing_list.remove(pos);
+            }
+        }
+
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 

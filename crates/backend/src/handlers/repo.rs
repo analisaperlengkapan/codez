@@ -28,7 +28,10 @@ pub async fn get_user_repo_status(
     let stars = state.stars.read().unwrap();
     let starred = stars.get(&repo_id).map(|users| users.contains(&user_id)).unwrap_or(false);
 
-    Json(RepoUserStatus { starred, watching: false })
+    let watchers = state.watchers.read().unwrap();
+    let watching = watchers.get(&repo_id).map(|users| users.contains(&user_id)).unwrap_or(false);
+
+    Json(RepoUserStatus { starred, watching })
 }
 
 pub async fn list_repos(
@@ -868,8 +871,22 @@ pub async fn watch_repo(
     Path((owner, repo_name)): Path<(String, String)>
 ) -> StatusCode {
     let mut repos = state.repos.write().unwrap();
-    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
-        repo.watchers_count += 1;
+    let repo = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name);
+
+    if let Some(r) = repo {
+        let repo_id = r.id;
+        let user_id = 1; // Mock current user
+
+        let mut watchers = state.watchers.write().unwrap();
+        let users = watchers.entry(repo_id).or_insert(Vec::new());
+
+        if let Some(pos) = users.iter().position(|u| *u == user_id) {
+            users.remove(pos);
+            if r.watchers_count > 0 { r.watchers_count -= 1; }
+        } else {
+            users.push(user_id);
+            r.watchers_count += 1;
+        }
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND

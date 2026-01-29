@@ -46,6 +46,9 @@ pub struct AppState {
     pub discussion_comments: Arc<RwLock<Vec<DiscussionComment>>>,
     pub release_assets_data: Arc<RwLock<HashMap<(u64, u64), Vec<u8>>>>,
     pub gpg_keys: Arc<RwLock<Vec<GpgKey>>>,
+    pub watchers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // repo_id -> user_ids
+    pub followers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> follower_ids
+    pub following: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> following_ids
 }
 
 pub fn api_router() -> Router {
@@ -229,6 +232,9 @@ pub fn api_router() -> Router {
         discussion_comments: Arc::new(RwLock::new(vec![])),
         release_assets_data: Arc::new(RwLock::new(HashMap::new())),
         gpg_keys: Arc::new(RwLock::new(vec![])),
+        watchers: Arc::new(RwLock::new(HashMap::new())),
+        followers: Arc::new(RwLock::new(HashMap::new())),
+        following: Arc::new(RwLock::new(HashMap::new())),
     };
 
     Router::new()
@@ -305,6 +311,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/raw/*path", get(get_raw_file))
         .route("/api/v1/users/:username/followers", get(list_followers))
         .route("/api/v1/users/:username/following", get(list_following))
+        .route("/api/v1/users/:username/follow", post(follow_user).delete(unfollow_user))
         .route("/api/v1/users/:username/heatmap", get(get_user_heatmap))
         .route("/api/v1/orgs/:org/members", get(list_org_members))
         .route("/api/v1/orgs/:org/members/:username", post(add_org_member).delete(remove_org_member))
