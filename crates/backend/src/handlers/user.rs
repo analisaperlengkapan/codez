@@ -290,11 +290,14 @@ pub async fn follow_user(
     Path(username): Path<String>
 ) -> StatusCode {
     let current_user_id = 1; // Mock current user
-    let users = state.users.read().unwrap();
-    let target_user = users.iter().find(|u| u.username == username);
 
-    if let Some(target) = target_user {
-        let target_id = target.id;
+    // Extract ID first to avoid holding user read lock while acquiring write locks
+    let target_id = {
+        let users = state.users.read().unwrap();
+        users.iter().find(|u| u.username == username).map(|u| u.id)
+    };
+
+    if let Some(target_id) = target_id {
         if target_id == current_user_id {
              return StatusCode::BAD_REQUEST; // Cannot follow self
         }

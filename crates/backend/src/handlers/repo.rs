@@ -67,7 +67,7 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     let mut repo = Repository::new(id, payload.name.clone(), "admin".to_string());
     repo.private = payload.private;
     repo.description = payload.description.clone();
-    repo.default_branch = payload.default_branch.clone();
+    if let Some(branch) = payload.default_branch.clone() { repo.default_branch = Some(branch); }
     if let Some(val) = payload.allow_rebase_merge { repo.allow_rebase_merge = val; }
     if let Some(val) = payload.allow_squash_merge { repo.allow_squash_merge = val; }
     if let Some(val) = payload.allow_merge_commit { repo.allow_merge_commit = val; }
