@@ -200,7 +200,13 @@ use uuid::Uuid;
 
 pub async fn list_oauth2_apps(State(state): State<AppState>) -> Json<Vec<OAuth2Application>> {
     let apps = state.oauth2_apps.read().unwrap();
-    Json(apps.clone())
+    // Redact client_secret for listing
+    let safe_apps = apps.iter().map(|app| {
+        let mut a = app.clone();
+        a.client_secret = "****************".to_string();
+        a
+    }).collect();
+    Json(safe_apps)
 }
 
 pub async fn create_oauth2_app(
