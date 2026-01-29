@@ -265,12 +265,20 @@ pub struct Organization {
     pub username: String,
     pub description: Option<String>,
     pub avatar_url: Option<String>,
+    pub website: Option<String>,
+    pub location: Option<String>,
+    pub email: Option<String>,
+    pub visibility: String, // "public", "private"
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CreateOrgOption {
     pub username: String,
     pub description: Option<String>,
+    pub website: Option<String>,
+    pub location: Option<String>,
+    pub email: Option<String>,
+    pub visibility: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1102,8 +1110,13 @@ mod tests {
             username: "org".to_string(),
             description: None,
             avatar_url: None,
+            website: Some("https://org.com".to_string()),
+            location: Some("Earth".to_string()),
+            email: None,
+            visibility: "public".to_string(),
         };
         assert_eq!(org.username, "org");
+        assert_eq!(org.location, Some("Earth".to_string()));
     }
 
     #[test]
