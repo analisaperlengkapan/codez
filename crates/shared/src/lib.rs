@@ -12,6 +12,13 @@ pub struct Repository {
     pub watchers_count: u64,
     pub is_mirror: bool,
     pub parent_id: Option<u64>,
+    pub default_branch: String,
+    pub allow_rebase_merge: bool,
+    pub allow_squash_merge: bool,
+    pub allow_merge_commit: bool,
+    pub has_issues: bool,
+    pub has_wiki: bool,
+    pub has_projects: bool,
 }
 
 impl Repository {
@@ -27,6 +34,13 @@ impl Repository {
             watchers_count: 0,
             is_mirror: false,
             parent_id: None,
+            default_branch: "main".to_string(),
+            allow_rebase_merge: true,
+            allow_squash_merge: true,
+            allow_merge_commit: true,
+            has_issues: true,
+            has_wiki: true,
+            has_projects: true,
         }
     }
 }
@@ -102,6 +116,13 @@ pub struct CreateRepoOption {
     pub gitignores: Option<String>,
     pub license: Option<String>,
     pub readme: Option<String>,
+    pub default_branch: Option<String>,
+    pub allow_rebase_merge: Option<bool>,
+    pub allow_squash_merge: Option<bool>,
+    pub allow_merge_commit: Option<bool>,
+    pub has_issues: Option<bool>,
+    pub has_wiki: Option<bool>,
+    pub has_projects: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -369,6 +390,13 @@ pub struct RepoSettingsOption {
     pub description: Option<String>,
     pub private: Option<bool>,
     pub website: Option<String>,
+    pub default_branch: Option<String>,
+    pub allow_rebase_merge: Option<bool>,
+    pub allow_squash_merge: Option<bool>,
+    pub allow_merge_commit: Option<bool>,
+    pub has_issues: Option<bool>,
+    pub has_wiki: Option<bool>,
+    pub has_projects: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -957,6 +985,13 @@ mod tests {
             description: Some("desc".to_string()),
             private: Some(true),
             website: None,
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
         assert_eq!(r_opts.description, Some("desc".to_string()));
 
@@ -1190,6 +1225,13 @@ mod tests {
             gitignores: Some("Rust".to_string()),
             license: Some("MIT".to_string()),
             readme: Some("Default".to_string()),
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
         assert_eq!(opts.name, "new-repo");
         assert!(opts.private);
@@ -1205,6 +1247,21 @@ mod tests {
         assert_eq!(repo.private, false);
         assert_eq!(repo.stars_count, 0);
         assert_eq!(repo.is_mirror, false);
+        assert_eq!(repo.default_branch, "main");
+        assert!(repo.has_issues);
+    }
+
+    #[test]
+    fn test_repo_new_fields() {
+        let mut repo = Repository::new(1, "test".to_string(), "owner".to_string());
+        assert!(repo.allow_rebase_merge);
+        assert!(repo.allow_squash_merge);
+        assert!(repo.allow_merge_commit);
+        assert!(repo.has_wiki);
+        assert!(repo.has_projects);
+
+        repo.allow_rebase_merge = false;
+        assert!(!repo.allow_rebase_merge);
     }
 
     #[test]

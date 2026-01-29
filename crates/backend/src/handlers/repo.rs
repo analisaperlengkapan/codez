@@ -61,7 +61,14 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
         return (StatusCode::CONFLICT, Json(Repository::new(0, "".to_string(), "".to_string())));
     }
     let id = (repos.len() as u64) + 1;
-    let repo = Repository::new(id, payload.name.clone(), "admin".to_string());
+    let mut repo = Repository::new(id, payload.name.clone(), "admin".to_string());
+    if let Some(val) = payload.default_branch { repo.default_branch = val; }
+    if let Some(val) = payload.allow_rebase_merge { repo.allow_rebase_merge = val; }
+    if let Some(val) = payload.allow_squash_merge { repo.allow_squash_merge = val; }
+    if let Some(val) = payload.allow_merge_commit { repo.allow_merge_commit = val; }
+    if let Some(val) = payload.has_issues { repo.has_issues = val; }
+    if let Some(val) = payload.has_wiki { repo.has_wiki = val; }
+    if let Some(val) = payload.has_projects { repo.has_projects = val; }
     repos.push(repo.clone());
 
     // Create initial files
@@ -909,6 +916,13 @@ pub async fn get_repo_settings(Path((_owner, _repo)): Path<(String, String)>) ->
         description: Some("Description".to_string()),
         private: Some(false),
         website: None,
+        default_branch: Some("main".to_string()),
+        allow_rebase_merge: Some(true),
+        allow_squash_merge: Some(true),
+        allow_merge_commit: Some(true),
+        has_issues: Some(true),
+        has_wiki: Some(true),
+        has_projects: Some(true),
     })
 }
 
@@ -925,6 +939,14 @@ pub async fn update_repo_settings(
         if let Some(private) = payload.private {
             repo.private = private;
         }
+        if let Some(val) = payload.default_branch { repo.default_branch = val; }
+        if let Some(val) = payload.allow_rebase_merge { repo.allow_rebase_merge = val; }
+        if let Some(val) = payload.allow_squash_merge { repo.allow_squash_merge = val; }
+        if let Some(val) = payload.allow_merge_commit { repo.allow_merge_commit = val; }
+        if let Some(val) = payload.has_issues { repo.has_issues = val; }
+        if let Some(val) = payload.has_wiki { repo.has_wiki = val; }
+        if let Some(val) = payload.has_projects { repo.has_projects = val; }
+
         // Handle website update if Repo struct supported it, currently it doesn't in shared definition
         // but we can at least return OK after modifying what we can.
         StatusCode::OK
