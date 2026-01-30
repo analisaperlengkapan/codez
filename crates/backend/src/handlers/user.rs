@@ -230,7 +230,11 @@ pub async fn delete_oauth2_app(
     State(state): State<AppState>,
     Path(id): Path<u64>
 ) -> StatusCode {
-    let mut apps = state.oauth2_apps.lock().unwrap();
+    let mut apps = match state.oauth2_apps.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
     if let Some(pos) = apps.iter().position(|a| a.id == id) {
         apps.remove(pos);
         StatusCode::NO_CONTENT
