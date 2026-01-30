@@ -151,6 +151,10 @@ pub fn CreateOrg() -> impl IntoView {
         let payload = CreateOrgOption {
             username: name.get(),
             description: if desc.get().is_empty() { None } else { Some(desc.get()) },
+            website: None,
+            location: None,
+            email: None,
+            visibility: None,
         };
         spawn_local(async move {
             let _ = Request::post("/api/v1/orgs").json(&payload).unwrap().send().await;

@@ -857,6 +857,7 @@ pub fn CreateRepo() -> impl IntoView {
     let (desc, set_desc) = create_signal("".to_string());
     let (gitignore, set_gitignore) = create_signal("".to_string());
     let (license, set_license) = create_signal("".to_string());
+    let (private, set_private) = create_signal(false);
 
     let licenses = create_resource(|| (), |_| async move {
         Request::get("http://127.0.0.1:3000/api/v1/licenses").send().await.unwrap().json::<Vec<LicenseTemplate>>().await.unwrap_or_default()
@@ -871,11 +872,18 @@ pub fn CreateRepo() -> impl IntoView {
         let payload = CreateRepoOption {
             name: name.get(),
             description: if desc.get().is_empty() { None } else { Some(desc.get()) },
-            private: false,
+            private: private.get(),
             auto_init: true,
             gitignores: if gitignore.get().is_empty() { None } else { Some(gitignore.get()) },
             license: if license.get().is_empty() { None } else { Some(license.get()) },
             readme: Some("Default".to_string()),
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
         spawn_local(async move {
             let _ = Request::post("http://127.0.0.1:3000/api/v1/user/repos").json(&payload).unwrap().send().await;
@@ -888,6 +896,13 @@ pub fn CreateRepo() -> impl IntoView {
             <form on:submit=on_submit>
                 <input type="text" placeholder="Repository Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
                 <input type="text" placeholder="Description" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) />
+
+                <div style="margin: 10px 0;">
+                    <label>
+                        <input type="checkbox" prop:checked=private on:change=move |ev| set_private.set(event_target_checked(&ev)) />
+                        " Make Repository Private"
+                    </label>
+                </div>
 
                 <Suspense fallback=move || view! { <select disabled><option>"Loading licenses..."</option></select> }>
                     {move || licenses.get().map(|list| view! {
@@ -1363,15 +1378,53 @@ pub fn RepoSettings() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
     let (desc, set_desc) = create_signal("".to_string());
+    let (website, set_website) = create_signal("".to_string());
+    let (default_branch, set_default_branch) = create_signal("main".to_string());
+    let (private, set_private) = create_signal(false);
+    let (rebase, set_rebase) = create_signal(true);
+    let (squash, set_squash) = create_signal(true);
+    let (merge, set_merge) = create_signal(true);
+    let (issues, set_issues) = create_signal(true);
+    let (wiki, set_wiki) = create_signal(true);
+    let (projects, set_projects) = create_signal(true);
+
     let (transfer_to, set_transfer_to) = create_signal("".to_string());
     let (topics, set_topics) = create_signal("".to_string());
+
+    // Load initial settings
+    let _ = create_resource(
+        move || (owner(), repo_name()),
+        move |(o, r)| async move {
+            if let Ok(resp) = Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/settings", o, r)).send().await {
+                if let Ok(settings) = resp.json::<RepoSettingsOption>().await {
+                    set_desc.set(settings.description.unwrap_or_default());
+                    set_website.set(settings.website.unwrap_or_default());
+                    set_default_branch.set(settings.default_branch.unwrap_or("main".to_string()));
+                    set_private.set(settings.private.unwrap_or(false));
+                    set_rebase.set(settings.allow_rebase_merge.unwrap_or(true));
+                    set_squash.set(settings.allow_squash_merge.unwrap_or(true));
+                    set_merge.set(settings.allow_merge_commit.unwrap_or(true));
+                    set_issues.set(settings.has_issues.unwrap_or(true));
+                    set_wiki.set(settings.has_wiki.unwrap_or(true));
+                    set_projects.set(settings.has_projects.unwrap_or(true));
+                }
+            }
+        }
+    );
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let payload = RepoSettingsOption {
             description: Some(desc.get()),
-            private: None,
-            website: None,
+            private: Some(private.get()),
+            website: Some(website.get()),
+            default_branch: Some(default_branch.get()),
+            allow_rebase_merge: Some(rebase.get()),
+            allow_squash_merge: Some(squash.get()),
+            allow_merge_commit: Some(merge.get()),
+            has_issues: Some(issues.get()),
+            has_wiki: Some(wiki.get()),
+            has_projects: Some(projects.get()),
         };
         let o = owner();
         let r = repo_name();
@@ -1416,9 +1469,34 @@ pub fn RepoSettings() -> impl IntoView {
         <div class="repo-settings">
             <h3>"Repository Settings"</h3>
             <form on:submit=on_submit>
-                <label>"Description"</label>
-                <input type="text" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) />
-                <button type="submit">"Update Settings"</button>
+                <div>
+                    <label style="display: block;">"Description"</label>
+                    <input type="text" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) style="width: 100%; margin-bottom: 10px;" />
+                </div>
+                <div>
+                    <label style="display: block;">"Website"</label>
+                    <input type="text" prop:value=website on:input=move |ev| set_website.set(event_target_value(&ev)) style="width: 100%; margin-bottom: 10px;" />
+                </div>
+                <div>
+                    <label style="display: block;">"Default Branch"</label>
+                    <input type="text" prop:value=default_branch on:input=move |ev| set_default_branch.set(event_target_value(&ev)) style="width: 100%; margin-bottom: 10px;" />
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label><input type="checkbox" prop:checked=private on:change=move |ev| set_private.set(event_target_checked(&ev)) /> " Private Repository"</label>
+                </div>
+
+                <h4>"Merge Strategies"</h4>
+                <div><label><input type="checkbox" prop:checked=merge on:change=move |ev| set_merge.set(event_target_checked(&ev)) /> " Allow Merge Commits"</label></div>
+                <div><label><input type="checkbox" prop:checked=rebase on:change=move |ev| set_rebase.set(event_target_checked(&ev)) /> " Allow Rebase Merge"</label></div>
+                <div><label><input type="checkbox" prop:checked=squash on:change=move |ev| set_squash.set(event_target_checked(&ev)) /> " Allow Squash Merge"</label></div>
+
+                <h4>"Features"</h4>
+                <div><label><input type="checkbox" prop:checked=issues on:change=move |ev| set_issues.set(event_target_checked(&ev)) /> " Enable Issues"</label></div>
+                <div><label><input type="checkbox" prop:checked=wiki on:change=move |ev| set_wiki.set(event_target_checked(&ev)) /> " Enable Wiki"</label></div>
+                <div><label><input type="checkbox" prop:checked=projects on:change=move |ev| set_projects.set(event_target_checked(&ev)) /> " Enable Projects"</label></div>
+
+                <button type="submit" style="margin-top: 15px;">"Update Settings"</button>
             </form>
 
             <h4>"Topics"</h4>
