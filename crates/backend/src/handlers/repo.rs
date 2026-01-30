@@ -1063,10 +1063,10 @@ pub async fn create_wiki_page(
 pub async fn get_repo_settings(
     State(state): State<AppState>,
     Path((owner, repo_name)): Path<(String, String)>
-) -> Json<RepoSettingsOption> {
+) -> (StatusCode, Json<RepoSettingsOption>) {
     let repos = state.repos.read().unwrap();
     if let Some(repo) = repos.iter().find(|r| r.owner == owner && r.name == repo_name) {
-        Json(RepoSettingsOption {
+        (StatusCode::OK, Json(RepoSettingsOption {
             description: repo.description.clone(),
             private: Some(repo.private),
             website: repo.website.clone(),
@@ -1077,9 +1077,9 @@ pub async fn get_repo_settings(
             has_issues: Some(repo.has_issues),
             has_wiki: Some(repo.has_wiki),
             has_projects: Some(repo.has_projects),
-        })
+        }))
     } else {
-        Json(RepoSettingsOption {
+        (StatusCode::NOT_FOUND, Json(RepoSettingsOption {
             description: None,
             private: None,
             website: None,
@@ -1090,7 +1090,7 @@ pub async fn get_repo_settings(
             has_issues: None,
             has_wiki: None,
             has_projects: None,
-        })
+        }))
     }
 }
 
