@@ -1223,7 +1223,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::CREATED);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let forked_repo: Repository = serde_json::from_slice(&body).unwrap();
 

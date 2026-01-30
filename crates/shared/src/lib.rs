@@ -1042,6 +1042,13 @@ mod tests {
             description: Some("desc".to_string()),
             private: Some(true),
             website: None,
+            default_branch: Some("main".to_string()),
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
         assert_eq!(r_opts.description, Some("desc".to_string()));
 
@@ -1152,6 +1159,10 @@ mod tests {
             username: "org".to_string(),
             description: None,
             avatar_url: None,
+            website: None,
+            location: None,
+            email: None,
+            visibility: None,
         };
         assert_eq!(org.username, "org");
     }

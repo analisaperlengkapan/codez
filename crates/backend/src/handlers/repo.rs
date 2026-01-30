@@ -245,10 +245,17 @@ pub async fn create_issue(
     (StatusCode::CREATED, Json(issue))
 }
 
-pub async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index)): Path<(String, String, u64)>) -> Json<Option<Issue>> {
+pub async fn get_issue(State(state): State<AppState>, Path((owner, repo_name, index)): Path<(String, String, u64)>) -> Json<Option<Issue>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let issues = state.issues.read().unwrap();
-    let issue = issues.iter().find(|i| i.id == index).cloned();
-    Json(issue)
+    if let Some(issue) = issues.iter().find(|i| i.id == index) {
+        if issue.repo_id == repo_id {
+            return Json(Some(issue.clone()));
+        }
+    }
+    Json(None)
 }
 
 pub async fn update_issue(
@@ -444,28 +451,47 @@ pub async fn create_comment(
 
 pub async fn update_comment(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>,
     Json(payload): Json<UpdateCommentOption>
 ) -> (StatusCode, Json<Option<Comment>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    // Validate ownership requires joining with issues or checking repo_id if comment had it (it doesn't directly, it has issue_id).
+    // In this mock, we can look up the issue first.
+    let issues = state.issues.read().unwrap();
     let mut comments = state.comments.write().unwrap();
+
     if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
-        comment.body = payload.body;
-        return (StatusCode::OK, Json(Some(comment.clone())));
+        if let Some(issue) = issues.iter().find(|i| i.id == comment.issue_id) {
+            if issue.repo_id == repo_id {
+                comment.body = payload.body;
+                return (StatusCode::OK, Json(Some(comment.clone())));
+            }
+        }
     }
     (StatusCode::NOT_FOUND, Json(None))
 }
 
 pub async fn delete_comment(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let issues = state.issues.read().unwrap();
     let mut comments = state.comments.write().unwrap();
+
     if let Some(pos) = comments.iter().position(|c| c.id == id) {
-        comments.remove(pos);
-        StatusCode::NO_CONTENT
-    } else {
-        StatusCode::NOT_FOUND
+        if let Some(issue) = issues.iter().find(|i| i.id == comments[pos].issue_id) {
+            if issue.repo_id == repo_id {
+                comments.remove(pos);
+                return StatusCode::NO_CONTENT;
+            }
+        }
     }
+    StatusCode::NOT_FOUND
 }
 
 pub async fn list_labels(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Label>> {
@@ -593,10 +619,17 @@ pub async fn create_milestone(
     (StatusCode::CREATED, Json(milestone))
 }
 
-pub async fn get_milestone(State(state): State<AppState>, Path((_owner, _repo, id)): Path<(String, String, u64)>) -> Json<Option<Milestone>> {
+pub async fn get_milestone(State(state): State<AppState>, Path((owner, repo_name, id)): Path<(String, String, u64)>) -> Json<Option<Milestone>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let milestones = state.milestones.read().unwrap();
-    let m = milestones.iter().find(|m| m.id == id).cloned();
-    Json(m)
+    if let Some(m) = milestones.iter().find(|m| m.id == id) {
+        if m.repo_id == repo_id {
+            return Json(Some(m.clone()));
+        }
+    }
+    Json(None)
 }
 
 pub async fn update_milestone(
@@ -1000,7 +1033,7 @@ pub async fn watch_repo(
     }
 }
 
-pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> Json<Repository> {
+pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> (StatusCode, Json<Option<Repository>>) {
     let mut repos = state.repos.write().unwrap();
 
     if let Some(orig_idx) = repos.iter().position(|r| r.owner == owner && r.name == repo) {
@@ -1042,9 +1075,9 @@ pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<
             created: "now".to_string(),
         });
 
-        Json(new_repo)
+        (StatusCode::CREATED, Json(Some(new_repo)))
     } else {
-        Json(Repository::new(0, "error".to_string(), "error".to_string()))
+        (StatusCode::NOT_FOUND, Json(None))
     }
 }
 
