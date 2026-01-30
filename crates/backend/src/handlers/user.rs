@@ -5,7 +5,7 @@ use axum::{
 };
 use shared::{
     LoginOption, User, RegisterOption, UserSettingsOption, Notification, PublicKey, CreateKeyOption,
-    GpgKey, CreateGpgKeyOption, Activity, EmailAddress, OAuth2Application, TwoFactor, OAuth2Provider,
+    GpgKey, CreateGpgKeyOption, Activity, EmailAddress, TwoFactor, OAuth2Provider,
     Contribution, Issue, PullRequest, IssueFilterOptions, Repository
 };
 use crate::router::AppState;
@@ -137,27 +137,25 @@ pub async fn list_feeds(State(state): State<AppState>) -> Json<Vec<Activity>> {
     Json(feeds)
 }
 
-pub async fn list_gpg_keys() -> Json<Vec<GpgKey>> {
-    let keys = vec![
-        GpgKey {
-            id: 1,
-            key_id: "ID".to_string(),
-            primary_key_id: "PID".to_string(),
-            public_key: "PUB".to_string(),
-            emails: vec![],
-        }
-    ];
-    Json(keys)
+pub async fn list_gpg_keys(State(state): State<AppState>) -> Json<Vec<GpgKey>> {
+    let keys = state.gpg_keys.read().unwrap();
+    Json(keys.clone())
 }
 
-pub async fn create_gpg_key(Json(payload): Json<CreateGpgKeyOption>) -> (StatusCode, Json<GpgKey>) {
+pub async fn create_gpg_key(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateGpgKeyOption>
+) -> (StatusCode, Json<GpgKey>) {
+    let mut keys = state.gpg_keys.write().unwrap();
+    let id = (keys.len() as u64) + 1;
     let key = GpgKey {
-        id: 2,
-        key_id: "NEWID".to_string(),
-        primary_key_id: "NEWPID".to_string(),
+        id,
+        key_id: format!("KEY-{}", id),
+        primary_key_id: format!("PRIM-{}", id),
         public_key: payload.armored_public_key,
         emails: vec![],
     };
+    keys.push(key.clone());
     (StatusCode::CREATED, Json(key))
 }
 
@@ -165,12 +163,30 @@ pub async fn verify_gpg_key(Path(_id): Path<u64>) -> StatusCode {
     StatusCode::OK
 }
 
-pub async fn delete_ssh_key(Path(_id): Path<u64>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn delete_ssh_key(
+    State(state): State<AppState>,
+    Path(id): Path<u64>
+) -> StatusCode {
+    let mut keys = state.keys.write().unwrap();
+    if let Some(pos) = keys.iter().position(|k| k.id == id) {
+        keys.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
-pub async fn delete_gpg_key(Path(_id): Path<u64>) -> StatusCode {
-    StatusCode::NO_CONTENT
+pub async fn delete_gpg_key(
+    State(state): State<AppState>,
+    Path(id): Path<u64>
+) -> StatusCode {
+    let mut keys = state.gpg_keys.write().unwrap();
+    if let Some(pos) = keys.iter().position(|k| k.id == id) {
+        keys.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_emails() -> Json<Vec<EmailAddress>> {
@@ -179,18 +195,172 @@ pub async fn list_emails() -> Json<Vec<EmailAddress>> {
     ].into()
 }
 
-pub async fn list_oauth2_apps() -> Json<Vec<OAuth2Application>> {
-    vec![
-        OAuth2Application { id: 1, name: "MyApp".to_string(), client_id: "client-id".to_string(), redirect_uris: vec![] }
-    ].into()
+use shared::{CreateOAuth2AppOption, OAuth2Application};
+use uuid::Uuid;
+
+pub async fn list_oauth2_apps(State(state): State<AppState>) -> Json<Vec<OAuth2Application>> {
+    let apps = state.oauth2_apps.lock().unwrap();
+    // Redact client_secret for listing
+    let safe_apps = apps.iter().map(|app| {
+        let mut a = app.clone();
+        a.client_secret = "****************".to_string();
+        a
+    }).collect();
+    Json(safe_apps)
 }
 
-pub async fn list_followers(Path(_username): Path<String>) -> Json<Vec<User>> {
-    vec![User::new(2, "follower".to_string(), None)].into()
+pub async fn create_oauth2_app(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateOAuth2AppOption>
+) -> (StatusCode, Json<OAuth2Application>) {
+    let mut apps = state.oauth2_apps.lock().unwrap();
+    let id = (apps.len() as u64) + 1;
+    let app = OAuth2Application {
+        id,
+        name: payload.name,
+        client_id: Uuid::new_v4().to_string(),
+        client_secret: Uuid::new_v4().to_string(),
+        redirect_uris: payload.redirect_uris,
+    };
+    apps.push(app.clone());
+    (StatusCode::CREATED, Json(app))
 }
 
-pub async fn list_following(Path(_username): Path<String>) -> Json<Vec<User>> {
-    vec![User::new(3, "following".to_string(), None)].into()
+pub async fn delete_oauth2_app(
+    State(state): State<AppState>,
+    Path(id): Path<u64>
+) -> StatusCode {
+    let mut apps = match state.oauth2_apps.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    // Use retain to avoid CodeQL false positive regarding "logging" sensitive info
+    let initial_len = apps.len();
+    apps.retain(|a| a.id != id);
+    if apps.len() < initial_len {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn list_followers(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> Json<Vec<User>> {
+    let users = state.users.read().unwrap();
+    let target_user_id = users.iter().find(|u| u.username == username).map(|u| u.id).unwrap_or(0);
+
+    if target_user_id == 0 {
+        return Json(vec![]);
+    }
+
+    let followers_map = state.followers.read().unwrap();
+    let follower_ids = followers_map.get(&target_user_id).cloned().unwrap_or_default();
+
+    let mut result = Vec::new();
+    for id in follower_ids {
+        if let Some(u) = users.iter().find(|u| u.id == id) {
+            result.push(u.clone());
+        }
+    }
+    Json(result)
+}
+
+pub async fn list_following(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> Json<Vec<User>> {
+    let users = state.users.read().unwrap();
+    let target_user_id = users.iter().find(|u| u.username == username).map(|u| u.id).unwrap_or(0);
+
+    if target_user_id == 0 {
+        return Json(vec![]);
+    }
+
+    let following_map = state.following.read().unwrap();
+    let following_ids = following_map.get(&target_user_id).cloned().unwrap_or_default();
+
+    let mut result = Vec::new();
+    for id in following_ids {
+        if let Some(u) = users.iter().find(|u| u.id == id) {
+            result.push(u.clone());
+        }
+    }
+    Json(result)
+}
+
+pub async fn follow_user(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> StatusCode {
+    let current_user_id = 1; // Mock current user
+
+    // Extract ID first to avoid holding user read lock while acquiring write locks
+    let target_id = {
+        let users = state.users.read().unwrap();
+        users.iter().find(|u| u.username == username).map(|u| u.id)
+    };
+
+    if let Some(target_id) = target_id {
+        if target_id == current_user_id {
+             return StatusCode::BAD_REQUEST; // Cannot follow self
+        }
+
+        // Add current_user to target's followers
+        let mut followers = state.followers.write().unwrap();
+        let f_list = followers.entry(target_id).or_insert(Vec::new());
+        if !f_list.contains(&current_user_id) {
+            f_list.push(current_user_id);
+        }
+
+        // Add target to current_user's following
+        let mut following = state.following.write().unwrap();
+        let f_ing_list = following.entry(current_user_id).or_insert(Vec::new());
+        if !f_ing_list.contains(&target_id) {
+            f_ing_list.push(target_id);
+        }
+
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn unfollow_user(
+    State(state): State<AppState>,
+    Path(username): Path<String>
+) -> StatusCode {
+    let current_user_id = 1; // Mock current user
+
+    // Extract ID first to avoid holding user read lock while acquiring write locks
+    let target_id = {
+        let users = state.users.read().unwrap();
+        users.iter().find(|u| u.username == username).map(|u| u.id)
+    };
+
+    if let Some(target_id) = target_id {
+        // Remove current_user from target's followers
+        let mut followers = state.followers.write().unwrap();
+        if let Some(f_list) = followers.get_mut(&target_id) {
+            if let Some(pos) = f_list.iter().position(|id| *id == current_user_id) {
+                f_list.remove(pos);
+            }
+        }
+
+        // Remove target from current_user's following
+        let mut following = state.following.write().unwrap();
+        if let Some(f_ing_list) = following.get_mut(&current_user_id) {
+             if let Some(pos) = f_ing_list.iter().position(|id| *id == target_id) {
+                f_ing_list.remove(pos);
+            }
+        }
+
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 

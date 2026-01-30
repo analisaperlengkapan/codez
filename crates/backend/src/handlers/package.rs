@@ -54,3 +54,16 @@ pub async fn get_package_detail(
     let pkg = packages.iter().find(|p| p.owner == owner && p.name == name && p.version == version).cloned();
     Json(pkg)
 }
+
+pub async fn delete_package(
+    State(state): State<AppState>,
+    Path((owner, _type, name, version)): Path<(String, String, String, String)>
+) -> StatusCode {
+    let mut packages = state.packages.write().unwrap();
+    if let Some(pos) = packages.iter().position(|p| p.owner == owner && p.name == name && p.version == version) {
+        packages.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}

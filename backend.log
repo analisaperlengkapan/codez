@@ -1,4 +1,0 @@
-   Compiling backend v0.1.0 (/app/crates/backend)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 10.10s
-     Running `target/debug/backend`
-listening on 127.0.0.1:3000

@@ -5,9 +5,9 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment
+    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, GpgKey, OAuth2Application
 };
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 use std::collections::HashMap;
 use tower_http::cors::CorsLayer;
 use crate::handlers::*;
@@ -44,6 +44,12 @@ pub struct AppState {
     pub stars: Arc<RwLock<HashMap<u64, Vec<u64>>>>,
     pub discussions: Arc<RwLock<Vec<Discussion>>>,
     pub discussion_comments: Arc<RwLock<Vec<DiscussionComment>>>,
+    pub release_assets_data: Arc<RwLock<HashMap<(u64, u64), Vec<u8>>>>,
+    pub gpg_keys: Arc<RwLock<Vec<GpgKey>>>,
+    pub watchers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // repo_id -> user_ids
+    pub followers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> follower_ids
+    pub following: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> following_ids
+    pub oauth2_apps: Arc<Mutex<Vec<OAuth2Application>>>,
 }
 
 pub fn api_router() -> Router {
@@ -216,6 +222,10 @@ pub fn api_router() -> Router {
                 username: "codeza-org".to_string(),
                 description: Some("Codeza Organization".to_string()),
                 avatar_url: None,
+                website: None,
+                location: None,
+                email: None,
+                visibility: None,
             }
         ])),
         org_members: Arc::new(RwLock::new(vec![])),
@@ -225,6 +235,12 @@ pub fn api_router() -> Router {
         stars: Arc::new(RwLock::new(HashMap::new())),
         discussions: Arc::new(RwLock::new(vec![])),
         discussion_comments: Arc::new(RwLock::new(vec![])),
+        release_assets_data: Arc::new(RwLock::new(HashMap::new())),
+        gpg_keys: Arc::new(RwLock::new(vec![])),
+        watchers: Arc::new(RwLock::new(HashMap::new())),
+        followers: Arc::new(RwLock::new(HashMap::new())),
+        following: Arc::new(RwLock::new(HashMap::new())),
+        oauth2_apps: Arc::new(Mutex::new(vec![])),
     };
 
     Router::new()
@@ -255,8 +271,9 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/issues/comments/:id", patch(update_comment).delete(delete_comment))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/merge", post(merge_pull))
         .route("/api/v1/repos/:owner/:repo/labels", get(list_labels).post(create_label))
+        .route("/api/v1/repos/:owner/:repo/labels/:id", patch(update_label).delete(delete_label))
         .route("/api/v1/repos/:owner/:repo/milestones", get(list_milestones).post(create_milestone))
-        .route("/api/v1/repos/:owner/:repo/milestones/:id", get(get_milestone))
+        .route("/api/v1/repos/:owner/:repo/milestones/:id", get(get_milestone).patch(update_milestone).delete(delete_milestone))
         .route("/api/v1/repos/:owner/:repo/topics", get(list_topics).put(update_topics))
         .route("/api/v1/repos/:owner/:repo/issues/comments/:id/reactions", post(add_reaction))
         .route("/api/v1/repos/:owner/:repo/star", post(star_repo))
@@ -289,6 +306,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/admin/notices", get(list_notices))
         .route("/api/v1/user/2fa", get(get_2fa).post(update_2fa))
         .route("/api/v1/user/gpg_keys", get(list_gpg_keys).post(create_gpg_key))
+        .route("/api/v1/user/gpg_keys/:id", delete(delete_gpg_key))
         .route("/api/v1/repos/:owner/:repo/mirror-sync", post(mirror_sync))
         .route("/api/v1/repos/:owner/:repo/collaborators", get(list_collaborators))
         .route("/api/v1/repos/:owner/:repo/collaborators/:collaborator", get(get_collaborator).put(add_collaborator))
@@ -300,6 +318,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/raw/*path", get(get_raw_file))
         .route("/api/v1/users/:username/followers", get(list_followers))
         .route("/api/v1/users/:username/following", get(list_following))
+        .route("/api/v1/users/:username/follow", post(follow_user).delete(unfollow_user))
         .route("/api/v1/users/:username/heatmap", get(get_user_heatmap))
         .route("/api/v1/orgs/:org/members", get(list_org_members))
         .route("/api/v1/orgs/:org/members/:username", post(add_org_member).delete(remove_org_member))
@@ -315,23 +334,24 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/branch_protections/:name", delete(delete_branch_protection))
         .route("/api/v1/search/issues", get(search_issues_global))
         .route("/api/v1/user/emails", get(list_emails))
-        .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps))
+        .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps).post(create_oauth2_app))
+        .route("/api/v1/user/applications/oauth2/:id", delete(delete_oauth2_app))
         .route("/api/v1/repos/migrate", post(migrate_repo))
         .route("/api/v1/repos/:owner/:repo/transfer", post(transfer_repo))
         .route("/api/v1/user/keys/:id", delete(delete_ssh_key))
-        .route("/api/v1/user/gpg_keys/:id", delete(delete_gpg_key))
         .route("/api/v1/repos/:owner/:repo/milestones/:id/stats", get(get_milestone_stats))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/files", get(get_pr_files))
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels", post(add_issue_label))
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels/:id", delete(remove_issue_label))
         .route("/api/v1/repos/:owner/:repo/search", get(search_repo_code))
-        .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail))
+        .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail).delete(delete_package))
         .route("/api/v1/repos/:owner/:repo/wiki/pages", get(list_wiki_pages).post(create_wiki_page))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))
         .route("/api/v1/repos/:owner/:repo/discussions", get(list_discussions).post(create_discussion))
-        .route("/api/v1/repos/:owner/:repo/discussions/:id", get(get_discussion))
+        .route("/api/v1/repos/:owner/:repo/discussions/:id", get(get_discussion).patch(update_discussion).delete(delete_discussion))
         .route("/api/v1/repos/:owner/:repo/discussions/:id/comments", get(list_discussion_comments).post(create_discussion_comment))
         .route("/api/v1/repos/:owner/:repo/git/lfs/locks", get(list_lfs_locks).post(create_lfs_lock))
+        .route("/api/v1/repos/:owner/:repo/git/lfs/locks/:id/unlock", post(delete_lfs_lock))
         .route("/api/v1/user/gpg_keys/:id/verify", post(verify_gpg_key))
         .route("/api/v1/notifications/threads/:id", patch(mark_notification_read))
         .layer(CorsLayer::permissive())

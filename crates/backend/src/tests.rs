@@ -24,6 +24,13 @@ mod tests {
             gitignores: None,
             license: None,
             readme: None,
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
 
         let response = app.clone()
@@ -814,6 +821,10 @@ mod tests {
         let payload = shared::CreateOrgOption {
             username: "new-org".to_string(),
             description: Some("New Org".to_string()),
+            website: None,
+            location: None,
+            email: None,
+            visibility: None,
         };
         let response = app.clone()
             .oneshot(
@@ -1212,7 +1223,7 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::CREATED);
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let forked_repo: Repository = serde_json::from_slice(&body).unwrap();
 

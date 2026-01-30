@@ -12,7 +12,7 @@ use shared::{
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
     Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch,
-    RepoUserStatus
+    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption
 };
 use crate::router::AppState;
 
@@ -28,7 +28,10 @@ pub async fn get_user_repo_status(
     let stars = state.stars.read().unwrap();
     let starred = stars.get(&repo_id).map(|users| users.contains(&user_id)).unwrap_or(false);
 
-    Json(RepoUserStatus { starred, watching: false })
+    let watchers = state.watchers.read().unwrap();
+    let watching = watchers.get(&repo_id).map(|users| users.contains(&user_id)).unwrap_or(false);
+
+    Json(RepoUserStatus { starred, watching })
 }
 
 pub async fn list_repos(
@@ -61,7 +64,16 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
         return (StatusCode::CONFLICT, Json(Repository::new(0, "".to_string(), "".to_string())));
     }
     let id = (repos.len() as u64) + 1;
-    let repo = Repository::new(id, payload.name.clone(), "admin".to_string());
+    let mut repo = Repository::new(id, payload.name.clone(), "admin".to_string());
+    repo.private = payload.private;
+    repo.description = payload.description.clone();
+    if let Some(branch) = payload.default_branch.clone() { repo.default_branch = Some(branch); }
+    if let Some(val) = payload.allow_rebase_merge { repo.allow_rebase_merge = val; }
+    if let Some(val) = payload.allow_squash_merge { repo.allow_squash_merge = val; }
+    if let Some(val) = payload.allow_merge_commit { repo.allow_merge_commit = val; }
+    if let Some(val) = payload.has_issues { repo.has_issues = val; }
+    if let Some(val) = payload.has_wiki { repo.has_wiki = val; }
+    if let Some(val) = payload.has_projects { repo.has_projects = val; }
     repos.push(repo.clone());
 
     // Create initial files
@@ -233,10 +245,17 @@ pub async fn create_issue(
     (StatusCode::CREATED, Json(issue))
 }
 
-pub async fn get_issue(State(state): State<AppState>, Path((_owner, _repo, index)): Path<(String, String, u64)>) -> Json<Option<Issue>> {
+pub async fn get_issue(State(state): State<AppState>, Path((owner, repo_name, index)): Path<(String, String, u64)>) -> Json<Option<Issue>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let issues = state.issues.read().unwrap();
-    let issue = issues.iter().find(|i| i.id == index).cloned();
-    Json(issue)
+    if let Some(issue) = issues.iter().find(|i| i.id == index) {
+        if issue.repo_id == repo_id {
+            return Json(Some(issue.clone()));
+        }
+    }
+    Json(None)
 }
 
 pub async fn update_issue(
@@ -432,28 +451,47 @@ pub async fn create_comment(
 
 pub async fn update_comment(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>,
     Json(payload): Json<UpdateCommentOption>
 ) -> (StatusCode, Json<Option<Comment>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    // Validate ownership requires joining with issues or checking repo_id if comment had it (it doesn't directly, it has issue_id).
+    // In this mock, we can look up the issue first.
+    let issues = state.issues.read().unwrap();
     let mut comments = state.comments.write().unwrap();
+
     if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
-        comment.body = payload.body;
-        return (StatusCode::OK, Json(Some(comment.clone())));
+        if let Some(issue) = issues.iter().find(|i| i.id == comment.issue_id) {
+            if issue.repo_id == repo_id {
+                comment.body = payload.body;
+                return (StatusCode::OK, Json(Some(comment.clone())));
+            }
+        }
     }
     (StatusCode::NOT_FOUND, Json(None))
 }
 
 pub async fn delete_comment(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let issues = state.issues.read().unwrap();
     let mut comments = state.comments.write().unwrap();
+
     if let Some(pos) = comments.iter().position(|c| c.id == id) {
-        comments.remove(pos);
-        StatusCode::NO_CONTENT
-    } else {
-        StatusCode::NOT_FOUND
+        if let Some(issue) = issues.iter().find(|i| i.id == comments[pos].issue_id) {
+            if issue.repo_id == repo_id {
+                comments.remove(pos);
+                return StatusCode::NO_CONTENT;
+            }
+        }
     }
+    StatusCode::NOT_FOUND
 }
 
 pub async fn list_labels(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Label>> {
@@ -492,6 +530,54 @@ pub async fn create_label(
     };
     labels.push(label.clone());
     (StatusCode::CREATED, Json(label))
+}
+
+pub async fn update_label(
+    State(state): State<AppState>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateLabelOption>
+) -> (StatusCode, Json<Option<Label>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(None));
+    }
+
+    let mut labels = state.labels.write().unwrap();
+    if let Some(label) = labels.iter_mut().find(|l| l.id == id) {
+        if label.repo_id != repo_id {
+            return (StatusCode::NOT_FOUND, Json(None));
+        }
+        if let Some(name) = payload.name { label.name = name; }
+        if let Some(color) = payload.color { label.color = color; }
+        if let Some(description) = payload.description { label.description = Some(description); }
+        return (StatusCode::OK, Json(Some(label.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn delete_label(
+    State(state): State<AppState>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
+    let mut labels = state.labels.write().unwrap();
+    if let Some(pos) = labels.iter().position(|l| l.id == id) {
+        if labels[pos].repo_id != repo_id {
+            return StatusCode::NOT_FOUND;
+        }
+        labels.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_milestones(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Milestone>> {
@@ -533,10 +619,66 @@ pub async fn create_milestone(
     (StatusCode::CREATED, Json(milestone))
 }
 
-pub async fn get_milestone(State(state): State<AppState>, Path((_owner, _repo, id)): Path<(String, String, u64)>) -> Json<Option<Milestone>> {
+pub async fn get_milestone(State(state): State<AppState>, Path((owner, repo_name, id)): Path<(String, String, u64)>) -> Json<Option<Milestone>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let milestones = state.milestones.read().unwrap();
-    let m = milestones.iter().find(|m| m.id == id).cloned();
-    Json(m)
+    if let Some(m) = milestones.iter().find(|m| m.id == id) {
+        if m.repo_id == repo_id {
+            return Json(Some(m.clone()));
+        }
+    }
+    Json(None)
+}
+
+pub async fn update_milestone(
+    State(state): State<AppState>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>,
+    Json(payload): Json<UpdateMilestoneOption>
+) -> (StatusCode, Json<Option<Milestone>>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(None));
+    }
+
+    let mut milestones = state.milestones.write().unwrap();
+    if let Some(m) = milestones.iter_mut().find(|m| m.id == id) {
+        if m.repo_id != repo_id {
+            return (StatusCode::NOT_FOUND, Json(None));
+        }
+        if let Some(title) = payload.title { m.title = title; }
+        if let Some(desc) = payload.description { m.description = Some(desc); }
+        if let Some(due) = payload.due_on { m.due_on = Some(due); }
+        if let Some(state) = payload.state { m.state = state; }
+        return (StatusCode::OK, Json(Some(m.clone())));
+    }
+    (StatusCode::NOT_FOUND, Json(None))
+}
+
+pub async fn delete_milestone(
+    State(state): State<AppState>,
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
+    let mut milestones = state.milestones.write().unwrap();
+    if let Some(pos) = milestones.iter().position(|m| m.id == id) {
+        if milestones[pos].repo_id != repo_id {
+            return StatusCode::NOT_FOUND;
+        }
+        milestones.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn list_hooks(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<Webhook>> {
@@ -624,7 +766,7 @@ pub async fn create_secret(
         r.id
     } else {
          return (StatusCode::NOT_FOUND, Json(Secret {
-            name: "".to_string(), repo_id: 0, created_at: "".to_string()
+            name: "".to_string(), repo_id: 0, created_at: "".to_string(), data: "".to_string()
         }));
     };
 
@@ -632,6 +774,7 @@ pub async fn create_secret(
         name: payload.name,
         repo_id,
         created_at: "2023-01-02".to_string(),
+        data: payload.data,
     };
     (StatusCode::CREATED, Json(secret))
 }
@@ -642,7 +785,7 @@ pub async fn list_secrets(Path((_owner, _repo)): Path<(String, String)>) -> Json
     // For consistency with other handlers, we'd need to move secrets to AppState.
     // However, following the instruction to filter, I will return an empty list if repo doesn't match mock.
     let secrets = vec![
-        Secret { name: "MY_TOKEN".to_string(), repo_id: 1, created_at: "2023-01-01".to_string() }
+        Secret { name: "MY_TOKEN".to_string(), repo_id: 1, created_at: "2023-01-01".to_string(), data: "hidden".to_string() }
     ];
     Json(secrets)
 }
@@ -699,30 +842,61 @@ pub async fn list_lfs_locks(
     Json(filtered_locks)
 }
 
+#[derive(serde::Deserialize)]
+pub struct LfsLockRequest {
+    pub path: String,
+}
+
 pub async fn create_lfs_lock(
     State(state): State<AppState>,
-    Path((owner, repo_name)): Path<(String, String)>
-) -> StatusCode {
+    Path((owner, repo_name)): Path<(String, String)>,
+    Json(payload): Json<LfsLockRequest>,
+) -> (StatusCode, Json<LfsLock>) {
     let repos = state.repos.read().unwrap();
-    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
-    let repo_id = if let Some(r) = repo {
-        r.id
-    } else {
-        return StatusCode::NOT_FOUND;
-    };
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(LfsLock { id: "".to_string(), repo_id: 0, path: "".to_string(), owner: User::new(0, "".to_string(), None), locked_at: "".to_string() }));
+    }
 
     let mut locks = state.lfs_locks.write().unwrap();
+    if locks.iter().any(|l| l.repo_id == repo_id && l.path == payload.path) {
+        return (StatusCode::CONFLICT, Json(LfsLock { id: "".to_string(), repo_id: 0, path: "".to_string(), owner: User::new(0, "".to_string(), None), locked_at: "".to_string() }));
+    }
+
     let id = (locks.len() as u64) + 1;
+    // Mock user for now, or ideally extract from auth
     let user = User::new(1, "admin".to_string(), None);
-    locks.push(LfsLock {
+
+    let lock = LfsLock {
         id: id.to_string(),
         repo_id,
-        path: format!("file{}.bin", id),
+        path: payload.path,
         owner: user,
         locked_at: "now".to_string(),
-    });
-    StatusCode::CREATED
+    };
+    locks.push(lock.clone());
+    (StatusCode::CREATED, Json(lock))
+}
+
+pub async fn delete_lfs_lock(
+    State(state): State<AppState>,
+    Path((owner, repo_name, id)): Path<(String, String, String)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
+    let mut locks = state.lfs_locks.write().unwrap();
+    if let Some(pos) = locks.iter().position(|l| l.repo_id == repo_id && l.id == id) {
+        locks.remove(pos);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn add_reaction(
@@ -837,20 +1011,35 @@ pub async fn watch_repo(
     Path((owner, repo_name)): Path<(String, String)>
 ) -> StatusCode {
     let mut repos = state.repos.write().unwrap();
-    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
-        repo.watchers_count += 1;
+    let repo = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name);
+
+    if let Some(r) = repo {
+        let repo_id = r.id;
+        let user_id = 1; // Mock current user
+
+        let mut watchers = state.watchers.write().unwrap();
+        let users = watchers.entry(repo_id).or_insert(Vec::new());
+
+        if let Some(pos) = users.iter().position(|u| *u == user_id) {
+            users.remove(pos);
+            if r.watchers_count > 0 { r.watchers_count -= 1; }
+        } else {
+            users.push(user_id);
+            r.watchers_count += 1;
+        }
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
     }
 }
 
-pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> Json<Repository> {
+pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<(String, String)>) -> (StatusCode, Json<Option<Repository>>) {
     let mut repos = state.repos.write().unwrap();
 
-    let original_repo = repos.iter().find(|r| r.owner == owner && r.name == repo).cloned();
+    if let Some(orig_idx) = repos.iter().position(|r| r.owner == owner && r.name == repo) {
+        repos[orig_idx].forks_count += 1;
+        let orig = repos[orig_idx].clone();
 
-    if let Some(orig) = original_repo {
         let id = (repos.len() as u64) + 1;
         let new_name = format!("{}-fork", repo);
         let mut new_repo = Repository::new(id, new_name.clone(), "admin".to_string());
@@ -886,9 +1075,9 @@ pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<
             created: "now".to_string(),
         });
 
-        Json(new_repo)
+        (StatusCode::CREATED, Json(Some(new_repo)))
     } else {
-        Json(Repository::new(0, "error".to_string(), "error".to_string()))
+        (StatusCode::NOT_FOUND, Json(None))
     }
 }
 
@@ -904,12 +1093,38 @@ pub async fn create_wiki_page(
     (StatusCode::CREATED, Json(page))
 }
 
-pub async fn get_repo_settings(Path((_owner, _repo)): Path<(String, String)>) -> Json<RepoSettingsOption> {
-    Json(RepoSettingsOption {
-        description: Some("Description".to_string()),
-        private: Some(false),
-        website: None,
-    })
+pub async fn get_repo_settings(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>
+) -> (StatusCode, Json<RepoSettingsOption>) {
+    let repos = state.repos.read().unwrap();
+    if let Some(repo) = repos.iter().find(|r| r.owner == owner && r.name == repo_name) {
+        (StatusCode::OK, Json(RepoSettingsOption {
+            description: repo.description.clone(),
+            private: Some(repo.private),
+            website: repo.website.clone(),
+            default_branch: repo.default_branch.clone(),
+            allow_rebase_merge: Some(repo.allow_rebase_merge),
+            allow_squash_merge: Some(repo.allow_squash_merge),
+            allow_merge_commit: Some(repo.allow_merge_commit),
+            has_issues: Some(repo.has_issues),
+            has_wiki: Some(repo.has_wiki),
+            has_projects: Some(repo.has_projects),
+        }))
+    } else {
+        (StatusCode::NOT_FOUND, Json(RepoSettingsOption {
+            description: None,
+            private: None,
+            website: None,
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
+        }))
+    }
 }
 
 pub async fn update_repo_settings(
@@ -919,14 +1134,16 @@ pub async fn update_repo_settings(
 ) -> StatusCode {
     let mut repos = state.repos.write().unwrap();
     if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
-        if let Some(desc) = payload.description {
-            repo.description = Some(desc);
-        }
-        if let Some(private) = payload.private {
-            repo.private = private;
-        }
-        // Handle website update if Repo struct supported it, currently it doesn't in shared definition
-        // but we can at least return OK after modifying what we can.
+        if let Some(desc) = payload.description { repo.description = Some(desc); }
+        if let Some(private) = payload.private { repo.private = private; }
+        if let Some(website) = payload.website { repo.website = Some(website); }
+        if let Some(branch) = payload.default_branch { repo.default_branch = Some(branch); }
+        if let Some(val) = payload.allow_rebase_merge { repo.allow_rebase_merge = val; }
+        if let Some(val) = payload.allow_squash_merge { repo.allow_squash_merge = val; }
+        if let Some(val) = payload.allow_merge_commit { repo.allow_merge_commit = val; }
+        if let Some(val) = payload.has_issues { repo.has_issues = val; }
+        if let Some(val) = payload.has_wiki { repo.has_wiki = val; }
+        if let Some(val) = payload.has_projects { repo.has_projects = val; }
         StatusCode::OK
     } else {
         StatusCode::NOT_FOUND
@@ -942,8 +1159,43 @@ pub async fn migrate_repo(Json(payload): Json<MigrateRepoOption>) -> (StatusCode
     (StatusCode::CREATED, Json(repo))
 }
 
-pub async fn transfer_repo(Path((_owner, _repo)): Path<(String, String)>, Json(_payload): Json<TransferRepoOption>) -> StatusCode {
-    StatusCode::ACCEPTED
+pub async fn transfer_repo(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
+    Json(payload): Json<TransferRepoOption>
+) -> StatusCode {
+    let users = state.users.read().unwrap();
+    if !users.iter().any(|u| u.username == payload.new_owner) {
+         return StatusCode::BAD_REQUEST;
+    }
+    drop(users); // Release user lock
+
+    let mut repos = state.repos.write().unwrap();
+    if let Some(repo) = repos.iter_mut().find(|r| r.owner == owner && r.name == repo_name) {
+        repo.owner = payload.new_owner.clone();
+        let repo_id = repo.id;
+        let r_name = repo.name.clone();
+
+        // Drop repo lock before activity lock if possible, though repo->activity order is generally consistent.
+        // But to be safe and avoid holding lock unnecessarily:
+        drop(repos);
+
+        let mut activities = state.activities.write().unwrap();
+        let activity_id = (activities.len() as u64) + 1;
+        activities.push(Activity {
+            id: activity_id,
+            repo_id,
+            user_id: 1, // mock admin
+            user_name: "admin".to_string(),
+            op_type: "transfer_repo".to_string(),
+            content: format!("transferred repository {} from {} to {}", r_name, owner, payload.new_owner),
+            created: "now".to_string(),
+        });
+
+        StatusCode::ACCEPTED
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }
 
 pub async fn add_issue_label(
@@ -1088,11 +1340,20 @@ pub async fn merge_pull(
     Path((owner, repo, index)): Path<(String, String, u64)>,
     Json(_payload): Json<MergePullRequestOption>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
     let mut pulls = state.pulls.write().unwrap();
     let pr_opt = pulls.iter_mut().find(|p| p.number == index);
 
     if let Some(pr) = pr_opt {
-        let repo_id = pr.repo_id;
+        if pr.repo_id != repo_id {
+            return StatusCode::NOT_FOUND;
+        }
         pr.merged = true;
         pr.state = "closed".to_string();
 
@@ -1470,23 +1731,37 @@ pub async fn get_commit_diff(Path((_owner, _repo, _sha)): Path<(String, String, 
 
 pub async fn list_branch_protections(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>
+    Path((owner, repo_name)): Path<(String, String)>
 ) -> Json<Vec<ProtectedBranch>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
     let branches = state.protected_branches.read().unwrap();
-    // In real impl we would filter by repo ID
-    Json(branches.clone())
+    let filtered: Vec<ProtectedBranch> = branches.iter().filter(|b| b.repo_id == repo_id).cloned().collect();
+    Json(filtered)
 }
 
 pub async fn create_branch_protection(
     State(state): State<AppState>,
-    Path((_owner, _repo)): Path<(String, String)>,
+    Path((owner, repo_name)): Path<(String, String)>,
     Json(payload): Json<CreateProtectedBranchOption>
 ) -> (StatusCode, Json<ProtectedBranch>) {
-    let mut branches = state.protected_branches.write().unwrap();
-    if branches.iter().any(|b| b.name == payload.name) {
-         return (StatusCode::CONFLICT, Json(ProtectedBranch { name: "".to_string(), enable_push: false, enable_force_push: false }));
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+         return (StatusCode::NOT_FOUND, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false }));
     }
+
+    let mut branches = state.protected_branches.write().unwrap();
+    if branches.iter().any(|b| b.repo_id == repo_id && b.name == payload.name) {
+         return (StatusCode::CONFLICT, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false }));
+    }
+
+    let id = branches.iter().map(|b| b.id).max().unwrap_or(0) + 1;
     let protection = ProtectedBranch {
+        id,
+        repo_id,
         name: payload.name,
         enable_push: payload.enable_push,
         enable_force_push: payload.enable_force_push,
@@ -1497,10 +1772,17 @@ pub async fn create_branch_protection(
 
 pub async fn delete_branch_protection(
     State(state): State<AppState>,
-    Path((_owner, _repo, name)): Path<(String, String, String)>
+    Path((owner, repo_name, name)): Path<(String, String, String)>
 ) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return StatusCode::NOT_FOUND;
+    }
+
     let mut branches = state.protected_branches.write().unwrap();
-    if let Some(pos) = branches.iter().position(|b| b.name == name) {
+    if let Some(pos) = branches.iter().position(|b| b.repo_id == repo_id && b.name == name) {
         branches.remove(pos);
         StatusCode::NO_CONTENT
     } else {

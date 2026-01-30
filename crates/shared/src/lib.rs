@@ -12,6 +12,14 @@ pub struct Repository {
     pub watchers_count: u64,
     pub is_mirror: bool,
     pub parent_id: Option<u64>,
+    pub website: Option<String>,
+    pub default_branch: Option<String>,
+    pub allow_rebase_merge: bool,
+    pub allow_squash_merge: bool,
+    pub allow_merge_commit: bool,
+    pub has_issues: bool,
+    pub has_wiki: bool,
+    pub has_projects: bool,
 }
 
 impl Repository {
@@ -27,6 +35,14 @@ impl Repository {
             watchers_count: 0,
             is_mirror: false,
             parent_id: None,
+            website: None,
+            default_branch: Some("main".to_string()),
+            allow_rebase_merge: true,
+            allow_squash_merge: true,
+            allow_merge_commit: true,
+            has_issues: true,
+            has_wiki: true,
+            has_projects: true,
         }
     }
 }
@@ -102,6 +118,13 @@ pub struct CreateRepoOption {
     pub gitignores: Option<String>,
     pub license: Option<String>,
     pub readme: Option<String>,
+    pub default_branch: Option<String>,
+    pub allow_rebase_merge: Option<bool>,
+    pub allow_squash_merge: Option<bool>,
+    pub allow_merge_commit: Option<bool>,
+    pub has_issues: Option<bool>,
+    pub has_wiki: Option<bool>,
+    pub has_projects: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -244,12 +267,20 @@ pub struct Organization {
     pub username: String,
     pub description: Option<String>,
     pub avatar_url: Option<String>,
+    pub website: Option<String>,
+    pub location: Option<String>,
+    pub email: Option<String>,
+    pub visibility: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CreateOrgOption {
     pub username: String,
     pub description: Option<String>,
+    pub website: Option<String>,
+    pub location: Option<String>,
+    pub email: Option<String>,
+    pub visibility: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -309,6 +340,13 @@ pub struct CreateLabelOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateLabelOption {
+    pub name: Option<String>,
+    pub color: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Milestone {
     pub id: u64,
     pub repo_id: u64,
@@ -323,6 +361,14 @@ pub struct CreateMilestoneOption {
     pub title: String,
     pub description: Option<String>,
     pub due_on: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateMilestoneOption {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub due_on: Option<String>,
+    pub state: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -369,6 +415,13 @@ pub struct RepoSettingsOption {
     pub description: Option<String>,
     pub private: Option<bool>,
     pub website: Option<String>,
+    pub default_branch: Option<String>,
+    pub allow_rebase_merge: Option<bool>,
+    pub allow_squash_merge: Option<bool>,
+    pub allow_merge_commit: Option<bool>,
+    pub has_issues: Option<bool>,
+    pub has_wiki: Option<bool>,
+    pub has_projects: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -570,6 +623,7 @@ pub struct Secret {
     pub name: String,
     pub repo_id: u64,
     pub created_at: String,
+    pub data: String, // In real app this would be encrypted
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -710,6 +764,8 @@ pub struct LanguageStat {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProtectedBranch {
+    pub id: u64,
+    pub repo_id: u64,
     pub name: String,
     pub enable_push: bool,
     pub enable_force_push: bool,
@@ -729,11 +785,32 @@ pub struct EmailAddress {
     pub primary: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+use std::fmt;
+
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
 pub struct OAuth2Application {
     pub id: u64,
     pub name: String,
     pub client_id: String,
+    pub client_secret: String,
+    pub redirect_uris: Vec<String>,
+}
+
+impl fmt::Debug for OAuth2Application {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OAuth2Application")
+            .field("id", &self.id)
+            .field("name", &self.name)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"***REDACTED***")
+            .field("redirect_uris", &self.redirect_uris)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateOAuth2AppOption {
+    pub name: String,
     pub redirect_uris: Vec<String>,
 }
 
@@ -793,6 +870,14 @@ pub struct CreateDiscussionOption {
     pub title: String,
     pub body: String,
     pub category: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateDiscussionOption {
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub category: Option<String>,
+    pub is_locked: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -895,7 +980,7 @@ mod tests {
 
     #[test]
     fn test_secret_deploykey() {
-        let s = Secret { name: "TOKEN".to_string(), repo_id: 1, created_at: "now".to_string() };
+        let s = Secret { name: "TOKEN".to_string(), repo_id: 1, created_at: "now".to_string(), data: "d".to_string() };
         assert_eq!(s.name, "TOKEN");
 
         let k = DeployKey { id: 1, repo_id: 1, title: "deploy".to_string(), key: "k".to_string(), fingerprint: "f".to_string() };
@@ -957,6 +1042,13 @@ mod tests {
             description: Some("desc".to_string()),
             private: Some(true),
             website: None,
+            default_branch: Some("main".to_string()),
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
         assert_eq!(r_opts.description, Some("desc".to_string()));
 
@@ -1067,6 +1159,10 @@ mod tests {
             username: "org".to_string(),
             description: None,
             avatar_url: None,
+            website: None,
+            location: None,
+            email: None,
+            visibility: None,
         };
         assert_eq!(org.username, "org");
     }
@@ -1190,6 +1286,13 @@ mod tests {
             gitignores: Some("Rust".to_string()),
             license: Some("MIT".to_string()),
             readme: Some("Default".to_string()),
+            default_branch: None,
+            allow_rebase_merge: None,
+            allow_squash_merge: None,
+            allow_merge_commit: None,
+            has_issues: None,
+            has_wiki: None,
+            has_projects: None,
         };
         assert_eq!(opts.name, "new-repo");
         assert!(opts.private);
@@ -1250,13 +1353,25 @@ mod tests {
         let l = LanguageStat { language: "Rust".to_string(), percentage: 100, color: "#dea584".to_string() };
         assert_eq!(l.percentage, 100);
 
-        let pb = ProtectedBranch { name: "main".to_string(), enable_push: false, enable_force_push: false };
+        let pb = ProtectedBranch {
+            id: 1,
+            repo_id: 1,
+            name: "main".to_string(),
+            enable_push: false,
+            enable_force_push: false,
+        };
         assert!(!pb.enable_push);
 
         let e = EmailAddress { email: "e".to_string(), verified: true, primary: true };
         assert!(e.primary);
 
-        let app = OAuth2Application { id: 1, name: "app".to_string(), client_id: "cid".to_string(), redirect_uris: vec![] };
+        let app = OAuth2Application {
+            id: 1,
+            name: "app".to_string(),
+            client_id: "cid".to_string(),
+            client_secret: "secret".to_string(),
+            redirect_uris: vec![],
+        };
         assert_eq!(app.client_id, "cid");
     }
 

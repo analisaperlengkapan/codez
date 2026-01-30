@@ -114,6 +114,11 @@ pub async fn delete_release(
 
     let mut releases = state.releases.write().unwrap();
     if let Some(pos) = releases.iter().position(|r| r.repo_id == repo_id && r.id == id) {
+        let release = &releases[pos];
+        let mut assets_data = state.release_assets_data.write().unwrap();
+        for asset in &release.assets {
+            assets_data.remove(&(release.id, asset.id));
+        }
         releases.remove(pos);
         StatusCode::NO_CONTENT
     } else {
@@ -121,12 +126,19 @@ pub async fn delete_release(
     }
 }
 
+use axum::body::Bytes;
+
 pub async fn upload_release_asset(
     State(state): State<AppState>,
-    Path((owner, repo_name, id)): Path<(String, String, u64)>
+    Path((owner, repo_name, id)): Path<(String, String, u64)>,
+    body: Bytes,
 ) -> (StatusCode, Json<Option<ReleaseAsset>>) {
     let repos = state.repos.read().unwrap();
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, Json(None));
+    }
 
     let mut releases = state.releases.write().unwrap();
     let release = releases.iter_mut().find(|r| r.repo_id == repo_id && r.id == id);
@@ -135,12 +147,17 @@ pub async fn upload_release_asset(
         let asset_id = (r.assets.len() as u64) + 1;
         let asset = ReleaseAsset {
             id: asset_id,
-            name: format!("asset-{}.zip", asset_id),
-            size: 1024,
+            name: format!("asset-{}.bin", asset_id),
+            size: body.len() as u64,
             download_url: format!("/api/v1/repos/{}/{}/releases/{}/assets/{}", owner, repo_name, id, asset_id),
             created_at: "now".to_string(),
         };
         r.assets.push(asset.clone());
+
+        // Store content
+        let mut assets_data = state.release_assets_data.write().unwrap();
+        assets_data.insert((r.id, asset_id), body.to_vec());
+
         return (StatusCode::CREATED, Json(Some(asset)));
     }
     (StatusCode::NOT_FOUND, Json(None))
@@ -149,16 +166,22 @@ pub async fn upload_release_asset(
 pub async fn download_release_asset(
     State(state): State<AppState>,
     Path((owner, repo_name, id, asset_id)): Path<(String, String, u64, u64)>
-) -> (StatusCode, String) {
+) -> (StatusCode, Vec<u8>) {
     let repos = state.repos.read().unwrap();
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
+    if repo_id == 0 {
+        return (StatusCode::NOT_FOUND, vec![]);
+    }
+
     let releases = state.releases.read().unwrap();
     if let Some(release) = releases.iter().find(|r| r.repo_id == repo_id && r.id == id) {
-        if let Some(asset) = release.assets.iter().find(|a| a.id == asset_id) {
-            // Mock file content download
-            return (StatusCode::OK, format!("Content of asset {} ({})", asset.name, asset_id));
+        if release.assets.iter().any(|a| a.id == asset_id) {
+            let assets_data = state.release_assets_data.read().unwrap();
+            if let Some(content) = assets_data.get(&(release.id, asset_id)) {
+                return (StatusCode::OK, content.clone());
+            }
         }
     }
-    (StatusCode::NOT_FOUND, "Asset not found".to_string())
+    (StatusCode::NOT_FOUND, vec![])
 }
