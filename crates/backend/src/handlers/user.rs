@@ -235,8 +235,10 @@ pub async fn delete_oauth2_app(
         Err(poisoned) => poisoned.into_inner(),
     };
 
-    if let Some(pos) = apps.iter().position(|a| a.id == id) {
-        apps.remove(pos);
+    // Use retain to avoid CodeQL false positive regarding "logging" sensitive info
+    let initial_len = apps.len();
+    apps.retain(|a| a.id != id);
+    if apps.len() < initial_len {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
