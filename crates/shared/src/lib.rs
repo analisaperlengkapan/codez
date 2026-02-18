@@ -165,6 +165,9 @@ pub struct PullRequest {
     pub state: String,
     pub user: User,
     pub merged: bool,
+    pub head_sha: String,
+    pub base: String,
+    pub head: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -769,6 +772,7 @@ pub struct ProtectedBranch {
     pub name: String,
     pub enable_push: bool,
     pub enable_force_push: bool,
+    pub required_status_checks: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -776,6 +780,27 @@ pub struct CreateProtectedBranchOption {
     pub name: String,
     pub enable_push: bool,
     pub enable_force_push: bool,
+    pub required_status_checks: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CommitStatus {
+    pub id: u64,
+    pub sha: String,
+    pub state: String, // pending, success, error, failure
+    pub target_url: Option<String>,
+    pub description: Option<String>,
+    pub context: String,
+    pub created_at: String,
+    pub creator: User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateStatusOption {
+    pub state: String,
+    pub target_url: Option<String>,
+    pub description: Option<String>,
+    pub context: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1231,6 +1256,9 @@ mod tests {
             state: "open".to_string(),
             user,
             merged: false,
+            head_sha: "sha".to_string(),
+            base: "main".to_string(),
+            head: "feature".to_string(),
         };
         assert_eq!(pr.title, "PR Title");
         assert!(!pr.merged);
@@ -1359,6 +1387,7 @@ mod tests {
             name: "main".to_string(),
             enable_push: false,
             enable_force_push: false,
+            required_status_checks: vec![],
         };
         assert!(!pb.enable_push);
 

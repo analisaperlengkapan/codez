@@ -12,7 +12,7 @@ use shared::{
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
     Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch,
-    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption
+    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption, CommitStatus, CreateStatusOption
 };
 use crate::router::AppState;
 
@@ -319,7 +319,7 @@ pub async fn create_pull(
     if repo_id == 0 {
          return (StatusCode::NOT_FOUND, Json(PullRequest {
             id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
-            user: User::new(0, "".to_string(), None), merged: false
+            user: User::new(0, "".to_string(), None), merged: false, head_sha: "".to_string(), base: "".to_string(), head: "".to_string()
         }));
     }
 
@@ -334,6 +334,9 @@ pub async fn create_pull(
         state: "open".to_string(),
         user: User::new(1, "admin".to_string(), None),
         merged: false,
+        head_sha: format!("head_sha_{}", id),
+        base: payload.base.clone(),
+        head: payload.head.clone(),
     };
     pulls.push(pr.clone());
 
@@ -1354,6 +1357,27 @@ pub async fn merge_pull(
         if pr.repo_id != repo_id {
             return StatusCode::NOT_FOUND;
         }
+
+        // Check branch protection and status checks
+        {
+            let protections = state.protected_branches.read().unwrap();
+            if let Some(protection) = protections.iter().find(|p| p.repo_id == repo_id && p.name == pr.base) {
+                if !protection.required_status_checks.is_empty() {
+                    let statuses = state.commit_statuses.read().unwrap();
+                    for context in &protection.required_status_checks {
+                        let latest = statuses.iter()
+                            .filter(|s| s.sha == pr.head_sha && &s.context == context)
+                            .max_by_key(|s| s.id);
+
+                        match latest {
+                            Some(status) if status.state == "success" => continue,
+                            _ => return StatusCode::CONFLICT,
+                        }
+                    }
+                }
+            }
+        }
+
         pr.merged = true;
         pr.state = "closed".to_string();
 
@@ -1567,6 +1591,17 @@ pub async fn update_file(
         return (StatusCode::NOT_FOUND, Json(FileEntry { name: "".to_string(), path: "".to_string(), kind: "".to_string(), size: 0 }));
     };
 
+    // Check branch protection
+    let branch_name = payload.branch.clone().unwrap_or("main".to_string());
+    {
+        let protections = state.protected_branches.read().unwrap();
+        if let Some(protection) = protections.iter().find(|p| p.repo_id == repo_id && p.name == branch_name) {
+            if !protection.enable_push {
+                return (StatusCode::FORBIDDEN, Json(FileEntry { name: "".to_string(), path: "".to_string(), kind: "".to_string(), size: 0 }));
+            }
+        }
+    }
+
     // Update file content in state
     {
         let mut files = state.file_contents.write().unwrap();
@@ -1750,12 +1785,12 @@ pub async fn create_branch_protection(
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
     if repo_id == 0 {
-         return (StatusCode::NOT_FOUND, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false }));
+         return (StatusCode::NOT_FOUND, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false, required_status_checks: vec![] }));
     }
 
     let mut branches = state.protected_branches.write().unwrap();
     if branches.iter().any(|b| b.repo_id == repo_id && b.name == payload.name) {
-         return (StatusCode::CONFLICT, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false }));
+         return (StatusCode::CONFLICT, Json(ProtectedBranch { id: 0, repo_id: 0, name: "".to_string(), enable_push: false, enable_force_push: false, required_status_checks: vec![] }));
     }
 
     let id = branches.iter().map(|b| b.id).max().unwrap_or(0) + 1;
@@ -1765,6 +1800,7 @@ pub async fn create_branch_protection(
         name: payload.name,
         enable_push: payload.enable_push,
         enable_force_push: payload.enable_force_push,
+        required_status_checks: payload.required_status_checks.unwrap_or_default(),
     };
     branches.push(protection.clone());
     (StatusCode::CREATED, Json(protection))
@@ -1802,4 +1838,43 @@ pub async fn search_issues_global(
         filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
     }
     Json(filtered_issues)
+}
+
+pub async fn create_commit_status(
+    State(state): State<AppState>,
+    Path((owner, repo_name, sha)): Path<(String, String, String)>,
+    Json(payload): Json<CreateStatusOption>
+) -> (StatusCode, Json<CommitStatus>) {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+         return (StatusCode::NOT_FOUND, Json(CommitStatus {
+            id: 0, sha: "".to_string(), state: "".to_string(), target_url: None, description: None, context: "".to_string(), created_at: "".to_string(), creator: User::new(0, "".to_string(), None)
+        }));
+    }
+
+    let mut statuses = state.commit_statuses.write().unwrap();
+    let id = (statuses.len() as u64) + 1;
+    let status = CommitStatus {
+        id,
+        sha: sha.clone(),
+        state: payload.state,
+        target_url: payload.target_url,
+        description: payload.description,
+        context: payload.context.unwrap_or("default".to_string()),
+        created_at: "now".to_string(),
+        creator: User::new(1, "admin".to_string(), None),
+    };
+    statuses.push(status.clone());
+    (StatusCode::CREATED, Json(status))
+}
+
+pub async fn list_commit_statuses(
+    State(state): State<AppState>,
+    Path((_owner, _repo, ref_name)): Path<(String, String, String)>
+) -> Json<Vec<CommitStatus>> {
+    let statuses = state.commit_statuses.read().unwrap();
+    let filtered: Vec<CommitStatus> = statuses.iter().filter(|s| s.sha == ref_name).cloned().collect();
+    Json(filtered)
 }

@@ -9,7 +9,7 @@ use shared::{
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
     UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery, CreateIssueOption,
-    RepoUserStatus
+    RepoUserStatus, CommitStatus
 };
 
 #[component]
@@ -1225,6 +1225,7 @@ pub fn PullRequestDetail() -> impl IntoView {
                                     view! { <p>{pr.body.clone().unwrap_or_default()}</p> }.into_view()
                                 }}
                             </div>
+                            <CommitStatusList owner=owner() repo=repo_name() sha=pr.head_sha.clone() />
                         }
                     }.into_view(),
                     _ => view! { <p>"Pull Request not found"</p> }.into_view()
@@ -1547,7 +1548,19 @@ pub fn ProtectedBranchList() -> impl IntoView {
                 <Suspense fallback=move || view! { <li>"Loading..."</li> }>
                     {move || branches.get().map(|list| view! {
                         <For each=move || list.clone() key=|b| b.name.clone() children=move |b| {
-                            view! { <li>{b.name} " (Push: " {b.enable_push} ", Force: " {b.enable_force_push} ")"</li> }
+                            view! {
+                                <li>
+                                    {b.name}
+                                    " (Push: " {b.enable_push}
+                                    ", Force: " {b.enable_force_push}
+                                    {if !b.required_status_checks.is_empty() {
+                                        format!(", Checks: {}", b.required_status_checks.join(", "))
+                                    } else {
+                                        "".to_string()
+                                    }}
+                                    ")"
+                                </li>
+                            }
                         }/>
                     })}
                 </Suspense>
@@ -2173,6 +2186,54 @@ pub fn RepoCodeSearch() -> impl IntoView {
                     })}
                 </Suspense>
             </ul>
+        </div>
+    }
+}
+
+#[component]
+pub fn CommitStatusList(owner: String, repo: String, sha: String) -> impl IntoView {
+    let statuses = create_resource(
+        move || (owner.clone(), repo.clone(), sha.clone()),
+        |(o, r, s)| async move {
+            Request::get(&format!("/api/v1/repos/{}/{}/commits/{}/statuses", o, r, s))
+                .send().await.unwrap().json::<Vec<CommitStatus>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="commit-statuses" style="margin: 10px 0; border: 1px solid #eee; padding: 10px; border-radius: 5px;">
+            <h4>"Checks"</h4>
+            <Suspense fallback=move || view! { <span>"Loading checks..."</span> }>
+                {move || statuses.get().map(|list| {
+                    if list.is_empty() {
+                        view! { <div>"No checks run."</div> }.into_view()
+                    } else {
+                        view! {
+                            <ul style="list-style: none; padding: 0;">
+                                <For each=move || list.clone() key=|s| s.id children=move |s| {
+                                    let color = match s.state.as_str() {
+                                        "success" => "green",
+                                        "failure" | "error" => "red",
+                                        _ => "orange",
+                                    };
+                                    let icon = match s.state.as_str() {
+                                        "success" => "✔",
+                                        "failure" | "error" => "✘",
+                                        _ => "●",
+                                    };
+                                    view! {
+                                        <li style="margin-bottom: 5px; display: flex; align-items: center;">
+                                            <span style=format!("color: {}; margin-right: 10px; font-weight: bold;", color)>{icon}</span>
+                                            <strong style="margin-right: 10px;">{s.context}</strong>
+                                            <span>{s.description.unwrap_or_default()}</span>
+                                        </li>
+                                    }
+                                }/>
+                            </ul>
+                        }.into_view()
+                    }
+                })}
+            </Suspense>
         </div>
     }
 }
