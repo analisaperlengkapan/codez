@@ -2195,7 +2195,7 @@ pub fn CommitStatusList(owner: String, repo: String, sha: String) -> impl IntoVi
     let statuses = create_resource(
         move || (owner.clone(), repo.clone(), sha.clone()),
         |(o, r, s)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/commits/{}/statuses", o, r, s))
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/commits/{}/statuses", o, r, s))
                 .send().await.unwrap().json::<Vec<CommitStatus>>().await.unwrap_or_default()
         }
     );
