@@ -1474,12 +1474,45 @@ pub async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String
     StatusCode::NO_CONTENT
 }
 
-pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
+pub async fn list_branches(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>
+) -> Json<Vec<Branch>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return Json(vec![]);
+    }
+
+    let files = state.file_contents.read().unwrap();
+    let mut branch_names = std::collections::HashSet::new();
+
+    for (r_id, branch, _) in files.keys() {
+        if *r_id == repo_id {
+            branch_names.insert(branch.clone());
+        }
+    }
+
+    // Always ensure "main" exists if files are empty but repo exists, or handle graceful fallback.
+    // Ideally create_repo makes "main", so it should be there.
+    if branch_names.is_empty() {
+        // Fallback or empty
+    }
+
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "abc".to_string(), repo_id: 1, message: "init".to_string(), author: user, date: "now".to_string() };
-    let branches = vec![
-        Branch { name: "main".to_string(), repo_id: 1, commit, protected: true }
-    ];
+    // Mock commit for branch tip
+    let commit = Commit { sha: "mock_sha".to_string(), repo_id, message: "branch tip".to_string(), author: user, date: "now".to_string() };
+
+    let branches: Vec<Branch> = branch_names.into_iter().map(|name| {
+        Branch {
+            name: name.clone(),
+            repo_id,
+            commit: commit.clone(),
+            protected: name == "main", // Mock protection
+        }
+    }).collect();
+
     Json(branches)
 }
 
@@ -1581,18 +1614,21 @@ pub async fn search_repo_code(
     Query(params): Query<RepoSearchOptions>
 ) -> Json<Vec<CodeSearchResult>> {
     let repos = state.repos.read().unwrap();
-    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repo.map(|r| r.id).unwrap_or(0);
     let q = params.q.to_lowercase();
 
     if repo_id == 0 {
         return Json(vec![]);
     }
 
+    let default_branch = repo.and_then(|r| r.default_branch.clone()).unwrap_or("main".to_string());
+
     let files = state.file_contents.read().unwrap();
     let mut results = Vec::new();
 
-    for ((r_id, _branch, path), content) in files.iter() {
-        if *r_id == repo_id {
+    for ((r_id, branch, path), content) in files.iter() {
+        if *r_id == repo_id && branch == &default_branch {
              if q.is_empty() || path.to_lowercase().contains(&q) || content.to_lowercase().contains(&q) {
                  results.push(CodeSearchResult {
                      name: path.split('/').last().unwrap_or(path).to_string(),
