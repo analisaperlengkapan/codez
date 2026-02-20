@@ -302,7 +302,7 @@ pub fn FileEdit() -> impl IntoView {
     let on_save = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let b = branch_ref();
-        let branch_val = if b.is_empty() { "main".to_string() } else { b };
+        let branch_val = if b.is_empty() { None } else { Some(b) };
 
         let payload = UpdateFileOption {
             content: content.get(),
