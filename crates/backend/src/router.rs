@@ -5,7 +5,8 @@ use axum::{
 use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
-    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, GpgKey, OAuth2Application
+    Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, GpgKey, OAuth2Application,
+    CommitStatus
 };
 use std::sync::{Arc, RwLock, Mutex};
 use std::collections::HashMap;
@@ -50,6 +51,7 @@ pub struct AppState {
     pub followers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> follower_ids
     pub following: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> following_ids
     pub oauth2_apps: Arc<Mutex<Vec<OAuth2Application>>>,
+    pub commit_statuses: Arc<RwLock<Vec<CommitStatus>>>,
 }
 
 pub fn api_router() -> Router {
@@ -95,6 +97,9 @@ pub fn api_router() -> Router {
                 state: "open".to_string(),
                 user: user.clone(),
                 merged: false,
+                head_sha: "mock_sha".to_string(),
+                base: "main".to_string(),
+                head: "feature".to_string(),
             }
         ])),
         releases: Arc::new(RwLock::new(vec![
@@ -241,6 +246,7 @@ pub fn api_router() -> Router {
         followers: Arc::new(RwLock::new(HashMap::new())),
         following: Arc::new(RwLock::new(HashMap::new())),
         oauth2_apps: Arc::new(Mutex::new(vec![])),
+        commit_statuses: Arc::new(RwLock::new(vec![])),
     };
 
     Router::new()
@@ -332,6 +338,8 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/languages", get(get_repo_languages))
         .route("/api/v1/repos/:owner/:repo/branch_protections", get(list_branch_protections).post(create_branch_protection))
         .route("/api/v1/repos/:owner/:repo/branch_protections/:name", delete(delete_branch_protection))
+        .route("/api/v1/repos/:owner/:repo/statuses/:sha", post(create_commit_status))
+        .route("/api/v1/repos/:owner/:repo/commits/:ref/statuses", get(list_commit_statuses))
         .route("/api/v1/search/issues", get(search_issues_global))
         .route("/api/v1/user/emails", get(list_emails))
         .route("/api/v1/user/applications/oauth2", get(list_oauth2_apps).post(create_oauth2_app))

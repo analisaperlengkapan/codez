@@ -9,7 +9,8 @@ mod tests {
     use shared::{
         CreateRepoOption, Repository, Activity, CreateIssueOption, Issue, UpdateFileOption, FileEntry, UpdateIssueOption,
         CreateCommentOption, Comment, UpdateCommentOption, CreatePullRequestOption, UpdatePullRequestOption, PullRequest,
-        CreateProjectOption, Project, CreateProjectColumnOption, ProjectColumn, CreateProjectCardOption, ProjectCard, MoveProjectCardOption
+        CreateProjectOption, Project, CreateProjectColumnOption, ProjectColumn, CreateProjectCardOption, ProjectCard, MoveProjectCardOption,
+        CreateProtectedBranchOption, CreateStatusOption, CommitStatus, MergePullRequestOption
     };
 
     #[tokio::test]
@@ -1246,5 +1247,107 @@ mod tests {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let content = String::from_utf8(body.to_vec()).unwrap();
         assert!(content.contains("Welcome to codeza"));
+    }
+
+    #[tokio::test]
+    async fn test_commit_status_protection_flow() {
+        let app = api_router();
+
+        // 1. Create Protected Branch
+        let pb_payload = CreateProtectedBranchOption {
+            name: "main".to_string(),
+            enable_push: false,
+            enable_force_push: false,
+            required_status_checks: Some(vec!["ci/test".to_string()]),
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/branch_protections")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&pb_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // 2. Create PR (target: main)
+        let pr_payload = CreatePullRequestOption {
+            title: "Protected PR".to_string(),
+            body: None,
+            head: "feature".to_string(),
+            base: "main".to_string(),
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/pulls")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&pr_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let pr: PullRequest = serde_json::from_slice(&body).unwrap();
+        let pr_number = pr.number;
+        let head_sha = pr.head_sha;
+
+        // 3. Attempt Merge (Should Fail due to missing status check)
+        let merge_payload = MergePullRequestOption {
+            merge_action: "merge".to_string(),
+            merge_title_field: None,
+            merge_message_field: None,
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/pulls/{}/merge", pr_number))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&merge_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT); // 409 Conflict
+
+        // 4. Create Success Status
+        let status_payload = CreateStatusOption {
+            state: "success".to_string(),
+            target_url: None,
+            description: Some("Tests passed".to_string()),
+            context: Some("ci/test".to_string()),
+        };
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/statuses/{}", head_sha))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&status_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // 5. Attempt Merge (Should Succeed)
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(&format!("/api/v1/repos/admin/codeza/pulls/{}/merge", pr_number))
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&merge_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }
