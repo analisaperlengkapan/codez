@@ -1539,6 +1539,16 @@ pub async fn create_branch(
     // Copy files from base branch
     {
         let mut files = state.file_contents.write().unwrap();
+
+        // Check if branch already exists
+        for (r_id, b_name, _) in files.keys() {
+            if *r_id == repo_id && b_name == &payload.name {
+                return (StatusCode::CONFLICT, Json(Branch {
+                    repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), repo_id: 0, message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
+                }));
+            }
+        }
+
         let mut new_files = Vec::new();
         let base = payload.base.clone();
 
