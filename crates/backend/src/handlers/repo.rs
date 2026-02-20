@@ -1585,14 +1585,14 @@ pub async fn update_file(
     let repos = state.repos.read().unwrap();
     let repo_obj = repos.iter().find(|r| r.owner == owner && r.name == repo);
 
-    let repo_id = if let Some(r) = repo_obj {
-        r.id
+    let (repo_id, default_branch) = if let Some(r) = repo_obj {
+        (r.id, r.default_branch.clone().unwrap_or("main".to_string()))
     } else {
         return (StatusCode::NOT_FOUND, Json(FileEntry { name: "".to_string(), path: "".to_string(), kind: "".to_string(), size: 0 }));
     };
 
     // Check branch protection
-    let branch_name = payload.branch.clone().unwrap_or("main".to_string());
+    let branch_name = payload.branch.clone().unwrap_or(default_branch);
     {
         let protections = state.protected_branches.read().unwrap();
         if let Some(protection) = protections.iter().find(|p| p.repo_id == repo_id && p.name == branch_name) {
