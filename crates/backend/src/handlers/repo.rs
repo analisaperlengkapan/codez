@@ -16,6 +16,12 @@ use shared::{
 };
 use crate::router::AppState;
 
+#[derive(serde::Deserialize)]
+pub struct GetContentQuery {
+    #[serde(rename = "ref")]
+    pub ref_name: Option<String>,
+}
+
 pub async fn get_user_repo_status(
     State(state): State<AppState>,
     Path((owner, repo_name)): Path<(String, String)>
@@ -79,9 +85,10 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     // Create initial files
     {
         let mut files = state.file_contents.write().unwrap();
-        files.insert((id, "README.md".to_string()), format!("# {}\n\n{}", payload.name, payload.description.clone().unwrap_or_default()));
+        let default_branch = payload.default_branch.clone().unwrap_or("main".to_string());
+        files.insert((id, default_branch.clone(), "README.md".to_string()), format!("# {}\n\n{}", payload.name, payload.description.clone().unwrap_or_default()));
         if let Some(gitignores) = &payload.gitignores {
-            files.insert((id, ".gitignore".to_string()), format!("# {}\n\ntarget/\n", gitignores));
+            files.insert((id, default_branch, ".gitignore".to_string()), format!("# {}\n\ntarget/\n", gitignores));
         }
     }
 
@@ -1054,14 +1061,14 @@ pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<
             let mut files = state.file_contents.write().unwrap();
             let mut new_files = Vec::new();
 
-            for ((r_id, path), content) in files.iter() {
+            for ((r_id, branch, path), content) in files.iter() {
                 if *r_id == orig.id {
-                    new_files.push((path.clone(), content.clone()));
+                    new_files.push((branch.clone(), path.clone(), content.clone()));
                 }
             }
 
-            for (path, content) in new_files {
-                files.insert((id, path), content);
+            for (branch, path, content) in new_files {
+                files.insert((id, branch, path), content);
             }
         }
 
@@ -1281,14 +1288,19 @@ pub async fn get_wiki_page(Path((_owner, _repo, page_name)): Path<(String, Strin
 
 pub async fn get_contents(
     State(state): State<AppState>,
-    Path((owner, repo_name, path)): Path<(String, String, String)>
+    Path((owner, repo_name, path)): Path<(String, String, String)>,
+    Query(query): Query<GetContentQuery>
 ) -> Json<Vec<FileEntry>> {
     let repos = state.repos.read().unwrap();
-    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repo.map(|r| r.id).unwrap_or(0);
 
     if repo_id == 0 {
         return Json(vec![]);
     }
+
+    let default_branch = repo.and_then(|r| r.default_branch.clone()).unwrap_or("main".to_string());
+    let target_branch = query.ref_name.unwrap_or(default_branch);
 
     let all_files = state.file_contents.read().unwrap();
     let mut entries = Vec::new();
@@ -1300,8 +1312,8 @@ pub async fn get_contents(
         format!("{}/", path.trim_matches('/'))
     };
 
-    for (k_repo_id, k_path) in all_files.keys() {
-        if *k_repo_id == repo_id && k_path.starts_with(&prefix) {
+    for (k_repo_id, k_branch, k_path) in all_files.keys() {
+        if *k_repo_id == repo_id && k_branch == &target_branch && k_path.starts_with(&prefix) {
             let relative_path = &k_path[prefix.len()..];
             if relative_path.is_empty() { continue; }
 
@@ -1318,7 +1330,7 @@ pub async fn get_contents(
                 }
             } else {
                 // It's a file
-                let size = all_files.get(&(*k_repo_id, k_path.clone())).map(|s| s.len()).unwrap_or(0) as u64;
+                let size = all_files.get(&(*k_repo_id, k_branch.clone(), k_path.clone())).map(|s| s.len()).unwrap_or(0) as u64;
                 entries.push(FileEntry {
                     name: relative_path.to_string(),
                     path: k_path.clone(),
@@ -1333,9 +1345,10 @@ pub async fn get_contents(
 
 pub async fn get_root_contents(
     State(state): State<AppState>,
-    Path((owner, repo)): Path<(String, String)>
+    Path((owner, repo)): Path<(String, String)>,
+    Query(query): Query<GetContentQuery>
 ) -> Json<Vec<FileEntry>> {
-    get_contents(State(state), Path((owner, repo, "".to_string()))).await
+    get_contents(State(state), Path((owner, repo, "".to_string())), Query(query)).await
 }
 
 pub async fn merge_pull(
@@ -1375,6 +1388,24 @@ pub async fn merge_pull(
                         }
                     }
                 }
+            }
+        }
+
+        // Copy files from head to base
+        {
+            let mut files = state.file_contents.write().unwrap();
+            let mut merged_files = Vec::new();
+            let head = pr.head.clone();
+            let base = pr.base.clone();
+
+            for ((r_id, b_name, path), content) in files.iter() {
+                if *r_id == repo_id && b_name == &head {
+                    merged_files.push((path.clone(), content.clone()));
+                }
+            }
+
+            for (path, content) in merged_files {
+                files.insert((repo_id, base.clone(), path), content);
             }
         }
 
@@ -1470,7 +1501,25 @@ pub async fn create_branch(
 
     let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "def".to_string(), repo_id, message: "new branch".to_string(), author: user, date: "now".to_string() };
-    let branch = Branch { name: payload.name, repo_id, commit, protected: false };
+    let branch = Branch { name: payload.name.clone(), repo_id, commit, protected: false };
+
+    // Copy files from base branch
+    {
+        let mut files = state.file_contents.write().unwrap();
+        let mut new_files = Vec::new();
+        let base = payload.base.clone();
+
+        for ((r_id, b_name, path), content) in files.iter() {
+            if *r_id == repo_id && b_name == &base {
+                new_files.push((payload.name.clone(), path.clone(), content.clone()));
+            }
+        }
+
+        for (b_name, path, content) in new_files {
+            files.insert((repo_id, b_name, path), content);
+        }
+    }
+
     (StatusCode::CREATED, Json(branch))
 }
 
@@ -1542,7 +1591,7 @@ pub async fn search_repo_code(
     let files = state.file_contents.read().unwrap();
     let mut results = Vec::new();
 
-    for ((r_id, path), content) in files.iter() {
+    for ((r_id, _branch, path), content) in files.iter() {
         if *r_id == repo_id {
              if q.is_empty() || path.to_lowercase().contains(&q) || content.to_lowercase().contains(&q) {
                  results.push(CodeSearchResult {
@@ -1560,17 +1609,22 @@ pub async fn search_repo_code(
 
 pub async fn get_raw_file(
     State(state): State<AppState>,
-    Path((owner, repo_name, path)): Path<(String, String, String)>
+    Path((owner, repo_name, path)): Path<(String, String, String)>,
+    Query(query): Query<GetContentQuery>
 ) -> impl IntoResponse {
     let repos = state.repos.read().unwrap();
-    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repo.map(|r| r.id).unwrap_or(0);
 
     if repo_id == 0 {
         return (StatusCode::NOT_FOUND, "".to_string());
     }
 
+    let default_branch = repo.and_then(|r| r.default_branch.clone()).unwrap_or("main".to_string());
+    let target_branch = query.ref_name.unwrap_or(default_branch);
+
     let files = state.file_contents.read().unwrap();
-    if let Some(content) = files.get(&(repo_id, path)) {
+    if let Some(content) = files.get(&(repo_id, target_branch, path)) {
         (StatusCode::OK, content.clone())
     } else {
         (StatusCode::NOT_FOUND, "".to_string())
@@ -1605,7 +1659,7 @@ pub async fn update_file(
     // Update file content in state
     {
         let mut files = state.file_contents.write().unwrap();
-        files.insert((repo_id, path.clone()), payload.content.clone());
+        files.insert((repo_id, branch_name.clone(), path.clone()), payload.content.clone());
     }
 
     // Create a commit for the file update
