@@ -308,7 +308,7 @@ pub fn FileEdit() -> impl IntoView {
             content: content.get(),
             message: message.get(),
             sha: "mock_sha".to_string(),
-            branch: Some(branch_val),
+            branch: branch_val,
         };
         let o = owner();
         let r = repo_name();
