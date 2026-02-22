@@ -1391,6 +1391,10 @@ pub async fn merge_pull(
             }
         }
 
+        if pr.merged {
+            return StatusCode::METHOD_NOT_ALLOWED;
+        }
+
         // Copy files from head to base
         {
             let mut files = state.file_contents.write().unwrap();
