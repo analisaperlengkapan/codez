@@ -304,12 +304,11 @@ pub fn FileEdit() -> impl IntoView {
         let b = branch_ref();
         let branch_val = if b.is_empty() { None } else { Some(b) };
 
-
         let payload = UpdateFileOption {
             content: content.get(),
             message: message.get(),
             sha: "mock_sha".to_string(),
-            branch: Some(branch_val),
+            branch: branch_val,
         };
         let o = owner();
         let r = repo_name();
