@@ -1364,12 +1364,9 @@ pub async fn merge_pull(
     }
 
     let mut pulls = state.pulls.write().unwrap();
-    let pr_opt = pulls.iter_mut().find(|p| p.number == index);
+    let pr_opt = pulls.iter_mut().find(|p| p.repo_id == repo_id && p.number == index);
 
     if let Some(pr) = pr_opt {
-        if pr.repo_id != repo_id {
-            return StatusCode::NOT_FOUND;
-        }
 
         // Check branch protection and status checks
         {
@@ -1553,8 +1550,23 @@ pub async fn create_branch(
             }
         }
 
-        let mut new_files = Vec::new();
+        // Validate base branch exists (has files)
         let base = payload.base.clone();
+        let mut base_exists = false;
+        for (r_id, b_name, _) in files.keys() {
+            if *r_id == repo_id && b_name == &base {
+                base_exists = true;
+                break;
+            }
+        }
+
+        if !base_exists {
+             return (StatusCode::NOT_FOUND, Json(Branch {
+                repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), repo_id: 0, message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
+            }));
+        }
+
+        let mut new_files = Vec::new();
 
         for ((r_id, b_name, path), content) in files.iter() {
             if *r_id == repo_id && b_name == &base {
