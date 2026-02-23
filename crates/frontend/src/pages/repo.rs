@@ -196,6 +196,14 @@ pub fn RepoCode() -> impl IntoView {
         }
     );
 
+    let repo_meta = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}", o, r))
+                .send().await.unwrap().json::<Option<Repository>>().await.unwrap_or(None)
+        }
+    );
+
     let nav_ref = store_value(navigate);
     let owner_ref = store_value(owner);
     let repo_ref = store_value(repo_name);
@@ -205,11 +213,14 @@ pub fn RepoCode() -> impl IntoView {
         <div class="repo-code">
             <div style="margin-bottom: 10px;">
                 <Suspense fallback=move || view! { <select disabled><option>"Loading branches..."</option></select> }>
-                    {move || branches.get().map(|list| {
-                        let current = if branch_ref().is_empty() { "main".to_string() } else { branch_ref() };
-                        view! {
-                            <select on:change=move |ev| {
-                                let val = event_target_value(&ev);
+                    {move || {
+                        let repo_data = repo_meta.get().flatten();
+                        let default_branch = repo_data.and_then(|r| r.default_branch).unwrap_or("main".to_string());
+                        let current = if branch_ref().is_empty() { default_branch } else { branch_ref() };
+                        branches.get().map(move |list| {
+                            view! {
+                                <select on:change=move |ev| {
+                                    let val = event_target_value(&ev);
                                 let p = path_ref.with_value(|p| p());
                                 let o = owner_ref.with_value(|o| o());
                                 let r = repo_ref.with_value(|r| r());
@@ -225,8 +236,9 @@ pub fn RepoCode() -> impl IntoView {
                                     view! { <option value={b.name.clone()} selected={selected}>{b.name}</option> }
                                 }/>
                             </select>
-                        }
-                    })}
+                            }
+                        })
+                    }}
                 </Suspense>
             </div>
             <h3>"Files in " {move || if path().is_empty() { "root".to_string() } else { path() }}</h3>
