@@ -2135,7 +2135,11 @@ async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, String)>
 
                     // If safe, return a URL constructed with the IP to prevent TOCTOU/DNS rebinding
                     // and the original Host header.
-                    let safe_url = format!("{}://{}:{}{}", parsed_url.scheme(), ip, port, parsed_url.path());
+                    let ip_str = match ip {
+                        std::net::IpAddr::V4(v4) => format!("{}", v4),
+                        std::net::IpAddr::V6(v6) => format!("[{}]", v6),
+                    };
+                    let safe_url = format!("{}://{}:{}{}", parsed_url.scheme(), ip_str, port, parsed_url.path());
                     let host_header = format!("{}:{}", host, port);
                     return Some((safe_url, host_header));
                 }
