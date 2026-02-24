@@ -1619,7 +1619,8 @@ pub async fn create_branch(
         let base = payload.base.clone();
 
         for ((r_id, b_name, path), content) in files.iter() {
-            if *r_id == repo_id && b_name == &base {
+            if *r_id == repo_id && b_name == &payload.name {
+
                 history.insert((repo_id, payload.name.clone(), path.clone()), content.clone());
             }
         }
