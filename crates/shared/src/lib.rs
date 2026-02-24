@@ -946,6 +946,17 @@ pub struct CreateDiscussionCommentOption {
     pub body: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RepoPulseStats {
+    pub period: String,
+    pub active_issues: u64,
+    pub closed_issues: u64,
+    pub opened_prs: u64,
+    pub merged_prs: u64,
+    pub new_commits: u64,
+    pub active_authors: Vec<User>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

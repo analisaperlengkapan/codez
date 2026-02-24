@@ -9,7 +9,7 @@ use shared::{
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
     LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
     UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery, CreateIssueOption,
-    RepoUserStatus, CommitStatus
+    RepoUserStatus, CommitStatus, RepoPulseStats
 };
 
 #[component]
@@ -153,11 +153,84 @@ pub fn RepoDetail() -> impl IntoView {
                             <a href="projects">"Projects"</a> " | "
                             <a href="discussions">"Discussions"</a> " | "
                             <a href="actions">"Actions"</a> " | "
+                            <a href="pulse">"Pulse"</a> " | "
                             <a href="settings">"Settings"</a>
                         </p>
                     }.into_view(),
                     _ => view! { <p>"Repo not found"</p> }.into_view()
                 }}
+            </Suspense>
+        </div>
+    }
+}
+
+#[component]
+pub fn RepoPulse() -> impl IntoView {
+    let params = use_params_map();
+    let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
+    let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+
+    let (period, set_period) = create_signal("weekly".to_string());
+
+    let stats = create_resource(
+        move || (owner(), repo_name(), period.get()),
+        |(o, r, p)| async move {
+            Request::get(&format!("/api/v1/repos/{}/{}/pulse?period={}", o, r, p))
+                .send().await.unwrap().json::<RepoPulseStats>().await.unwrap_or(RepoPulseStats {
+                    period: "weekly".to_string(), active_issues: 0, closed_issues: 0, opened_prs: 0, merged_prs: 0, new_commits: 0, active_authors: vec![]
+                })
+        }
+    );
+
+    view! {
+        <div class="repo-pulse">
+            <h3>"Pulse (" {period} ")"</h3>
+            <div class="pulse-controls" style="margin-bottom: 20px;">
+                <button on:click=move |_| set_period.set("daily".to_string()) style=move || if period.get() == "daily" { "font-weight: bold;" } else { "" }>"Daily"</button>
+                <button on:click=move |_| set_period.set("weekly".to_string()) style=move || if period.get() == "weekly" { "font-weight: bold; margin-left: 5px;" } else { "margin-left: 5px;" }>"Weekly"</button>
+                <button on:click=move |_| set_period.set("monthly".to_string()) style=move || if period.get() == "monthly" { "font-weight: bold; margin-left: 5px;" } else { "margin-left: 5px;" }>"Monthly"</button>
+            </div>
+
+            <Suspense fallback=move || view! { <p>"Loading stats..."</p> }>
+                {move || stats.get().map(|s| view! {
+                    <div class="pulse-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px;">
+                        <div class="stat-card" style="border: 1px solid #eee; padding: 10px; border-radius: 5px;">
+                            <div style="font-size: 2em; font-weight: bold;">{s.active_issues}</div>
+                            <div>"Active Issues"</div>
+                        </div>
+                        <div class="stat-card" style="border: 1px solid #eee; padding: 10px; border-radius: 5px;">
+                            <div style="font-size: 2em; font-weight: bold;">{s.closed_issues}</div>
+                            <div>"Closed Issues"</div>
+                        </div>
+                        <div class="stat-card" style="border: 1px solid #eee; padding: 10px; border-radius: 5px;">
+                            <div style="font-size: 2em; font-weight: bold;">{s.opened_prs}</div>
+                            <div>"Opened PRs"</div>
+                        </div>
+                        <div class="stat-card" style="border: 1px solid #eee; padding: 10px; border-radius: 5px;">
+                            <div style="font-size: 2em; font-weight: bold;">{s.merged_prs}</div>
+                            <div>"Merged PRs"</div>
+                        </div>
+                        <div class="stat-card" style="border: 1px solid #eee; padding: 10px; border-radius: 5px;">
+                            <div style="font-size: 2em; font-weight: bold;">{s.new_commits}</div>
+                            <div>"New Commits"</div>
+                        </div>
+                    </div>
+
+                    <div class="active-authors">
+                        <h4>"Active Contributors"</h4>
+                        {if s.active_authors.is_empty() {
+                            view! { <p>"No active contributors in this period."</p> }.into_view()
+                        } else {
+                            view! {
+                                <ul>
+                                    <For each=move || s.active_authors.clone() key=|u| u.id children=move |u| {
+                                        view! { <li>{u.username}</li> }
+                                    }/>
+                                </ul>
+                            }.into_view()
+                        }}
+                    </div>
+                })}
             </Suspense>
         </div>
     }

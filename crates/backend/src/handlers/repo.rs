@@ -13,12 +13,13 @@ use shared::{
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
     Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch,
     RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption, CommitStatus, CreateStatusOption,
-    IssueEvent, PullRequestEvent, PushEvent
+    IssueEvent, PullRequestEvent, PushEvent, RepoPulseStats
 };
 use crate::router::AppState;
 use serde::Serialize;
 use ipnetwork::IpNetwork;
 use url::Url;
+use chrono::{Utc, Duration};
 
 #[derive(serde::Deserialize)]
 pub struct GetContentQuery {
@@ -307,6 +308,22 @@ pub async fn update_issue(
             i.body = Some(body);
         }
         if let Some(state_val) = payload.state {
+            if i.state != state_val {
+                // Log activity for state change
+                let mut activities = state.activities.write().unwrap();
+                let activity_id = (activities.len() as u64) + 1;
+                // TODO: Extract actual authenticated user from request context once auth middleware is implemented.
+                // Currently using mock admin (ID 1) to maintain consistency with existing handlers.
+                activities.push(Activity {
+                    id: activity_id,
+                    repo_id,
+                    user_id: 1, // mock admin
+                    user_name: "admin".to_string(),
+                    op_type: if state_val == "closed" { "close_issue".to_string() } else { "reopen_issue".to_string() },
+                    content: format!("{} issue #{} in {}/{}", if state_val == "closed" { "closed" } else { "reopened" }, index, owner, repo_name),
+                    created: "now".to_string(),
+                });
+            }
             i.state = state_val;
         }
         if let Some(milestone_id) = payload.milestone_id {
@@ -2208,4 +2225,94 @@ pub async fn list_commit_statuses(
     let statuses = state.commit_statuses.read().unwrap();
     let filtered: Vec<CommitStatus> = statuses.iter().filter(|s| s.sha == ref_name).cloned().collect();
     Json(filtered)
+}
+
+pub async fn get_repo_pulse(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>,
+    Query(params): Query<std::collections::HashMap<String, String>>
+) -> Json<RepoPulseStats> {
+    let period = params.get("period").map(|s| s.as_str()).unwrap_or("weekly");
+    let duration = match period {
+        "daily" => Duration::days(1),
+        "monthly" => Duration::days(30),
+        _ => Duration::weeks(1),
+    };
+
+    let now = Utc::now();
+    let start_date = now - duration;
+
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return Json(RepoPulseStats {
+            period: period.to_string(),
+            active_issues: 0,
+            closed_issues: 0,
+            opened_prs: 0,
+            merged_prs: 0,
+            new_commits: 0,
+            active_authors: vec![],
+        });
+    }
+
+    let mut active_issues = 0;
+    let mut closed_issues = 0;
+    let mut opened_prs = 0;
+    let mut merged_prs = 0;
+    let mut new_commits = 0;
+    let mut authors = std::collections::HashSet::new();
+
+    let activities = state.activities.read().unwrap();
+    for act in activities.iter() {
+        if act.repo_id == repo_id {
+            // Parse date
+            let date = if act.created == "now" {
+                Some(now)
+            } else {
+                chrono::DateTime::parse_from_rfc3339(&act.created).ok().map(|d| d.with_timezone(&Utc))
+            };
+
+            if let Some(d) = date {
+                if d >= start_date {
+                    match act.op_type.as_str() {
+                        "create_issue" => {
+                            active_issues += 1;
+                            authors.insert((act.user_id, act.user_name.clone()));
+                        },
+                        "close_issue" => {
+                            closed_issues += 1;
+                            authors.insert((act.user_id, act.user_name.clone()));
+                        },
+                        "create_pull_request" => {
+                            opened_prs += 1;
+                            authors.insert((act.user_id, act.user_name.clone()));
+                        },
+                        "merge_pull_request" => {
+                            merged_prs += 1;
+                            authors.insert((act.user_id, act.user_name.clone()));
+                        },
+                        "update_file" | "push" => { // approximate commits
+                            new_commits += 1;
+                            authors.insert((act.user_id, act.user_name.clone()));
+                        },
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    let active_authors = authors.into_iter().map(|(id, name)| User::new(id, name, None)).collect();
+
+    Json(RepoPulseStats {
+        period: period.to_string(),
+        active_issues,
+        closed_issues,
+        opened_prs,
+        merged_prs,
+        new_commits,
+        active_authors,
+    })
 }

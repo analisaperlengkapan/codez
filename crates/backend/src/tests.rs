@@ -1431,4 +1431,89 @@ async fn test_webhook_ssrf_prevention() {
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
+
+    #[tokio::test]
+    async fn test_repo_pulse_flow() {
+        let app = api_router();
+
+        // 1. Create 2 Issues
+        for i in 1..=2 {
+            let payload = CreateIssueOption { title: format!("Issue {}", i), body: None };
+            let _ = app.clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/v1/repos/admin/codeza/issues")
+                        .header("Content-Type", "application/json")
+                        .body(Body::from(serde_json::to_string(&payload).unwrap()))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+        }
+
+        // 2. Close 1 Issue (The first one created in this test is ID 2, since ID 1 exists in init)
+        // Wait, init has issue 1. Created are 2 and 3.
+        // Let's close issue 2.
+        let update_payload = UpdateIssueOption {
+            title: None, body: None, state: Some("closed".to_string()), milestone_id: None
+        };
+        let _ = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("PATCH")
+                    .uri("/api/v1/repos/admin/codeza/issues/2")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&update_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // 3. Create a PR
+        let pr_payload = CreatePullRequestOption {
+            title: "Pulse PR".to_string(),
+            body: None,
+            head: "feature".to_string(),
+            base: "main".to_string(),
+        };
+        let _ = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/repos/admin/codeza/pulls")
+                    .header("Content-Type", "application/json")
+                    .body(Body::from(serde_json::to_string(&pr_payload).unwrap()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // 4. Fetch Pulse
+        let response = app.clone()
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/repos/admin/codeza/pulse?period=weekly")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let stats: shared::RepoPulseStats = serde_json::from_slice(&body).unwrap();
+
+        // Verify Stats
+        // Issues: 2 created. 1 closed.
+        // Note: 'active_issues' in handler counts "create_issue" events.
+        // 'closed_issues' counts "close_issue" events.
+        // So active_issues should be 2 (plus any from init if they had activity logs? Init has no activity logs).
+        // So active_issues >= 2.
+        assert!(stats.active_issues >= 2);
+        assert!(stats.closed_issues >= 1);
+        assert!(stats.opened_prs >= 1);
+        assert!(!stats.active_authors.is_empty());
+    }
 }
