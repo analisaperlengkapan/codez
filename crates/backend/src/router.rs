@@ -66,6 +66,9 @@ pub fn api_router() -> Router {
     // Seed "feature" branch for the PR 1
     file_map.insert((1, "feature".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza feature\"); }".to_string());
     file_map.insert((1, "feature".to_string(), "README.md".to_string()), "# Codeza Repository (Feature)\n\nThis is a demo repository.".to_string());
+    // Copy unmodified files from main to feature branch
+    file_map.insert((1, "feature".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+    file_map.insert((1, "feature".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
 
     // Initialize history map
     let mut history_map = HashMap::new();
