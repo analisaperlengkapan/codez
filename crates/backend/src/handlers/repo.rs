@@ -780,18 +780,20 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
     let event_string = event.to_string();
 
     tokio::spawn(async move {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .unwrap_or_default();
-
         for hook in relevant_hooks {
-            // SSRF Protection with DNS Pinning
+            // SSRF Protection with DNS Pinning via reqwest::resolve
             let validated_target = validate_and_resolve_webhook_url(&hook.url).await;
 
-            let (status_str, status_code) = if let Some((safe_url, host_header)) = validated_target {
-                let response = client.post(safe_url)
-                    .header("Host", host_header)
+            let (status_str, status_code) = if let Some((host, port, safe_addr)) = validated_target {
+                // We must build a new client for each hook to apply the specific DNS resolution override
+                // while keeping the original URL for correct TLS validation (SNI).
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(10))
+                    .resolve(&host, safe_addr)
+                    .build()
+                    .unwrap_or_default();
+
+                let response = client.post(&hook.url)
                     .header("X-Codeza-Event", &event_string)
                     .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
                     .json(&payload)
@@ -2093,8 +2095,8 @@ pub async fn search_issues_global(
     Json(filtered_issues)
 }
 
-// Returns Some((safe_url, host_header)) if safe, None otherwise.
-async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, String)> {
+// Returns Some((host, port, safe_addr)) if safe, None otherwise.
+async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, u16, std::net::SocketAddr)> {
     if let Ok(parsed_url) = Url::parse(url) {
         if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
             return None;
@@ -2133,15 +2135,7 @@ async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, String)>
                         return None;
                     }
 
-                    // If safe, return a URL constructed with the IP to prevent TOCTOU/DNS rebinding
-                    // and the original Host header.
-                    let ip_str = match ip {
-                        std::net::IpAddr::V4(v4) => format!("{}", v4),
-                        std::net::IpAddr::V6(v6) => format!("[{}]", v6),
-                    };
-                    let safe_url = format!("{}://{}:{}{}", parsed_url.scheme(), ip_str, port, parsed_url.path());
-                    let host_header = format!("{}:{}", host, port);
-                    return Some((safe_url, host_header));
+                    return Some((host.to_string(), port, addr));
                 }
             }
         }
