@@ -778,8 +778,13 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
     let event_string = event.to_string();
 
     tokio::spawn(async move {
-        let client = reqwest::Client::new();
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap_or_default();
+
         for hook in relevant_hooks {
+            // TODO: Implement SSRF protection by validating hook.url against internal/private IP ranges.
             let response = client.post(&hook.url)
                 .header("X-Codeza-Event", &event_string)
                 .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
