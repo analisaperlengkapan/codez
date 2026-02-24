@@ -16,7 +16,8 @@ use crate::handlers::*;
 #[derive(Clone, Default)]
 pub struct AppState {
     pub repos: Arc<RwLock<Vec<Repository>>>,
-    pub file_contents: Arc<RwLock<HashMap<(u64, String), String>>>,
+    pub file_contents: Arc<RwLock<HashMap<(u64, String, String), String>>>,
+    pub file_history: Arc<RwLock<HashMap<(u64, String, String), String>>>,
     pub issues: Arc<RwLock<Vec<Issue>>>,
     pub users: Arc<RwLock<Vec<User>>>,
     pub pulls: Arc<RwLock<Vec<PullRequest>>>,
@@ -58,10 +59,29 @@ pub fn api_router() -> Router {
     let user = User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string()));
 
     let mut file_map = HashMap::new();
-    file_map.insert((1, "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza\"); }".to_string());
-    file_map.insert((1, "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
-    file_map.insert((1, "README.md".to_string()), "# Codeza Repository\n\nThis is a demo repository.".to_string());
-    file_map.insert((1, "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
+    file_map.insert((1, "main".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza\"); }".to_string());
+    file_map.insert((1, "main".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+    file_map.insert((1, "main".to_string(), "README.md".to_string()), "# Codeza Repository\n\nThis is a demo repository.".to_string());
+    file_map.insert((1, "main".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
+    // Seed "feature" branch for the PR 1
+    file_map.insert((1, "feature".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza feature\"); }".to_string());
+    file_map.insert((1, "feature".to_string(), "README.md".to_string()), "# Codeza Repository (Feature)\n\nThis is a demo repository.".to_string());
+    // Copy unmodified files from main to feature branch
+    file_map.insert((1, "feature".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+    file_map.insert((1, "feature".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
+
+    // Initialize history map
+    let mut history_map = HashMap::new();
+    // Copy main branch entries to history
+    history_map.insert((1, "main".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza\"); }".to_string());
+    history_map.insert((1, "main".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+    history_map.insert((1, "main".to_string(), "README.md".to_string()), "# Codeza Repository\n\nThis is a demo repository.".to_string());
+    history_map.insert((1, "main".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
+    // For feature branch history, use main branch content (as baseline)
+    history_map.insert((1, "feature".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza\"); }".to_string());
+    history_map.insert((1, "feature".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+    history_map.insert((1, "feature".to_string(), "README.md".to_string()), "# Codeza Repository\n\nThis is a demo repository.".to_string());
+    history_map.insert((1, "feature".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
 
     let state = AppState {
         repos: Arc::new(RwLock::new(vec![
@@ -69,6 +89,7 @@ pub fn api_router() -> Router {
             Repository::new(2, "gitea-clone".to_string(), "user".to_string()),
         ])),
         file_contents: Arc::new(RwLock::new(file_map)),
+        file_history: Arc::new(RwLock::new(history_map)),
         issues: Arc::new(RwLock::new(vec![
              Issue {
                 id: 1,

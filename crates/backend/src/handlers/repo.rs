@@ -16,6 +16,12 @@ use shared::{
 };
 use crate::router::AppState;
 
+#[derive(serde::Deserialize)]
+pub struct GetContentQuery {
+    #[serde(rename = "ref")]
+    pub ref_name: Option<String>,
+}
+
 pub async fn get_user_repo_status(
     State(state): State<AppState>,
     Path((owner, repo_name)): Path<(String, String)>
@@ -79,9 +85,17 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     // Create initial files
     {
         let mut files = state.file_contents.write().unwrap();
-        files.insert((id, "README.md".to_string()), format!("# {}\n\n{}", payload.name, payload.description.clone().unwrap_or_default()));
+        let mut history = state.file_history.write().unwrap();
+        let default_branch = payload.default_branch.clone().unwrap_or("main".to_string());
+
+        let readme_content = format!("# {}\n\n{}", payload.name, payload.description.clone().unwrap_or_default());
+        files.insert((id, default_branch.clone(), "README.md".to_string()), readme_content.clone());
+        history.insert((id, default_branch.clone(), "README.md".to_string()), readme_content);
+
         if let Some(gitignores) = &payload.gitignores {
-            files.insert((id, ".gitignore".to_string()), format!("# {}\n\ntarget/\n", gitignores));
+            let ignore_content = format!("# {}\n\ntarget/\n", gitignores);
+            files.insert((id, default_branch.clone(), ".gitignore".to_string()), ignore_content.clone());
+            history.insert((id, default_branch, ".gitignore".to_string()), ignore_content);
         }
     }
 
@@ -1054,14 +1068,32 @@ pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<
             let mut files = state.file_contents.write().unwrap();
             let mut new_files = Vec::new();
 
-            for ((r_id, path), content) in files.iter() {
+            for ((r_id, branch, path), content) in files.iter() {
                 if *r_id == orig.id {
-                    new_files.push((path.clone(), content.clone()));
+                    new_files.push((branch.clone(), path.clone(), content.clone()));
                 }
             }
 
-            for (path, content) in new_files {
-                files.insert((id, path), content);
+            for (branch, path, content) in new_files {
+                files.insert((id, branch, path), content);
+            }
+        }
+
+        // Copy history
+        {
+            let history = state.file_history.read().unwrap();
+            let mut new_history = Vec::new();
+
+            for ((r_id, branch, path), content) in history.iter() {
+                if *r_id == orig.id {
+                    new_history.push((branch.clone(), path.clone(), content.clone()));
+                }
+            }
+            drop(history); // release read lock
+
+            let mut history = state.file_history.write().unwrap();
+            for (branch, path, content) in new_history {
+                history.insert((id, branch, path), content);
             }
         }
 
@@ -1281,14 +1313,19 @@ pub async fn get_wiki_page(Path((_owner, _repo, page_name)): Path<(String, Strin
 
 pub async fn get_contents(
     State(state): State<AppState>,
-    Path((owner, repo_name, path)): Path<(String, String, String)>
+    Path((owner, repo_name, path)): Path<(String, String, String)>,
+    Query(query): Query<GetContentQuery>
 ) -> Json<Vec<FileEntry>> {
     let repos = state.repos.read().unwrap();
-    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repo.map(|r| r.id).unwrap_or(0);
 
     if repo_id == 0 {
         return Json(vec![]);
     }
+
+    let default_branch = repo.and_then(|r| r.default_branch.clone()).unwrap_or("main".to_string());
+    let target_branch = query.ref_name.unwrap_or(default_branch);
 
     let all_files = state.file_contents.read().unwrap();
     let mut entries = Vec::new();
@@ -1300,8 +1337,8 @@ pub async fn get_contents(
         format!("{}/", path.trim_matches('/'))
     };
 
-    for (k_repo_id, k_path) in all_files.keys() {
-        if *k_repo_id == repo_id && k_path.starts_with(&prefix) {
+    for (k_repo_id, k_branch, k_path) in all_files.keys() {
+        if *k_repo_id == repo_id && k_branch == &target_branch && k_path.starts_with(&prefix) {
             let relative_path = &k_path[prefix.len()..];
             if relative_path.is_empty() { continue; }
 
@@ -1318,7 +1355,7 @@ pub async fn get_contents(
                 }
             } else {
                 // It's a file
-                let size = all_files.get(&(*k_repo_id, k_path.clone())).map(|s| s.len()).unwrap_or(0) as u64;
+                let size = all_files.get(&(*k_repo_id, k_branch.clone(), k_path.clone())).map(|s| s.len()).unwrap_or(0) as u64;
                 entries.push(FileEntry {
                     name: relative_path.to_string(),
                     path: k_path.clone(),
@@ -1333,9 +1370,10 @@ pub async fn get_contents(
 
 pub async fn get_root_contents(
     State(state): State<AppState>,
-    Path((owner, repo)): Path<(String, String)>
+    Path((owner, repo)): Path<(String, String)>,
+    Query(query): Query<GetContentQuery>
 ) -> Json<Vec<FileEntry>> {
-    get_contents(State(state), Path((owner, repo, "".to_string()))).await
+    get_contents(State(state), Path((owner, repo, "".to_string())), Query(query)).await
 }
 
 pub async fn merge_pull(
@@ -1351,11 +1389,11 @@ pub async fn merge_pull(
     }
 
     let mut pulls = state.pulls.write().unwrap();
-    let pr_opt = pulls.iter_mut().find(|p| p.number == index);
+    let pr_opt = pulls.iter_mut().find(|p| p.repo_id == repo_id && p.number == index);
 
     if let Some(pr) = pr_opt {
-        if pr.repo_id != repo_id {
-            return StatusCode::NOT_FOUND;
+        if pr.merged {
+            return StatusCode::METHOD_NOT_ALLOWED;
         }
 
         // Check branch protection and status checks
@@ -1375,6 +1413,52 @@ pub async fn merge_pull(
                         }
                     }
                 }
+            }
+        }
+
+        // Copy modified files from head to base
+        {
+            let mut files = state.file_contents.write().unwrap();
+            let history = state.file_history.read().unwrap();
+            let mut merged_files = Vec::new();
+            let head = pr.head.clone();
+            let base = pr.base.clone();
+
+            for ((r_id, b_name, path), head_content) in files.iter() {
+                if *r_id == repo_id && b_name == &head {
+                    let history_key = (repo_id, head.clone(), path.clone());
+                    let original_content_opt = history.get(&history_key);
+
+                    // Check if file was modified on head compared to history baseline
+                    let head_modified = match original_content_opt {
+                        Some(original_content) => original_content != head_content,
+                        None => true, // New file on head
+                    };
+
+                    if head_modified {
+                        // Check for conflict: was it also modified on base?
+                        let base_content_opt = files.get(&(repo_id, base.clone(), path.clone()));
+                        let base_modified = match (base_content_opt, original_content_opt) {
+                            (Some(base_content), Some(original_content)) => base_content != original_content,
+                            (Some(_), None) => true, // Created on both? Conflict unless identical
+                            (None, Some(_)) => true, // Deleted on base? Conflict
+                            (None, None) => false, // Shouldn't happen if head is new
+                        };
+
+                        if base_modified {
+                            // Simple conflict check: if content differs, it's a conflict
+                            if base_content_opt != Some(head_content) {
+                                return StatusCode::CONFLICT;
+                            }
+                        }
+
+                        merged_files.push((path.clone(), head_content.clone()));
+                    }
+                }
+            }
+
+            for (path, content) in merged_files {
+                files.insert((repo_id, base.clone(), path), content);
             }
         }
 
@@ -1443,12 +1527,45 @@ pub async fn add_collaborator(Path((_owner, _repo, _collaborator)): Path<(String
     StatusCode::NO_CONTENT
 }
 
-pub async fn list_branches(Path((_owner, _repo)): Path<(String, String)>) -> Json<Vec<Branch>> {
+pub async fn list_branches(
+    State(state): State<AppState>,
+    Path((owner, repo_name)): Path<(String, String)>
+) -> Json<Vec<Branch>> {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    if repo_id == 0 {
+        return Json(vec![]);
+    }
+
+    let files = state.file_contents.read().unwrap();
+    let mut branch_names = std::collections::HashSet::new();
+
+    for (r_id, branch, _) in files.keys() {
+        if *r_id == repo_id {
+            branch_names.insert(branch.clone());
+        }
+    }
+
+    // Always ensure "main" exists if files are empty but repo exists, or handle graceful fallback.
+    // Ideally create_repo makes "main", so it should be there.
+    if branch_names.is_empty() {
+        // Fallback or empty
+    }
+
     let user = User::new(1, "admin".to_string(), None);
-    let commit = Commit { sha: "abc".to_string(), repo_id: 1, message: "init".to_string(), author: user, date: "now".to_string() };
-    let branches = vec![
-        Branch { name: "main".to_string(), repo_id: 1, commit, protected: true }
-    ];
+    // Mock commit for branch tip
+    let commit = Commit { sha: "mock_sha".to_string(), repo_id, message: "branch tip".to_string(), author: user, date: "now".to_string() };
+
+    let branches: Vec<Branch> = branch_names.into_iter().map(|name| {
+        Branch {
+            name: name.clone(),
+            repo_id,
+            commit: commit.clone(),
+            protected: name == "main", // Mock protection
+        }
+    }).collect();
+
     Json(branches)
 }
 
@@ -1470,7 +1587,63 @@ pub async fn create_branch(
 
     let user = User::new(1, "admin".to_string(), None);
     let commit = Commit { sha: "def".to_string(), repo_id, message: "new branch".to_string(), author: user, date: "now".to_string() };
-    let branch = Branch { name: payload.name, repo_id, commit, protected: false };
+    let branch = Branch { name: payload.name.clone(), repo_id, commit, protected: false };
+
+    // Copy files from base branch
+    {
+        let mut files = state.file_contents.write().unwrap();
+
+        // Check if branch already exists
+        for (r_id, b_name, _) in files.keys() {
+            if *r_id == repo_id && b_name == &payload.name {
+                return (StatusCode::CONFLICT, Json(Branch {
+                    repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), repo_id: 0, message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
+                }));
+            }
+        }
+
+        // Validate base branch exists (has files)
+        let base = payload.base.clone();
+        let mut base_exists = false;
+        for (r_id, b_name, _) in files.keys() {
+            if *r_id == repo_id && b_name == &base {
+                base_exists = true;
+                break;
+            }
+        }
+
+        if !base_exists {
+             return (StatusCode::NOT_FOUND, Json(Branch {
+                repo_id: 0, name: "".to_string(), commit: Commit { sha: "".to_string(), repo_id: 0, message: "".to_string(), author: User::new(0, "".to_string(), None), date: "".to_string() }, protected: false
+            }));
+        }
+
+        let mut new_files = Vec::new();
+
+        for ((r_id, b_name, path), content) in files.iter() {
+            if *r_id == repo_id && b_name == &base {
+                new_files.push((payload.name.clone(), path.clone(), content.clone()));
+            }
+        }
+
+        for (b_name, path, content) in new_files {
+            files.insert((repo_id, b_name, path), content);
+        }
+    }
+
+    // Initialize history for the new branch with current content of base branch
+    {
+        let files = state.file_contents.read().unwrap();
+        let mut history = state.file_history.write().unwrap();
+        let base = payload.base.clone();
+
+        for ((r_id, b_name, path), content) in files.iter() {
+            if *r_id == repo_id && b_name == &base {
+                history.insert((repo_id, payload.name.clone(), path.clone()), content.clone());
+            }
+        }
+    }
+
     (StatusCode::CREATED, Json(branch))
 }
 
@@ -1532,18 +1705,21 @@ pub async fn search_repo_code(
     Query(params): Query<RepoSearchOptions>
 ) -> Json<Vec<CodeSearchResult>> {
     let repos = state.repos.read().unwrap();
-    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repo.map(|r| r.id).unwrap_or(0);
     let q = params.q.to_lowercase();
 
     if repo_id == 0 {
         return Json(vec![]);
     }
 
+    let default_branch = repo.and_then(|r| r.default_branch.clone()).unwrap_or("main".to_string());
+
     let files = state.file_contents.read().unwrap();
     let mut results = Vec::new();
 
-    for ((r_id, path), content) in files.iter() {
-        if *r_id == repo_id {
+    for ((r_id, branch, path), content) in files.iter() {
+        if *r_id == repo_id && branch == &default_branch {
              if q.is_empty() || path.to_lowercase().contains(&q) || content.to_lowercase().contains(&q) {
                  results.push(CodeSearchResult {
                      name: path.split('/').last().unwrap_or(path).to_string(),
@@ -1560,17 +1736,22 @@ pub async fn search_repo_code(
 
 pub async fn get_raw_file(
     State(state): State<AppState>,
-    Path((owner, repo_name, path)): Path<(String, String, String)>
+    Path((owner, repo_name, path)): Path<(String, String, String)>,
+    Query(query): Query<GetContentQuery>
 ) -> impl IntoResponse {
     let repos = state.repos.read().unwrap();
-    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+    let repo = repos.iter().find(|r| r.owner == owner && r.name == repo_name);
+    let repo_id = repo.map(|r| r.id).unwrap_or(0);
 
     if repo_id == 0 {
         return (StatusCode::NOT_FOUND, "".to_string());
     }
 
+    let default_branch = repo.and_then(|r| r.default_branch.clone()).unwrap_or("main".to_string());
+    let target_branch = query.ref_name.unwrap_or(default_branch);
+
     let files = state.file_contents.read().unwrap();
-    if let Some(content) = files.get(&(repo_id, path)) {
+    if let Some(content) = files.get(&(repo_id, target_branch, path)) {
         (StatusCode::OK, content.clone())
     } else {
         (StatusCode::NOT_FOUND, "".to_string())
@@ -1605,7 +1786,7 @@ pub async fn update_file(
     // Update file content in state
     {
         let mut files = state.file_contents.write().unwrap();
-        files.insert((repo_id, path.clone()), payload.content.clone());
+        files.insert((repo_id, branch_name.clone(), path.clone()), payload.content.clone());
     }
 
     // Create a commit for the file update

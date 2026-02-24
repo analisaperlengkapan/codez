@@ -166,24 +166,81 @@ pub fn RepoDetail() -> impl IntoView {
 #[component]
 pub fn RepoCode() -> impl IntoView {
     let params = use_params_map();
+    let query = use_query_map();
+    let navigate = use_navigate();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
     let path = move || params.with(|params| params.get("path").cloned().unwrap_or_default());
+    let branch_ref = move || query.with(|q| q.get("ref").cloned().unwrap_or_default());
+
+    let branches = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/branches", o, r))
+                .send().await.unwrap().json::<Vec<Branch>>().await.unwrap_or_default()
+        }
+    );
 
     let contents = create_resource(
-        move || (owner(), repo_name(), path()),
-        |(o, r, p)| async move {
-            let url = if p.is_empty() {
+        move || (owner(), repo_name(), path(), branch_ref()),
+        |(o, r, p, b)| async move {
+            let mut url = if p.is_empty() {
                 format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/contents", o, r)
             } else {
                 format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/contents/{}", o, r, p)
             };
+            if !b.is_empty() {
+                url.push_str(&format!("?ref={}", b));
+            }
             Request::get(&url).send().await.unwrap().json::<Vec<FileEntry>>().await.unwrap_or_default()
         }
     );
 
+    let repo_meta = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}", o, r))
+                .send().await.unwrap().json::<Option<Repository>>().await.unwrap_or(None)
+        }
+    );
+
+    let nav_ref = store_value(navigate);
+    let owner_ref = store_value(owner);
+    let repo_ref = store_value(repo_name);
+    let path_ref = store_value(path);
+
     view! {
         <div class="repo-code">
+            <div style="margin-bottom: 10px;">
+                <Suspense fallback=move || view! { <select disabled><option>"Loading branches..."</option></select> }>
+                    {move || {
+                        let repo_data = repo_meta.get().flatten();
+                        let default_branch = repo_data.and_then(|r| r.default_branch).unwrap_or("main".to_string());
+                        let current = if branch_ref().is_empty() { default_branch } else { branch_ref() };
+                        branches.get().map(move |list| {
+                            view! {
+                                <select on:change=move |ev| {
+                                    let val = event_target_value(&ev);
+                                let p = path_ref.with_value(|p| p());
+                                let o = owner_ref.with_value(|o| o());
+                                let r = repo_ref.with_value(|r| r());
+                                let url = if p.is_empty() {
+                                    format!("/repos/{}/{}/src", o, r)
+                                } else {
+                                    format!("/repos/{}/{}/src/{}", o, r, p)
+                                };
+                                nav_ref.with_value(|n| n(&format!("{}?ref={}", url, val), Default::default()));
+                            }>
+                                <For each=move || list.clone() key=|b| b.name.clone() children=move |b| {
+                                    let selected = b.name == current;
+                                    view! { <option value={b.name.clone()} selected={selected}>{b.name}</option> }
+                                }/>
+                            </select>
+                            }
+                        })
+                    }}
+                </Suspense>
+            </div>
             <h3>"Files in " {move || if path().is_empty() { "root".to_string() } else { path() }}</h3>
             <div class="code-search-link">
                 <a href="search">"Search Code"</a>
@@ -202,10 +259,18 @@ pub fn RepoCode() -> impl IntoView {
                                     view! {
                                         <li>
                                             {if is_dir { "📁 " } else { "📄 " }}
-                                            <a href=link>{f.name}</a>
+                                            <a href=move || {
+                                                if branch_ref().is_empty() {
+                                                    link.clone()
+                                                } else {
+                                                    format!("{}?ref={}", link, branch_ref())
+                                                }
+                                            }>{f.name}</a>
                                             " (" {f.size} " bytes)"
                                             {if !is_dir {
-                                                view! { <a href=format!("/repos/{}/{}/edit/{}", owner(), repo_name(), f.path) style="margin-left: 10px;">"Edit"</a> }.into_view()
+                                                let edit_link = format!("/repos/{}/{}/edit/{}", owner(), repo_name(), f.path);
+                                                let final_edit_link = if branch_ref().is_empty() { edit_link } else { format!("{}?ref={}", edit_link, branch_ref()) };
+                                                view! { <a href=final_edit_link style="margin-left: 10px;">"Edit"</a> }.into_view()
                                             } else {
                                                 view! { <span></span> }.into_view()
                                             }}
@@ -224,17 +289,23 @@ pub fn RepoCode() -> impl IntoView {
 #[component]
 pub fn FileEdit() -> impl IntoView {
     let params = use_params_map();
+    let query = use_query_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
     let path = move || params.with(|params| params.get("path").cloned().unwrap_or_default());
+    let branch_ref = move || query.with(|q| q.get("ref").cloned().unwrap_or_default());
 
     let (content, set_content) = create_signal("".to_string());
     let (message, set_message) = create_signal("Update file".to_string());
 
     let _ = create_resource(
-        move || (owner(), repo_name(), path()),
-        move |(o, r, p)| async move {
-            let res = Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/raw/{}", o, r, p))
+        move || (owner(), repo_name(), path(), branch_ref()),
+        move |(o, r, p, b)| async move {
+            let mut url = format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/raw/{}", o, r, p);
+            if !b.is_empty() {
+                url.push_str(&format!("?ref={}", b));
+            }
+            let res = Request::get(&url)
                 .send().await.unwrap().text().await.unwrap_or_default();
             set_content.set(res);
         }
@@ -242,11 +313,14 @@ pub fn FileEdit() -> impl IntoView {
 
     let on_save = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
+        let b = branch_ref();
+        let branch_val = if b.is_empty() { None } else { Some(b) };
+
         let payload = UpdateFileOption {
             content: content.get(),
             message: message.get(),
             sha: "mock_sha".to_string(),
-            branch: Some("main".to_string()),
+            branch: branch_val,
         };
         let o = owner();
         let r = repo_name();
