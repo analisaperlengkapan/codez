@@ -789,6 +789,7 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
                 // while keeping the original URL for correct TLS validation (SNI).
                 let client = reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(10))
+                    .redirect(reqwest::redirect::Policy::none())
                     .resolve(&host, safe_addr)
                     .build()
                     .unwrap_or_default();
