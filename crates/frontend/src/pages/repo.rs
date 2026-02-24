@@ -268,9 +268,13 @@ pub fn RepoCode() -> impl IntoView {
                                             }>{f.name}</a>
                                             " (" {f.size} " bytes)"
                                             {if !is_dir {
-                                                let edit_link = format!("/repos/{}/{}/edit/{}", owner(), repo_name(), f.path);
-                                                let final_edit_link = if branch_ref().is_empty() { edit_link } else { format!("{}?ref={}", edit_link, branch_ref()) };
-                                                view! { <a href=final_edit_link style="margin-left: 10px;">"Edit"</a> }.into_view()
+                                                let edit_path = f.path.clone();
+                                                let edit_owner = owner();
+                                                let edit_repo = repo_name();
+                                                view! { <a href=move || {
+                                                    let edit_link = format!("/repos/{}/{}/edit/{}", edit_owner, edit_repo, edit_path);
+                                                    if branch_ref().is_empty() { edit_link } else { format!("{}?ref={}", edit_link, branch_ref()) }
+                                                } style="margin-left: 10px;">"Edit"</a> }.into_view()
                                             } else {
                                                 view! { <span></span> }.into_view()
                                             }}
