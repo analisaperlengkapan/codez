@@ -518,8 +518,8 @@ mod tests {
         let pr_payload = CreatePullRequestOption {
             title: "My PR".to_string(),
             body: None,
-            head: "f".to_string(),
-            base: "m".to_string(),
+            head: "feature".to_string(),
+            base: "main".to_string(),
         };
         let _ = app.clone()
             .oneshot(
@@ -754,8 +754,8 @@ mod tests {
         let payload = CreatePullRequestOption {
             title: "PR for Review".to_string(),
             body: None,
-            head: "f".to_string(),
-            base: "m".to_string(),
+            head: "feature".to_string(),
+            base: "main".to_string(),
         };
         let response = app.clone()
             .oneshot(

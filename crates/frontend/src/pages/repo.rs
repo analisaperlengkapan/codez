@@ -1116,7 +1116,10 @@ pub fn PullRequestList() -> impl IntoView {
 
     view! {
         <div class="pull-list">
-            <h3>"Pull Requests for " {owner} "/" {repo_name}</h3>
+            <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h3>"Pull Requests for " {owner} "/" {repo_name}</h3>
+                <a href="compare" class="btn-primary" style="text-decoration: none; background-color: #2da44e; color: white; padding: 5px 10px; border-radius: 6px;">"New Pull Request"</a>
+            </div>
             <ul>
                 <Suspense fallback=move || view! { <li>"Loading pull requests..."</li> }>
                     {move || pulls.get().map(|list| view! {

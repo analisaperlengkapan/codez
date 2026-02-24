@@ -349,6 +349,20 @@ pub async fn create_pull(
         }));
     }
 
+    // Validate branches exist
+    {
+        let files = state.file_contents.read().unwrap();
+        let has_head = files.keys().any(|(r_id, b_name, _)| *r_id == repo_id && b_name == &payload.head);
+        let has_base = files.keys().any(|(r_id, b_name, _)| *r_id == repo_id && b_name == &payload.base);
+
+        if !has_head || !has_base {
+             return (StatusCode::BAD_REQUEST, Json(PullRequest {
+                id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
+                user: User::new(0, "".to_string(), None), merged: false, head_sha: "".to_string(), base: "".to_string(), head: "".to_string()
+            }));
+        }
+    }
+
     let mut pulls = state.pulls.write().unwrap();
     let id = (pulls.len() as u64) + 1;
     let pr = PullRequest {

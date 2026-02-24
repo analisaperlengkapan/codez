@@ -8,6 +8,7 @@ pub mod packages;
 pub mod actions;
 pub mod release;
 pub mod discussions;
+pub mod compare;
 
 pub use dashboard::*;
 pub use admin::*;
@@ -19,3 +20,4 @@ pub use packages::*;
 pub use actions::*;
 pub use release::*;
 pub use discussions::*;
+pub use compare::*;
