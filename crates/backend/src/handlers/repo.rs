@@ -226,7 +226,7 @@ pub async fn create_issue(
         repo_id,
         number: id,
         title: payload.title.clone(),
-        body: payload.body,
+        body: payload.body.clone(),
         state: "open".to_string(),
         user: User::new(1, "admin".to_string(), None),
         assignees: vec![],
@@ -257,6 +257,28 @@ pub async fn create_issue(
         unread: true,
         updated_at: "now".to_string(),
     });
+
+    // Notify mentioned users
+    if let Some(body) = &payload.body {
+        let mentions = process_mentions(body);
+        if !mentions.is_empty() {
+            let users = state.users.read().unwrap();
+            for username in mentions {
+                if let Some(user) = users.iter().find(|u| u.username == username) {
+                    // Don't notify self (mock admin id 1)
+                    if user.id != 1 {
+                        let nid = (notifications.len() as u64) + 1;
+                        notifications.push(Notification {
+                            id: nid,
+                            subject: format!("You were mentioned in issue #{} in {}/{}", id, owner, repo_name),
+                            unread: true,
+                            updated_at: "now".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
 
     // Trigger Webhooks
     if let Some(r) = repo {
@@ -305,6 +327,25 @@ pub async fn update_issue(
             i.title = title;
         }
         if let Some(body) = payload.body {
+            // Check for mentions in new body
+            let mentions = process_mentions(&body);
+            if !mentions.is_empty() {
+                let mut notifications = state.notifications.write().unwrap();
+                let users = state.users.read().unwrap();
+                for username in mentions {
+                    if let Some(user) = users.iter().find(|u| u.username == username) {
+                         if user.id != 1 {
+                             let nid = (notifications.len() as u64) + 1;
+                             notifications.push(Notification {
+                                 id: nid,
+                                 subject: format!("You were mentioned in issue #{} in {}/{}", index, owner, repo_name),
+                                 unread: true,
+                                 updated_at: "now".to_string(),
+                             });
+                         }
+                    }
+                }
+            }
             i.body = Some(body);
         }
         if let Some(state_val) = payload.state {
@@ -387,7 +428,7 @@ pub async fn create_pull(
         repo_id,
         number: id,
         title: payload.title.clone(),
-        body: payload.body,
+        body: payload.body.clone(),
         state: "open".to_string(),
         user: User::new(1, "admin".to_string(), None),
         merged: false,
@@ -419,6 +460,28 @@ pub async fn create_pull(
         unread: true,
         updated_at: "now".to_string(),
     });
+
+    // Notify mentioned users
+    if let Some(body) = &payload.body {
+        let mentions = process_mentions(body);
+        if !mentions.is_empty() {
+            let users = state.users.read().unwrap();
+            for username in mentions {
+                if let Some(user) = users.iter().find(|u| u.username == username) {
+                    // Don't notify self (mock admin id 1)
+                    if user.id != 1 {
+                        let nid = (notifications.len() as u64) + 1;
+                        notifications.push(Notification {
+                            id: nid,
+                            subject: format!("You were mentioned in PR #{} in {}/{}", id, owner, repo_name),
+                            unread: true,
+                            updated_at: "now".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
 
     // Trigger Webhooks
     if let Some(r) = repos.iter().find(|r| r.id == repo_id) {
@@ -454,6 +517,25 @@ pub async fn update_pull(
             p.title = title;
         }
         if let Some(body) = payload.body {
+            // Check for mentions
+            let mentions = process_mentions(&body);
+            if !mentions.is_empty() {
+                let mut notifications = state.notifications.write().unwrap();
+                let users = state.users.read().unwrap();
+                for username in mentions {
+                    if let Some(user) = users.iter().find(|u| u.username == username) {
+                         if user.id != 1 {
+                             let nid = (notifications.len() as u64) + 1;
+                             notifications.push(Notification {
+                                 id: nid,
+                                 subject: format!("You were mentioned in PR #{} in {}/{}", index, owner, repo_name),
+                                 unread: true,
+                                 updated_at: "now".to_string(),
+                             });
+                         }
+                    }
+                }
+            }
             p.body = Some(body);
         }
         if let Some(state_val) = payload.state {
@@ -503,17 +585,42 @@ pub async fn create_comment(
     }
     let issue_id = issue.unwrap().id;
 
+    let body = payload.body;
     let mut comments = state.comments.write().unwrap();
     let id = (comments.len() as u64) + 1;
     let comment = Comment {
         id,
         issue_id,
-        body: payload.body,
+        body: body.clone(),
         user: User::new(1, "admin".to_string(), None),
         created_at: "2023-01-02".to_string(),
         reactions: vec![],
     };
     comments.push(comment.clone());
+
+    // Notify mentioned users
+    {
+        let mentions = process_mentions(&body);
+        if !mentions.is_empty() {
+            let mut notifications = state.notifications.write().unwrap();
+            let users = state.users.read().unwrap();
+            for username in mentions {
+                if let Some(user) = users.iter().find(|u| u.username == username) {
+                    // Don't notify self (mock admin id 1)
+                    if user.id != 1 {
+                        let nid = (notifications.len() as u64) + 1;
+                        notifications.push(Notification {
+                            id: nid,
+                            subject: format!("You were mentioned in comment on issue/PR #{} in {}/{}", index, owner, repo_name),
+                            unread: true,
+                            updated_at: "now".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     (StatusCode::CREATED, Json(comment))
 }
 
@@ -533,6 +640,26 @@ pub async fn update_comment(
     if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
         if let Some(issue) = issues.iter().find(|i| i.id == comment.issue_id) {
             if issue.repo_id == repo_id {
+                // Check for mentions
+                let mentions = process_mentions(&payload.body);
+                if !mentions.is_empty() {
+                    let mut notifications = state.notifications.write().unwrap();
+                    let users = state.users.read().unwrap();
+                    for username in mentions {
+                        if let Some(user) = users.iter().find(|u| u.username == username) {
+                             if user.id != 1 {
+                                 let nid = (notifications.len() as u64) + 1;
+                                 notifications.push(Notification {
+                                     id: nid,
+                                     subject: format!("You were mentioned in comment on issue/PR #{} in {}/{}", issue.number, owner, repo_name),
+                                     unread: true,
+                                     updated_at: "now".to_string(),
+                                 });
+                             }
+                        }
+                    }
+                }
+
                 comment.body = payload.body;
                 return (StatusCode::OK, Json(Some(comment.clone())));
             }
@@ -1551,6 +1678,35 @@ pub async fn merge_pull(
         pr.merged = true;
         pr.state = "closed".to_string();
 
+        // Process closing keywords
+        {
+            let text = format!("{} {}", pr.title, pr.body.clone().unwrap_or_default());
+            let closed_issues = process_closers(&text);
+            if !closed_issues.is_empty() {
+                let mut issues = state.issues.write().unwrap();
+                let mut activities = state.activities.write().unwrap();
+                for issue_id in closed_issues {
+                    if let Some(issue) = issues.iter_mut().find(|i| i.repo_id == repo_id && i.number == issue_id) {
+                        if issue.state != "closed" {
+                            issue.state = "closed".to_string();
+
+                            // Log activity
+                            let activity_id = (activities.len() as u64) + 1;
+                            activities.push(Activity {
+                                id: activity_id,
+                                repo_id,
+                                user_id: 1, // mock admin
+                                user_name: "admin".to_string(),
+                                op_type: "close_issue".to_string(),
+                                content: format!("closed issue #{} via PR #{}", issue.number, index),
+                                created: "now".to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
         // Create merge commit
         let mut commits = state.commits.write().unwrap();
         commits.push(Commit {
@@ -2319,4 +2475,46 @@ pub async fn get_repo_pulse(
         new_commits,
         active_authors,
     })
+}
+
+// Helper function to extract @mentions
+fn process_mentions(text: &str) -> Vec<String> {
+    let mut mentions = std::collections::HashSet::new();
+    for word in text.split_whitespace() {
+        if word.starts_with('@') {
+            let username = word.trim_start_matches('@')
+                .trim_end_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-'); // common username chars
+            if !username.is_empty() {
+                mentions.insert(username.to_string());
+            }
+        }
+    }
+    mentions.into_iter().collect()
+}
+
+// Helper function to extract closing keywords (e.g., "Closes #1")
+fn process_closers(text: &str) -> Vec<u64> {
+    let keywords = ["close", "closes", "closed", "fix", "fixes", "fixed", "resolve", "resolves", "resolved"];
+    let mut issue_ids = std::collections::HashSet::new();
+    let words: Vec<&str> = text.split_whitespace().collect();
+
+    for (i, word) in words.iter().enumerate() {
+        let lower = word.to_lowercase();
+        // Allow punctuation after keyword (e.g. "Fixes: #1")
+        let clean_keyword = lower.trim_end_matches(|c: char| !c.is_alphanumeric());
+
+        if keywords.contains(&clean_keyword) {
+            if i + 1 < words.len() {
+                let next = words[i + 1];
+                if next.starts_with('#') {
+                    let id_str = next.trim_start_matches('#')
+                        .trim_end_matches(|c: char| !c.is_digit(10));
+                    if let Ok(id) = id_str.parse::<u64>() {
+                        issue_ids.insert(id);
+                    }
+                }
+            }
+        }
+    }
+    issue_ids.into_iter().collect()
 }
