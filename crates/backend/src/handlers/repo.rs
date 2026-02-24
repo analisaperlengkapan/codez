@@ -17,6 +17,9 @@ use shared::{
 };
 use crate::router::AppState;
 use serde::Serialize;
+use std::net::ToSocketAddrs;
+use ipnetwork::IpNetwork;
+use url::Url;
 
 #[derive(serde::Deserialize)]
 pub struct GetContentQuery {
@@ -784,20 +787,69 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
             .unwrap_or_default();
 
         for hook in relevant_hooks {
-            // TODO: Implement SSRF protection by validating hook.url against internal/private IP ranges.
-            let response = client.post(&hook.url)
-                .header("X-Codeza-Event", &event_string)
-                .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
-                .json(&payload)
-                .send()
-                .await;
+            // SSRF Protection
+            let is_safe = 'check: {
+                if let Ok(parsed_url) = Url::parse(&hook.url) {
+                    if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+                        break 'check false;
+                    }
+                    if let Some(host) = parsed_url.host_str() {
+                        // Resolve hostname
+                        // Note: This naive check resolves once here and then reqwest resolves again.
+                        // Ideally, we'd resolve and use the safe IP, but for this implementation we validate first.
+                        // Using port 80 as default if unspecified for resolution purpose.
+                        let port = parsed_url.port().unwrap_or(80);
+                        if let Ok(addrs) = format!("{}:{}", host, port).to_socket_addrs() {
+                            for addr in addrs {
+                                let ip = addr.ip();
+                                if ip.is_loopback() || ip.is_unspecified() {
+                                    break 'check false;
+                                }
+                                match ip {
+                                    std::net::IpAddr::V4(ipv4) => {
+                                        // Check RFC 1918 and Link-Local
+                                        // 10.0.0.0/8
+                                        if ipv4.octets()[0] == 10 { break 'check false; }
+                                        // 172.16.0.0/12
+                                        if ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1]) { break 'check false; }
+                                        // 192.168.0.0/16
+                                        if ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168 { break 'check false; }
+                                        // 169.254.0.0/16 (Link Local)
+                                        if ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254 { break 'check false; }
+                                    },
+                                    std::net::IpAddr::V6(ipv6) => {
+                                        // Unique Local (fc00::/7)
+                                        if (ipv6.segments()[0] & 0xfe00) == 0xfc00 { break 'check false; }
+                                        // Link Local (fe80::/10)
+                                        if (ipv6.segments()[0] & 0xffc0) == 0xfe80 { break 'check false; }
+                                    }
+                                }
+                            }
+                            // If we get here, all resolved IPs are "safe" (public)
+                            break 'check true;
+                        }
+                    }
+                }
+                false
+            };
 
-            let (status_str, status_code) = match response {
-                Ok(resp) => {
-                    let s = resp.status();
-                    (if s.is_success() { "success" } else { "failed" }.to_string(), s.as_u16())
-                },
-                Err(_) => ("failed".to_string(), 0),
+            let (status_str, status_code) = if is_safe {
+                let response = client.post(&hook.url)
+                    .header("X-Codeza-Event", &event_string)
+                    .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
+                    .json(&payload)
+                    .send()
+                    .await;
+
+                match response {
+                    Ok(resp) => {
+                        let s = resp.status();
+                        (if s.is_success() { "success" } else { "failed" }.to_string(), s.as_u16())
+                    },
+                    Err(_) => ("failed".to_string(), 0),
+                }
+            } else {
+                ("failed (blocked)".to_string(), 0)
             };
 
             let mut deliveries = state_clone.webhook_deliveries.write().unwrap();
