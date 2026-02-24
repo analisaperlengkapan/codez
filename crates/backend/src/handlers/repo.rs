@@ -2115,8 +2115,16 @@ async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, u16, std
         }
         if let Some(host) = parsed_url.host_str() {
             let port = parsed_url.port().unwrap_or(if parsed_url.scheme() == "https" { 443 } else { 80 });
+
+            // Format address correctly for IPv6 (must be bracketed if it contains colons)
+            let addr_str = if host.contains(':') {
+                format!("[{}]:{}", host, port)
+            } else {
+                format!("{}:{}", host, port)
+            };
+
             // Resolve hostname asynchronously
-            if let Ok(mut addrs) = tokio::net::lookup_host(format!("{}:{}", host, port)).await {
+            if let Ok(mut addrs) = tokio::net::lookup_host(addr_str).await {
                 // Check first resolved address
                 if let Some(addr) = addrs.next() {
                     let ip = addr.ip();
