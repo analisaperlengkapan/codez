@@ -17,7 +17,6 @@ use shared::{
 };
 use crate::router::AppState;
 use serde::Serialize;
-use std::net::ToSocketAddrs;
 use ipnetwork::IpNetwork;
 use url::Url;
 
@@ -788,58 +787,7 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
 
         for hook in relevant_hooks {
             // SSRF Protection
-            let is_safe = 'check: {
-                if let Ok(parsed_url) = Url::parse(&hook.url) {
-                    if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
-                        break 'check false;
-                    }
-                    if let Some(host) = parsed_url.host_str() {
-                        // Resolve hostname
-                        // Note: This naive check resolves once here and then reqwest resolves again.
-                        // Ideally, we'd resolve and use the safe IP, but for this implementation we validate first.
-                        // Using port 80 as default if unspecified for resolution purpose.
-                        let port = parsed_url.port().unwrap_or(80);
-                        if let Ok(addrs) = format!("{}:{}", host, port).to_socket_addrs() {
-                            for addr in addrs {
-                                let ip = addr.ip();
-                                if ip.is_loopback() || ip.is_unspecified() {
-                                    break 'check false;
-                                }
-                                match ip {
-                                    std::net::IpAddr::V4(ipv4) => {
-                                        // Check RFC 1918 and Link-Local
-                                        // 10.0.0.0/8
-                                        if ipv4.octets()[0] == 10 { break 'check false; }
-                                        // 172.16.0.0/12
-                                        if ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1]) { break 'check false; }
-                                        // 192.168.0.0/16
-                                        if ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168 { break 'check false; }
-                                        // 169.254.0.0/16 (Link Local)
-                                        if ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254 { break 'check false; }
-                                    },
-                                    std::net::IpAddr::V6(ipv6) => {
-                                        // Check for IPv4-mapped IPv6 (::ffff:0:0/96)
-                                        if let Some(mapped_v4) = ipv6.to_ipv4_mapped() {
-                                            if mapped_v4.is_loopback() || mapped_v4.is_unspecified() { break 'check false; }
-                                            if mapped_v4.octets()[0] == 10 { break 'check false; }
-                                            if mapped_v4.octets()[0] == 172 && (16..=31).contains(&mapped_v4.octets()[1]) { break 'check false; }
-                                            if mapped_v4.octets()[0] == 192 && mapped_v4.octets()[1] == 168 { break 'check false; }
-                                            if mapped_v4.octets()[0] == 169 && mapped_v4.octets()[1] == 254 { break 'check false; }
-                                        }
-                                        // Unique Local (fc00::/7)
-                                        if (ipv6.segments()[0] & 0xfe00) == 0xfc00 { break 'check false; }
-                                        // Link Local (fe80::/10)
-                                        if (ipv6.segments()[0] & 0xffc0) == 0xfe80 { break 'check false; }
-                                    }
-                                }
-                            }
-                            // If we get here, all resolved IPs are "safe" (public)
-                            break 'check true;
-                        }
-                    }
-                }
-                false
-            };
+            let is_safe = validate_webhook_url(&hook.url).await;
 
             let (status_str, status_code) = if is_safe {
                 let response = client.post(&hook.url)
@@ -2142,6 +2090,50 @@ pub async fn search_issues_global(
         filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
     }
     Json(filtered_issues)
+}
+
+async fn validate_webhook_url(url: &str) -> bool {
+    if let Ok(parsed_url) = Url::parse(url) {
+        if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+            return false;
+        }
+        if let Some(host) = parsed_url.host_str() {
+            // Resolve hostname asynchronously
+            // Note: This naive check resolves once here and then reqwest resolves again (TOCTOU risk acknowledged).
+            // Using port 80 as default if unspecified for resolution purpose.
+            let port = parsed_url.port().unwrap_or(80);
+            if let Ok(addrs) = tokio::net::lookup_host(format!("{}:{}", host, port)).await {
+                for addr in addrs {
+                    let ip = addr.ip();
+                    if ip.is_loopback() || ip.is_unspecified() {
+                        return false;
+                    }
+                    match ip {
+                        std::net::IpAddr::V4(ipv4) => {
+                            // Check RFC 1918 and Link-Local
+                            // 10.0.0.0/8
+                            if ipv4.octets()[0] == 10 { return false; }
+                            // 172.16.0.0/12
+                            if ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1]) { return false; }
+                            // 192.168.0.0/16
+                            if ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168 { return false; }
+                            // 169.254.0.0/16 (Link Local)
+                            if ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254 { return false; }
+                        },
+                        std::net::IpAddr::V6(ipv6) => {
+                            // Unique Local (fc00::/7)
+                            if (ipv6.segments()[0] & 0xfe00) == 0xfc00 { return false; }
+                            // Link Local (fe80::/10)
+                            if (ipv6.segments()[0] & 0xffc0) == 0xfe80 { return false; }
+                        }
+                    }
+                }
+                // If we get here, all resolved IPs are "safe" (public)
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub async fn create_commit_status(
