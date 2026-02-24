@@ -2281,6 +2281,10 @@ pub async fn get_repo_pulse(
                             active_issues += 1;
                             authors.insert((act.user_id, act.user_name.clone()));
                         },
+                        "reopen_issue" => {
+                            active_issues += 1;
+                            authors.insert((act.user_id, act.user_name.clone()));
+                        },
                         "close_issue" => {
                             closed_issues += 1;
                             authors.insert((act.user_id, act.user_name.clone()));
