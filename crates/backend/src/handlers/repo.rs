@@ -1424,16 +1424,35 @@ pub async fn merge_pull(
             let head = pr.head.clone();
             let base = pr.base.clone();
 
-            for ((r_id, b_name, path), content) in files.iter() {
+            for ((r_id, b_name, path), head_content) in files.iter() {
                 if *r_id == repo_id && b_name == &head {
-                    // Check if file was modified compared to history baseline
-                    let is_modified = match history.get(&(repo_id, head.clone(), path.clone())) {
-                        Some(original_content) => original_content != content,
-                        None => true, // New file
+                    let history_key = (repo_id, head.clone(), path.clone());
+                    let original_content_opt = history.get(&history_key);
+
+                    // Check if file was modified on head compared to history baseline
+                    let head_modified = match original_content_opt {
+                        Some(original_content) => original_content != head_content,
+                        None => true, // New file on head
                     };
 
-                    if is_modified {
-                        merged_files.push((path.clone(), content.clone()));
+                    if head_modified {
+                        // Check for conflict: was it also modified on base?
+                        let base_content_opt = files.get(&(repo_id, base.clone(), path.clone()));
+                        let base_modified = match (base_content_opt, original_content_opt) {
+                            (Some(base_content), Some(original_content)) => base_content != original_content,
+                            (Some(_), None) => true, // Created on both? Conflict unless identical
+                            (None, Some(_)) => true, // Deleted on base? Conflict
+                            (None, None) => false, // Shouldn't happen if head is new
+                        };
+
+                        if base_modified {
+                            // Simple conflict check: if content differs, it's a conflict
+                            if base_content_opt != Some(head_content) {
+                                return StatusCode::CONFLICT;
+                            }
+                        }
+
+                        merged_files.push((path.clone(), head_content.clone()));
                     }
                 }
             }
@@ -1619,8 +1638,7 @@ pub async fn create_branch(
         let base = payload.base.clone();
 
         for ((r_id, b_name, path), content) in files.iter() {
-            if *r_id == repo_id && b_name == &payload.name {
-
+            if *r_id == repo_id && b_name == &base {
                 history.insert((repo_id, payload.name.clone(), path.clone()), content.clone());
             }
         }
