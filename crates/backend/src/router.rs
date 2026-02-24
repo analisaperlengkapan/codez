@@ -17,6 +17,7 @@ use crate::handlers::*;
 pub struct AppState {
     pub repos: Arc<RwLock<Vec<Repository>>>,
     pub file_contents: Arc<RwLock<HashMap<(u64, String, String), String>>>,
+    pub file_history: Arc<RwLock<HashMap<(u64, String, String), String>>>,
     pub issues: Arc<RwLock<Vec<Issue>>>,
     pub users: Arc<RwLock<Vec<User>>>,
     pub pulls: Arc<RwLock<Vec<PullRequest>>>,
@@ -71,7 +72,8 @@ pub fn api_router() -> Router {
             Repository::new(1, "codeza".to_string(), "admin".to_string()),
             Repository::new(2, "gitea-clone".to_string(), "user".to_string()),
         ])),
-        file_contents: Arc::new(RwLock::new(file_map)),
+        file_contents: Arc::new(RwLock::new(file_map.clone())),
+        file_history: Arc::new(RwLock::new(file_map)),
         issues: Arc::new(RwLock::new(vec![
              Issue {
                 id: 1,

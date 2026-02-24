@@ -85,10 +85,17 @@ pub async fn create_repo(State(state): State<AppState>, Json(payload): Json<Crea
     // Create initial files
     {
         let mut files = state.file_contents.write().unwrap();
+        let mut history = state.file_history.write().unwrap();
         let default_branch = payload.default_branch.clone().unwrap_or("main".to_string());
-        files.insert((id, default_branch.clone(), "README.md".to_string()), format!("# {}\n\n{}", payload.name, payload.description.clone().unwrap_or_default()));
+
+        let readme_content = format!("# {}\n\n{}", payload.name, payload.description.clone().unwrap_or_default());
+        files.insert((id, default_branch.clone(), "README.md".to_string()), readme_content.clone());
+        history.insert((id, default_branch.clone(), "README.md".to_string()), readme_content);
+
         if let Some(gitignores) = &payload.gitignores {
-            files.insert((id, default_branch, ".gitignore".to_string()), format!("# {}\n\ntarget/\n", gitignores));
+            let ignore_content = format!("# {}\n\ntarget/\n", gitignores);
+            files.insert((id, default_branch.clone(), ".gitignore".to_string()), ignore_content.clone());
+            history.insert((id, default_branch, ".gitignore".to_string()), ignore_content);
         }
     }
 
@@ -1391,16 +1398,25 @@ pub async fn merge_pull(
             }
         }
 
-        // Copy files from head to base
+        // Copy modified files from head to base
         {
             let mut files = state.file_contents.write().unwrap();
+            let history = state.file_history.read().unwrap();
             let mut merged_files = Vec::new();
             let head = pr.head.clone();
             let base = pr.base.clone();
 
             for ((r_id, b_name, path), content) in files.iter() {
                 if *r_id == repo_id && b_name == &head {
-                    merged_files.push((path.clone(), content.clone()));
+                    // Check if file was modified compared to history baseline
+                    let is_modified = match history.get(&(repo_id, head.clone(), path.clone())) {
+                        Some(original_content) => original_content != content,
+                        None => true, // New file
+                    };
+
+                    if is_modified {
+                        merged_files.push((path.clone(), content.clone()));
+                    }
                 }
             }
 
@@ -1575,6 +1591,19 @@ pub async fn create_branch(
 
         for (b_name, path, content) in new_files {
             files.insert((repo_id, b_name, path), content);
+        }
+    }
+
+    // Initialize history for the new branch with current content of base branch
+    {
+        let files = state.file_contents.read().unwrap();
+        let mut history = state.file_history.write().unwrap();
+        let base = payload.base.clone();
+
+        for ((r_id, b_name, path), content) in files.iter() {
+            if *r_id == repo_id && b_name == &base {
+                history.insert((repo_id, payload.name.clone(), path.clone()), content.clone());
+            }
         }
     }
 
