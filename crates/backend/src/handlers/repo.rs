@@ -799,7 +799,7 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
                         // Ideally, we'd resolve and use the safe IP, but for this implementation we validate first.
                         // Using port 80 as default if unspecified for resolution purpose.
                         let port = parsed_url.port_or_known_default().unwrap_or(80);
-                        if let Ok(addrs) = format!("{}:{}", host, port).to_socket_addrs() {
+                        if let Ok(addrs) = format!("[{}]:{}", host, port).to_socket_addrs() {
                             for addr in addrs {
                                 let ip = addr.ip();
                                 if ip.is_loopback() || ip.is_unspecified() {
