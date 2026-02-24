@@ -1079,6 +1079,24 @@ pub async fn fork_repo(State(state): State<AppState>, Path((owner, repo)): Path<
             }
         }
 
+        // Copy history
+        {
+            let history = state.file_history.read().unwrap();
+            let mut new_history = Vec::new();
+
+            for ((r_id, branch, path), content) in history.iter() {
+                if *r_id == orig.id {
+                    new_history.push((branch.clone(), path.clone(), content.clone()));
+                }
+            }
+            drop(history); // release read lock
+
+            let mut history = state.file_history.write().unwrap();
+            for (branch, path, content) in new_history {
+                history.insert((id, branch, path), content);
+            }
+        }
+
         // Log activity
         let mut activities = state.activities.write().unwrap();
         let activity_id = (activities.len() as u64) + 1;

@@ -67,13 +67,26 @@ pub fn api_router() -> Router {
     file_map.insert((1, "feature".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza feature\"); }".to_string());
     file_map.insert((1, "feature".to_string(), "README.md".to_string()), "# Codeza Repository (Feature)\n\nThis is a demo repository.".to_string());
 
+    // Initialize history map
+    let mut history_map = HashMap::new();
+    // Copy main branch entries to history
+    history_map.insert((1, "main".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza\"); }".to_string());
+    history_map.insert((1, "main".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+    history_map.insert((1, "main".to_string(), "README.md".to_string()), "# Codeza Repository\n\nThis is a demo repository.".to_string());
+    history_map.insert((1, "main".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
+    // For feature branch history, use main branch content (as baseline)
+    history_map.insert((1, "feature".to_string(), "src/main.rs".to_string()), "fn main() { println!(\"Welcome to codeza\"); }".to_string());
+    history_map.insert((1, "feature".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
+    history_map.insert((1, "feature".to_string(), "README.md".to_string()), "# Codeza Repository\n\nThis is a demo repository.".to_string());
+    history_map.insert((1, "feature".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
+
     let state = AppState {
         repos: Arc::new(RwLock::new(vec![
             Repository::new(1, "codeza".to_string(), "admin".to_string()),
             Repository::new(2, "gitea-clone".to_string(), "user".to_string()),
         ])),
-        file_contents: Arc::new(RwLock::new(file_map.clone())),
-        file_history: Arc::new(RwLock::new(file_map)),
+        file_contents: Arc::new(RwLock::new(file_map)),
+        file_history: Arc::new(RwLock::new(history_map)),
         issues: Arc::new(RwLock::new(vec![
              Issue {
                 id: 1,
