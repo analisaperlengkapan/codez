@@ -818,6 +818,14 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
                                         if ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254 { break 'check false; }
                                     },
                                     std::net::IpAddr::V6(ipv6) => {
+                                        // Check for IPv4-mapped IPv6 (::ffff:0:0/96)
+                                        if let Some(mapped_v4) = ipv6.to_ipv4_mapped() {
+                                            if mapped_v4.is_loopback() || mapped_v4.is_unspecified() { break 'check false; }
+                                            if mapped_v4.octets()[0] == 10 { break 'check false; }
+                                            if mapped_v4.octets()[0] == 172 && (16..=31).contains(&mapped_v4.octets()[1]) { break 'check false; }
+                                            if mapped_v4.octets()[0] == 192 && mapped_v4.octets()[1] == 168 { break 'check false; }
+                                            if mapped_v4.octets()[0] == 169 && mapped_v4.octets()[1] == 254 { break 'check false; }
+                                        }
                                         // Unique Local (fc00::/7)
                                         if (ipv6.segments()[0] & 0xfe00) == 0xfc00 { break 'check false; }
                                         // Link Local (fe80::/10)
