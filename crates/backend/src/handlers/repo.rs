@@ -789,7 +789,6 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
                 // while keeping the original URL for correct TLS validation (SNI).
                 let client = reqwest::Client::builder()
                     .timeout(std::time::Duration::from_secs(10))
-                    .redirect(reqwest::redirect::Policy::none())
                     .resolve(&host, safe_addr)
                     .build()
                     .unwrap_or_default();
@@ -2096,6 +2095,18 @@ pub async fn search_issues_global(
     Json(filtered_issues)
 }
 
+fn is_private_ipv4(ipv4: std::net::Ipv4Addr) -> bool {
+    // Check RFC 1918 and Link-Local
+    // 10.0.0.0/8
+    (ipv4.octets()[0] == 10) ||
+    // 172.16.0.0/12
+    (ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1])) ||
+    // 192.168.0.0/16
+    (ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168) ||
+    // 169.254.0.0/16 (Link Local)
+    (ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254)
+}
+
 // Returns Some((host, port, safe_addr)) if safe, None otherwise.
 async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, u16, std::net::SocketAddr)> {
     if let Ok(parsed_url) = Url::parse(url) {
@@ -2113,22 +2124,16 @@ async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, u16, std
                         return None;
                     }
                     let is_private = match ip {
-                        std::net::IpAddr::V4(ipv4) => {
-                            // Check RFC 1918 and Link-Local
-                            // 10.0.0.0/8
-                            (ipv4.octets()[0] == 10) ||
-                            // 172.16.0.0/12
-                            (ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1])) ||
-                            // 192.168.0.0/16
-                            (ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168) ||
-                            // 169.254.0.0/16 (Link Local)
-                            (ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254)
-                        },
+                        std::net::IpAddr::V4(ipv4) => is_private_ipv4(ipv4),
                         std::net::IpAddr::V6(ipv6) => {
-                            // Unique Local (fc00::/7)
-                            ((ipv6.segments()[0] & 0xfe00) == 0xfc00) ||
-                            // Link Local (fe80::/10)
-                            ((ipv6.segments()[0] & 0xffc0) == 0xfe80)
+                            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                                is_private_ipv4(ipv4)
+                            } else {
+                                // Unique Local (fc00::/7)
+                                ((ipv6.segments()[0] & 0xfe00) == 0xfc00) ||
+                                // Link Local (fe80::/10)
+                                ((ipv6.segments()[0] & 0xffc0) == 0xfe80)
+                            }
                         }
                     };
 
