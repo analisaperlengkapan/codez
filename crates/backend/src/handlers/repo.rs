@@ -1367,6 +1367,9 @@ pub async fn merge_pull(
     let pr_opt = pulls.iter_mut().find(|p| p.repo_id == repo_id && p.number == index);
 
     if let Some(pr) = pr_opt {
+        if pr.merged {
+            return StatusCode::METHOD_NOT_ALLOWED;
+        }
 
         // Check branch protection and status checks
         {
@@ -1386,10 +1389,6 @@ pub async fn merge_pull(
                     }
                 }
             }
-        }
-
-        if pr.merged {
-            return StatusCode::METHOD_NOT_ALLOWED;
         }
 
         // Copy files from head to base
@@ -1498,11 +1497,8 @@ pub async fn list_branches(
     // Always ensure "main" exists if files are empty but repo exists, or handle graceful fallback.
     // Ideally create_repo makes "main", so it should be there.
     if branch_names.is_empty() {
-        let repos_ref = repos.iter().find(|r| r.id == repo_id);
-        let default = repos_ref.and_then(|r| r.default_branch.clone()).unwrap_or("main".to_string());
-        branch_names.insert(default);
+        // Fallback or empty
     }
-
 
     let user = User::new(1, "admin".to_string(), None);
     // Mock commit for branch tip
