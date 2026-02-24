@@ -44,6 +44,7 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/pulls/:index" view=PullRequestDetail/>
                     <Route path="/repos/:owner/:repo/compare" view=CompareView/>
                     <Route path="/repos/:owner/:repo/actions" view=ActionsList/>
+                    <Route path="/repos/:owner/:repo/pulse" view=RepoPulse/>
                     <Route path="/repos/:owner/:repo/actions/workflows/:id" view=WorkflowRunsList/>
                     <Route path="/repos/:owner/:repo/branches" view=BranchList/>
                     <Route path="/repos/:owner/:repo/tags" view=TagList/>
