@@ -786,11 +786,12 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
             .unwrap_or_default();
 
         for hook in relevant_hooks {
-            // SSRF Protection
-            let is_safe = validate_webhook_url(&hook.url).await;
+            // SSRF Protection with DNS Pinning
+            let validated_target = validate_and_resolve_webhook_url(&hook.url).await;
 
-            let (status_str, status_code) = if is_safe {
-                let response = client.post(&hook.url)
+            let (status_str, status_code) = if let Some((safe_url, host_header)) = validated_target {
+                let response = client.post(safe_url)
+                    .header("Host", host_header)
                     .header("X-Codeza-Event", &event_string)
                     .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
                     .json(&payload)
@@ -2092,48 +2093,56 @@ pub async fn search_issues_global(
     Json(filtered_issues)
 }
 
-async fn validate_webhook_url(url: &str) -> bool {
+// Returns Some((safe_url, host_header)) if safe, None otherwise.
+async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, String)> {
     if let Ok(parsed_url) = Url::parse(url) {
         if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
-            return false;
+            return None;
         }
         if let Some(host) = parsed_url.host_str() {
+            let port = parsed_url.port().unwrap_or(if parsed_url.scheme() == "https" { 443 } else { 80 });
             // Resolve hostname asynchronously
-            // Note: This naive check resolves once here and then reqwest resolves again (TOCTOU risk acknowledged).
-            // Using port 80 as default if unspecified for resolution purpose.
-            let port = parsed_url.port().unwrap_or(80);
-            if let Ok(addrs) = tokio::net::lookup_host(format!("{}:{}", host, port)).await {
-                for addr in addrs {
+            if let Ok(mut addrs) = tokio::net::lookup_host(format!("{}:{}", host, port)).await {
+                // Check first resolved address
+                if let Some(addr) = addrs.next() {
                     let ip = addr.ip();
                     if ip.is_loopback() || ip.is_unspecified() {
-                        return false;
+                        return None;
                     }
-                    match ip {
+                    let is_private = match ip {
                         std::net::IpAddr::V4(ipv4) => {
                             // Check RFC 1918 and Link-Local
                             // 10.0.0.0/8
-                            if ipv4.octets()[0] == 10 { return false; }
+                            (ipv4.octets()[0] == 10) ||
                             // 172.16.0.0/12
-                            if ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1]) { return false; }
+                            (ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1])) ||
                             // 192.168.0.0/16
-                            if ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168 { return false; }
+                            (ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168) ||
                             // 169.254.0.0/16 (Link Local)
-                            if ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254 { return false; }
+                            (ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254)
                         },
                         std::net::IpAddr::V6(ipv6) => {
                             // Unique Local (fc00::/7)
-                            if (ipv6.segments()[0] & 0xfe00) == 0xfc00 { return false; }
+                            ((ipv6.segments()[0] & 0xfe00) == 0xfc00) ||
                             // Link Local (fe80::/10)
-                            if (ipv6.segments()[0] & 0xffc0) == 0xfe80 { return false; }
+                            ((ipv6.segments()[0] & 0xffc0) == 0xfe80)
                         }
+                    };
+
+                    if is_private {
+                        return None;
                     }
+
+                    // If safe, return a URL constructed with the IP to prevent TOCTOU/DNS rebinding
+                    // and the original Host header.
+                    let safe_url = format!("{}://{}:{}{}", parsed_url.scheme(), ip, port, parsed_url.path());
+                    let host_header = format!("{}:{}", host, port);
+                    return Some((safe_url, host_header));
                 }
-                // If we get here, all resolved IPs are "safe" (public)
-                return true;
             }
         }
     }
-    false
+    None
 }
 
 pub async fn create_commit_status(
