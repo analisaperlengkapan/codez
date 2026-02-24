@@ -778,11 +778,7 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
     let event_string = event.to_string();
 
     tokio::spawn(async move {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .unwrap_or_default();
-
+        let client = reqwest::Client::new();
         for hook in relevant_hooks {
             let response = client.post(&hook.url)
                 .header("X-Codeza-Event", &event_string)
