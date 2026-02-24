@@ -450,6 +450,32 @@ pub struct CreateKeyOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PushEvent {
+    pub r#ref: String,
+    pub before: String,
+    pub after: String,
+    pub repository: Repository,
+    pub pusher: User,
+    pub commits: Vec<Commit>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IssueEvent {
+    pub action: String,
+    pub issue: Issue,
+    pub repository: Repository,
+    pub sender: User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PullRequestEvent {
+    pub action: String,
+    pub pull_request: PullRequest,
+    pub repository: Repository,
+    pub sender: User,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Webhook {
     pub id: u64,
     pub repo_id: u64,

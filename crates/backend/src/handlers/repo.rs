@@ -12,9 +12,11 @@ use shared::{
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
     Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch,
-    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption, CommitStatus, CreateStatusOption
+    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption, CommitStatus, CreateStatusOption,
+    IssueEvent, PullRequestEvent, PushEvent
 };
 use crate::router::AppState;
+use serde::Serialize;
 
 #[derive(serde::Deserialize)]
 pub struct GetContentQuery {
@@ -254,7 +256,15 @@ pub async fn create_issue(
     });
 
     // Trigger Webhooks
-    dispatch_hooks(&state, repo_id, "issues");
+    if let Some(r) = repo {
+        let event = IssueEvent {
+            action: "opened".to_string(),
+            issue: issue.clone(),
+            repository: r.clone(),
+            sender: User::new(1, "admin".to_string(), None),
+        };
+        dispatch_hooks(&state, repo_id, "issues", event);
+    }
 
     (StatusCode::CREATED, Json(issue))
 }
@@ -378,7 +388,15 @@ pub async fn create_pull(
     });
 
     // Trigger Webhooks
-    dispatch_hooks(&state, repo_id, "pull_request");
+    if let Some(r) = repos.iter().find(|r| r.id == repo_id) {
+        let event = PullRequestEvent {
+            action: "opened".to_string(),
+            pull_request: pr.clone(),
+            repository: r.clone(),
+            sender: User::new(1, "admin".to_string(), None),
+        };
+        dispatch_hooks(&state, repo_id, "pull_request", event);
+    }
 
     (StatusCode::CREATED, Json(pr))
 }
@@ -745,7 +763,7 @@ pub async fn list_hook_deliveries(
     Json(filtered)
 }
 
-fn dispatch_hooks(state: &AppState, repo_id: u64, event: &str) {
+fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState, repo_id: u64, event: &str, payload: T) {
     let hooks = state.hooks.read().unwrap();
     let relevant_hooks: Vec<Webhook> = hooks.iter()
         .filter(|h| h.repo_id == repo_id && h.active && h.events.contains(&event.to_string()))
@@ -756,19 +774,40 @@ fn dispatch_hooks(state: &AppState, repo_id: u64, event: &str) {
         return;
     }
 
-    let mut deliveries = state.webhook_deliveries.write().unwrap();
-    for hook in relevant_hooks {
-        let delivery_id = (deliveries.len() as u64) + 1;
-        deliveries.push(WebhookDelivery {
-            id: delivery_id,
-            hook_id: hook.id,
-            event: event.to_string(),
-            status: "success".to_string(), // Mock success
-            request_url: hook.url.clone(),
-            response_status: 200,
-            delivered_at: "now".to_string(),
-        });
-    }
+    let state_clone = state.clone();
+    let event_string = event.to_string();
+
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        for hook in relevant_hooks {
+            let response = client.post(&hook.url)
+                .header("X-Codeza-Event", &event_string)
+                .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
+                .json(&payload)
+                .send()
+                .await;
+
+            let (status_str, status_code) = match response {
+                Ok(resp) => {
+                    let s = resp.status();
+                    (if s.is_success() { "success" } else { "failed" }.to_string(), s.as_u16())
+                },
+                Err(_) => ("failed".to_string(), 0),
+            };
+
+            let mut deliveries = state_clone.webhook_deliveries.write().unwrap();
+            let delivery_id = (deliveries.len() as u64) + 1;
+            deliveries.push(WebhookDelivery {
+                id: delivery_id,
+                hook_id: hook.id,
+                event: event_string.clone(),
+                status: status_str,
+                request_url: hook.url.clone(),
+                response_status: status_code,
+                delivered_at: "now".to_string(),
+            });
+        }
+    });
 }
 
 pub async fn create_secret(
@@ -1801,7 +1840,7 @@ pub async fn update_file(
     commits.push(Commit {
         sha: format!("update{}", commit_id),
         repo_id,
-        message: commit_message,
+        message: commit_message.clone(),
         author: User::new(1, "admin".to_string(), None),
         date: "now".to_string(),
     });
@@ -1820,7 +1859,26 @@ pub async fn update_file(
     });
 
     // Trigger Webhooks
-    dispatch_hooks(&state, repo_id, "push");
+    if let Some(r) = repo_obj {
+        let user = User::new(1, "admin".to_string(), None);
+        let commit = Commit {
+            sha: format!("update{}", commit_id),
+            repo_id,
+            message: commit_message,
+            author: user.clone(),
+            date: "now".to_string(),
+        };
+
+        let event = PushEvent {
+            r#ref: format!("refs/heads/{}", branch_name),
+            before: "0000000000000000000000000000000000000000".to_string(), // Mock
+            after: commit.sha.clone(),
+            repository: r.clone(),
+            pusher: user.clone(),
+            commits: vec![commit],
+        };
+        dispatch_hooks(&state, repo_id, "push", event);
+    }
 
     (StatusCode::OK, Json(FileEntry {
         name: "updated_file".to_string(),
