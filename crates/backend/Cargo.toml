@@ -13,3 +13,6 @@ tower-http = { version = "0.5", features = ["cors", "fs"] }
 shared = { path = "../shared" }
 chrono = { version = "0.4.43", features = ["serde"] }
 uuid = { version = "1.20.0", features = ["v4"] }
+reqwest = { version = "0.12", features = ["json"] }
+ipnetwork = "0.20"
+url = "2.5"

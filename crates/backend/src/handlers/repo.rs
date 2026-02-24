@@ -12,9 +12,13 @@ use shared::{
     Collaborator, Branch, CreateBranchOption, Tag, LfsObject, MilestoneStats, DiffFile, CodeSearchResult, Commit, ReviewRequest,
     DiffLine, UpdateFileOption, Activity, Notification, PaginationOptions, UpdateIssueOption, UpdateCommentOption, UpdatePullRequestOption,
     Review, CreateReviewOption, WebhookDelivery, CreateProtectedBranchOption, ProtectedBranch,
-    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption, CommitStatus, CreateStatusOption
+    RepoUserStatus, UpdateLabelOption, UpdateMilestoneOption, CommitStatus, CreateStatusOption,
+    IssueEvent, PullRequestEvent, PushEvent
 };
 use crate::router::AppState;
+use serde::Serialize;
+use ipnetwork::IpNetwork;
+use url::Url;
 
 #[derive(serde::Deserialize)]
 pub struct GetContentQuery {
@@ -254,7 +258,15 @@ pub async fn create_issue(
     });
 
     // Trigger Webhooks
-    dispatch_hooks(&state, repo_id, "issues");
+    if let Some(r) = repo {
+        let event = IssueEvent {
+            action: "opened".to_string(),
+            issue: issue.clone(),
+            repository: r.clone(),
+            sender: User::new(1, "admin".to_string(), None),
+        };
+        dispatch_hooks(&state, repo_id, "issues", event);
+    }
 
     (StatusCode::CREATED, Json(issue))
 }
@@ -378,7 +390,15 @@ pub async fn create_pull(
     });
 
     // Trigger Webhooks
-    dispatch_hooks(&state, repo_id, "pull_request");
+    if let Some(r) = repos.iter().find(|r| r.id == repo_id) {
+        let event = PullRequestEvent {
+            action: "opened".to_string(),
+            pull_request: pr.clone(),
+            repository: r.clone(),
+            sender: User::new(1, "admin".to_string(), None),
+        };
+        dispatch_hooks(&state, repo_id, "pull_request", event);
+    }
 
     (StatusCode::CREATED, Json(pr))
 }
@@ -745,7 +765,7 @@ pub async fn list_hook_deliveries(
     Json(filtered)
 }
 
-fn dispatch_hooks(state: &AppState, repo_id: u64, event: &str) {
+fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState, repo_id: u64, event: &str, payload: T) {
     let hooks = state.hooks.read().unwrap();
     let relevant_hooks: Vec<Webhook> = hooks.iter()
         .filter(|h| h.repo_id == repo_id && h.active && h.events.contains(&event.to_string()))
@@ -756,19 +776,54 @@ fn dispatch_hooks(state: &AppState, repo_id: u64, event: &str) {
         return;
     }
 
-    let mut deliveries = state.webhook_deliveries.write().unwrap();
-    for hook in relevant_hooks {
-        let delivery_id = (deliveries.len() as u64) + 1;
-        deliveries.push(WebhookDelivery {
-            id: delivery_id,
-            hook_id: hook.id,
-            event: event.to_string(),
-            status: "success".to_string(), // Mock success
-            request_url: hook.url.clone(),
-            response_status: 200,
-            delivered_at: "now".to_string(),
-        });
-    }
+    let state_clone = state.clone();
+    let event_string = event.to_string();
+
+    tokio::spawn(async move {
+        for hook in relevant_hooks {
+            // SSRF Protection with DNS Pinning via reqwest::resolve
+            let validated_target = validate_and_resolve_webhook_url(&hook.url).await;
+
+            let (status_str, status_code) = if let Some((host, port, safe_addr)) = validated_target {
+                // We must build a new client for each hook to apply the specific DNS resolution override
+                // while keeping the original URL for correct TLS validation (SNI).
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(10))
+                    .resolve(&host, safe_addr)
+                    .build()
+                    .unwrap_or_default();
+
+                let response = client.post(&hook.url)
+                    .header("X-Codeza-Event", &event_string)
+                    .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
+                    .json(&payload)
+                    .send()
+                    .await;
+
+                match response {
+                    Ok(resp) => {
+                        let s = resp.status();
+                        (if s.is_success() { "success" } else { "failed" }.to_string(), s.as_u16())
+                    },
+                    Err(_) => ("failed".to_string(), 0),
+                }
+            } else {
+                ("failed (blocked)".to_string(), 0)
+            };
+
+            let mut deliveries = state_clone.webhook_deliveries.write().unwrap();
+            let delivery_id = (deliveries.len() as u64) + 1;
+            deliveries.push(WebhookDelivery {
+                id: delivery_id,
+                hook_id: hook.id,
+                event: event_string.clone(),
+                status: status_str,
+                request_url: hook.url.clone(),
+                response_status: status_code,
+                delivered_at: "now".to_string(),
+            });
+        }
+    });
 }
 
 pub async fn create_secret(
@@ -1801,7 +1856,7 @@ pub async fn update_file(
     commits.push(Commit {
         sha: format!("update{}", commit_id),
         repo_id,
-        message: commit_message,
+        message: commit_message.clone(),
         author: User::new(1, "admin".to_string(), None),
         date: "now".to_string(),
     });
@@ -1820,7 +1875,26 @@ pub async fn update_file(
     });
 
     // Trigger Webhooks
-    dispatch_hooks(&state, repo_id, "push");
+    if let Some(r) = repo_obj {
+        let user = User::new(1, "admin".to_string(), None);
+        let commit = Commit {
+            sha: format!("update{}", commit_id),
+            repo_id,
+            message: commit_message,
+            author: user.clone(),
+            date: "now".to_string(),
+        };
+
+        let event = PushEvent {
+            r#ref: format!("refs/heads/{}", branch_name),
+            before: "0000000000000000000000000000000000000000".to_string(), // Mock
+            after: commit.sha.clone(),
+            repository: r.clone(),
+            pusher: user.clone(),
+            commits: vec![commit],
+        };
+        dispatch_hooks(&state, repo_id, "push", event);
+    }
 
     (StatusCode::OK, Json(FileEntry {
         name: "updated_file".to_string(),
@@ -2019,6 +2093,68 @@ pub async fn search_issues_global(
         filtered_issues.retain(|i| i.title.to_lowercase().contains(&q_lower) || i.body.clone().unwrap_or_default().to_lowercase().contains(&q_lower));
     }
     Json(filtered_issues)
+}
+
+fn is_private_ipv4(ipv4: std::net::Ipv4Addr) -> bool {
+    // Check RFC 1918 and Link-Local
+    // 10.0.0.0/8
+    (ipv4.octets()[0] == 10) ||
+    // 172.16.0.0/12
+    (ipv4.octets()[0] == 172 && (16..=31).contains(&ipv4.octets()[1])) ||
+    // 192.168.0.0/16
+    (ipv4.octets()[0] == 192 && ipv4.octets()[1] == 168) ||
+    // 169.254.0.0/16 (Link Local)
+    (ipv4.octets()[0] == 169 && ipv4.octets()[1] == 254)
+}
+
+// Returns Some((host, port, safe_addr)) if safe, None otherwise.
+async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, u16, std::net::SocketAddr)> {
+    if let Ok(parsed_url) = Url::parse(url) {
+        if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
+            return None;
+        }
+        if let Some(host) = parsed_url.host_str() {
+            let port = parsed_url.port().unwrap_or(if parsed_url.scheme() == "https" { 443 } else { 80 });
+
+            // Format address correctly for IPv6 (must be bracketed if it contains colons)
+            let addr_str = if host.contains(':') {
+                format!("[{}]:{}", host, port)
+            } else {
+                format!("{}:{}", host, port)
+            };
+
+            // Resolve hostname asynchronously
+            if let Ok(mut addrs) = tokio::net::lookup_host(addr_str).await {
+                // Check first resolved address
+                if let Some(addr) = addrs.next() {
+                    let ip = addr.ip();
+                    if ip.is_loopback() || ip.is_unspecified() {
+                        return None;
+                    }
+                    let is_private = match ip {
+                        std::net::IpAddr::V4(ipv4) => is_private_ipv4(ipv4),
+                        std::net::IpAddr::V6(ipv6) => {
+                            if let Some(ipv4) = ipv6.to_ipv4_mapped() {
+                                is_private_ipv4(ipv4)
+                            } else {
+                                // Unique Local (fc00::/7)
+                                ((ipv6.segments()[0] & 0xfe00) == 0xfc00) ||
+                                // Link Local (fe80::/10)
+                                ((ipv6.segments()[0] & 0xffc0) == 0xfe80)
+                            }
+                        }
+                    };
+
+                    if is_private {
+                        return None;
+                    }
+
+                    return Some((host.to_string(), port, addr));
+                }
+            }
+        }
+    }
+    None
 }
 
 pub async fn create_commit_status(
