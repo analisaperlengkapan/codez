@@ -3,7 +3,7 @@ use gloo_net::http::Request;
 use leptos_router::*;
 use shared::{
     Project, CreateProjectOption, ProjectColumn, CreateProjectColumnOption,
-    ProjectCard, CreateProjectCardOption
+    ProjectCard, CreateProjectCardOption, Issue
 };
 
 #[component]
@@ -197,11 +197,23 @@ fn ProjectColumnView(
     let o = repo_owner.clone();
     let r = repo_name.clone();
 
+    let o_cards = o.clone();
+    let r_cards = r.clone();
     let cards = create_resource(
-        move || (o.clone(), r.clone(), column_id, refresh_cards.get()), // also depends on global refresh? No, local is enough unless moved
+        move || (o_cards.clone(), r_cards.clone(), column_id, refresh_cards.get()), // also depends on global refresh? No, local is enough unless moved
         move |(o, r, c, _)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/projects/columns/{}/cards", o, r, c))
                 .send().await.unwrap().json::<Vec<ProjectCard>>().await.unwrap_or_default()
+        }
+    );
+
+    let o_issues = o.clone();
+    let r_issues = r.clone();
+    let issues = create_resource(
+        move || (o_issues.clone(), r_issues.clone()),
+        move |(o, r)| async move {
+            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/issues?state=open", o, r))
+                .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
         }
     );
 
@@ -254,7 +266,18 @@ fn ProjectColumnView(
             </div>
              <div class="add-card" style="margin-top: 10px;">
                 <textarea placeholder="Card content..." prop:value=new_card_content on:input=move |ev| set_new_card_content.set(event_target_value(&ev)) style="width: 100%; box-sizing: border-box; margin-bottom: 5px;"></textarea>
-                <input type="text" placeholder="Issue ID (optional)" prop:value=issue_id_input on:input=move |ev| set_issue_id_input.set(event_target_value(&ev)) style="width: 100%; box-sizing: border-box; margin-bottom: 5px;" />
+
+                <Suspense fallback=move || view! { <span style="font-size: small;">"Loading issues..."</span> }>
+                    {move || issues.get().map(|list| view! {
+                        <select on:change=move |ev| set_issue_id_input.set(event_target_value(&ev)) style="width: 100%; margin-bottom: 5px;">
+                            <option value="">"Select Issue (Optional)"</option>
+                            <For each=move || list.clone() key=|i| i.id children=move |i| {
+                                view! { <option value={i.id}>"#" {i.number} " " {i.title}</option> }
+                            }/>
+                        </select>
+                    })}
+                </Suspense>
+
                 <button on:click=on_add_card style="width: 100%;">"Add Card"</button>
             </div>
         </div>
