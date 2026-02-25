@@ -272,11 +272,10 @@ fn ProjectColumnView(
                         <select on:change=move |ev| set_issue_id_input.set(event_target_value(&ev)) style="width: 100%; margin-bottom: 5px;">
                             <option value="">"Select Issue (Optional)"</option>
                             <For each=move || list.clone() key=|i| i.id children=move |i| {
-                                view! { <option value={i.id.to_string()}>"#" {i.number} " " {i.title}</option> }
+                                view! { <option value={i.id}>"#" {i.number} " " {i.title}</option> }
                             }/>
                         </select>
                     })}
-                </Suspense>
                 </Suspense>
 
                 <button on:click=on_add_card style="width: 100%;">"Add Card"</button>
