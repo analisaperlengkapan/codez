@@ -268,14 +268,15 @@ fn ProjectColumnView(
                 <textarea placeholder="Card content..." prop:value=new_card_content on:input=move |ev| set_new_card_content.set(event_target_value(&ev)) style="width: 100%; box-sizing: border-box; margin-bottom: 5px;"></textarea>
 
                 <Suspense fallback=move || view! { <span style="font-size: small;">"Loading issues..."</span> }>
-                        <select prop:value=issue_id_input on:change=move |ev| set_issue_id_input.set(event_target_value(&ev)) style="width: 100%; margin-bottom: 5px;">
+                    {move || issues.get().map(|list| view! {
                         <select on:change=move |ev| set_issue_id_input.set(event_target_value(&ev)) style="width: 100%; margin-bottom: 5px;">
                             <option value="">"Select Issue (Optional)"</option>
                             <For each=move || list.clone() key=|i| i.id children=move |i| {
-                                view! { <option value={i.id}>"#" {i.number} " " {i.title}</option> }
+                                view! { <option value={i.id.to_string()}>"#" {i.number} " " {i.title}</option> }
                             }/>
                         </select>
                     })}
+                </Suspense>
                 </Suspense>
 
                 <button on:click=on_add_card style="width: 100%;">"Add Card"</button>
