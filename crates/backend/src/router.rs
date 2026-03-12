@@ -16,7 +16,9 @@ use crate::handlers::*;
 #[derive(Clone, Default)]
 pub struct AppState {
     pub repos: Arc<RwLock<Vec<Repository>>>,
+    #[allow(clippy::type_complexity)]
     pub file_contents: Arc<RwLock<HashMap<(u64, String, String), String>>>,
+    #[allow(clippy::type_complexity)]
     pub file_history: Arc<RwLock<HashMap<(u64, String, String), String>>>,
     pub issues: Arc<RwLock<Vec<Issue>>>,
     pub users: Arc<RwLock<Vec<User>>>,
@@ -46,6 +48,7 @@ pub struct AppState {
     pub stars: Arc<RwLock<HashMap<u64, Vec<u64>>>>,
     pub discussions: Arc<RwLock<Vec<Discussion>>>,
     pub discussion_comments: Arc<RwLock<Vec<DiscussionComment>>>,
+    #[allow(clippy::type_complexity)]
     pub release_assets_data: Arc<RwLock<HashMap<(u64, u64), Vec<u8>>>>,
     pub gpg_keys: Arc<RwLock<Vec<GpgKey>>>,
     pub watchers: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // repo_id -> user_ids

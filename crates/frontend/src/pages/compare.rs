@@ -16,7 +16,7 @@ pub fn CompareView() -> impl IntoView {
     let (body, set_body) = create_signal("".to_string());
     let (error_msg, set_error_msg) = create_signal(None::<String>);
 
-    let repo_meta = create_resource(
+    let _repo_meta = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
             Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}", o, r))

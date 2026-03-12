@@ -17,7 +17,6 @@ use shared::{
 };
 use crate::router::AppState;
 use serde::Serialize;
-use ipnetwork::IpNetwork;
 use url::Url;
 use chrono::{Utc, Duration};
 
@@ -942,7 +941,7 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(state: &AppState
             // SSRF Protection with DNS Pinning via reqwest::resolve
             let validated_target = validate_and_resolve_webhook_url(&hook.url).await;
 
-            let (status_str, status_code) = if let Some((host, port, safe_addr)) = validated_target {
+            let (status_str, status_code) = if let Some((host, _port, safe_addr)) = validated_target {
                 // We must build a new client for each hook to apply the specific DNS resolution override
                 // while keeping the original URL for correct TLS validation (SNI).
                 let client = reqwest::Client::builder()
@@ -1961,16 +1960,14 @@ pub async fn search_repo_code(
     let mut results = Vec::new();
 
     for ((r_id, branch, path), content) in files.iter() {
-        if *r_id == repo_id && branch == &default_branch {
-             if q.is_empty() || path.to_lowercase().contains(&q) || content.to_lowercase().contains(&q) {
+        if *r_id == repo_id && branch == &default_branch && (q.is_empty() || path.to_lowercase().contains(&q) || content.to_lowercase().contains(&q)) {
                  results.push(CodeSearchResult {
-                     name: path.split('/').last().unwrap_or(path).to_string(),
+                     name: path.split('/').next_back().unwrap_or(path).to_string(),
                      path: path.clone(),
                      sha: "mocksha".to_string(),
                      url: format!("/repos/{}/{}/src/{}", owner, repo_name, path),
                      content: Some(content.chars().take(100).collect()),
                  });
-             }
         }
     }
     Json(results)
@@ -2503,17 +2500,15 @@ fn process_closers(text: &str) -> Vec<u64> {
         // Allow punctuation after keyword (e.g. "Fixes: #1")
         let clean_keyword = lower.trim_end_matches(|c: char| !c.is_alphanumeric());
 
-        if keywords.contains(&clean_keyword) {
-            if i + 1 < words.len() {
+        if keywords.contains(&clean_keyword) && i + 1 < words.len() {
                 let next = words[i + 1];
                 if next.starts_with('#') {
                     let id_str = next.trim_start_matches('#')
-                        .trim_end_matches(|c: char| !c.is_digit(10));
+                        .trim_end_matches(|c: char| !c.is_ascii_digit());
                     if let Ok(id) = id_str.parse::<u64>() {
                         issue_ids.insert(id);
                     }
                 }
-            }
         }
     }
     issue_ids.into_iter().collect()
