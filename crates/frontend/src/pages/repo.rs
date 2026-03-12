@@ -1499,7 +1499,7 @@ pub fn BranchList() -> impl IntoView {
     let branches = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/branches", o, r))
+            Request::get(&format!("/api/v1/repos/{}/{}/branches", o, r))
                 .send().await.unwrap().json::<Vec<Branch>>().await.unwrap_or_default()
         }
     );
@@ -1535,7 +1535,7 @@ pub fn TagList() -> impl IntoView {
     let tags = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/repos/{}/{}/tags", o, r))
+            Request::get(&format!("/api/v1/repos/{}/{}/tags", o, r))
                 .send().await.unwrap().json::<Vec<Tag>>().await.unwrap_or_default()
         }
     );
