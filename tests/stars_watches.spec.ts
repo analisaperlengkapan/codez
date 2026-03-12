@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Repository Stars and Watches Flow', () => {
   test('should allow user to toggle star and watch status', async ({ page }) => {
     // 1. Navigate to create repo page
-    await page.goto('http://127.0.0.1:8080/repo/create');
+    await page.goto('http://localhost:8080/repo/create');
     await expect(page.locator('h3')).toContainText('Create New Repository', { timeout: 10000 });
 
     // Create new repo
@@ -29,39 +29,39 @@ test.describe('Repository Stars and Watches Flow', () => {
     const actionsDiv = page.locator('.repo-actions');
 
     // Fallback if already starred from a previous run or initial states
-    const unstarButton = actionsDiv.locator('button:has-text("Unstar (")').first();
+    const unstarButton = actionsDiv.locator('button', { hasText: /^Unstar \(/ }).first();
     if (await unstarButton.isVisible()) {
         await unstarButton.click();
         await page.waitForTimeout(1000);
     }
 
-    const unwatchButton = actionsDiv.locator('button:has-text("Unwatch (")').first();
+    const unwatchButton = actionsDiv.locator('button', { hasText: /^Unwatch \(/ }).first();
     if (await unwatchButton.isVisible()) {
         await unwatchButton.click();
         await page.waitForTimeout(1000);
     }
 
-    await expect(actionsDiv.locator('button:has-text("Star (")').first()).toBeVisible({ timeout: 5000 });
-    await expect(actionsDiv.locator('button:has-text("Watch (")').first()).toBeVisible({ timeout: 5000 });
+    await expect(actionsDiv.locator('button', { hasText: /^Star \(/ }).first()).toBeVisible({ timeout: 5000 });
+    await expect(actionsDiv.locator('button', { hasText: /^Watch \(/ }).first()).toBeVisible({ timeout: 5000 });
 
     // 4. Star the repository
-    await actionsDiv.locator('button:has-text("Star (")').first().click();
+    await actionsDiv.locator('button', { hasText: /^Star \(/ }).first().click();
     await page.waitForTimeout(1000);
-    await expect(actionsDiv.locator('button:has-text("Unstar (")').first()).toBeVisible({ timeout: 5000 });
+    await expect(actionsDiv.locator('button', { hasText: /^Unstar \(/ }).first()).toBeVisible({ timeout: 5000 });
 
     // 5. Watch the repository
-    await actionsDiv.locator('button:has-text("Watch (")').first().click();
+    await actionsDiv.locator('button', { hasText: /^Watch \(/ }).first().click();
     await page.waitForTimeout(1000);
-    await expect(actionsDiv.locator('button:has-text("Unwatch (")').first()).toBeVisible({ timeout: 5000 });
+    await expect(actionsDiv.locator('button', { hasText: /^Unwatch \(/ }).first()).toBeVisible({ timeout: 5000 });
 
     // 6. Unstar the repository
-    await actionsDiv.locator('button:has-text("Unstar (")').first().click();
+    await actionsDiv.locator('button', { hasText: /^Unstar \(/ }).first().click();
     await page.waitForTimeout(1000);
-    await expect(actionsDiv.locator('button:has-text("Star (")').first()).toBeVisible({ timeout: 5000 });
+    await expect(actionsDiv.locator('button', { hasText: /^Star \(/ }).first()).toBeVisible({ timeout: 5000 });
 
     // 7. Unwatch the repository
-    await actionsDiv.locator('button:has-text("Unwatch (")').first().click();
+    await actionsDiv.locator('button', { hasText: /^Unwatch \(/ }).first().click();
     await page.waitForTimeout(1000);
-    await expect(actionsDiv.locator('button:has-text("Watch (")').first()).toBeVisible({ timeout: 5000 });
+    await expect(actionsDiv.locator('button', { hasText: /^Watch \(/ }).first()).toBeVisible({ timeout: 5000 });
   });
 });

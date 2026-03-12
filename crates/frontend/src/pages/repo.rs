@@ -111,13 +111,18 @@ pub fn RepoDetail() -> impl IntoView {
     view! {
         <div class="repo-detail">
             <div class="repo-actions" style="float: right; display: flex; gap: 5px;">
-                <Suspense fallback=move || view! { <button>"Star"</button> }>
-                    {move || repo_status.get().map(|status| {
-                        let label = if status.starred { "Unstar" } else { "Star" };
-                        view! { <button on:click=on_star>{label}</button> }
-                    })}
+                <Suspense fallback=move || view! { <span>"Loading..."</span> }>
+                    {move || {
+                        let status = repo_status.get().unwrap_or(RepoUserStatus { starred: false, watching: false });
+                        let repo_data = repo.get().unwrap_or_default().unwrap_or(Repository::new(0, "".to_string(), "".to_string()));
+                        let star_label = if status.starred { "Unstar" } else { "Star" };
+                        let watch_label = if status.watching { "Unwatch" } else { "Watch" };
+                        view! {
+                            <button on:click=on_star>{star_label} " (" {repo_data.stars_count} ")"</button>
+                            <button on:click=on_watch>{watch_label} " (" {repo_data.watchers_count} ")"</button>
+                        }
+                    }}
                 </Suspense>
-                <button on:click=on_watch>"Watch"</button>
                 <button on:click=on_fork>"Fork"</button>
             </div>
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
