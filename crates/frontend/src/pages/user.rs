@@ -1,7 +1,8 @@
 use leptos::*;
 use gloo_net::http::Request;
 use shared::{
-    User, LoginOption, RegisterOption, Contribution, UserSettingsOption, PublicKey, GpgKey
+    User, LoginOption, RegisterOption, Contribution, UserSettingsOption, PublicKey, GpgKey,
+    CreateKeyOption, CreateGpgKeyOption
 };
 use leptos_router::*;
 
@@ -177,15 +178,62 @@ pub fn UserSettings() -> impl IntoView {
         })
     });
 
-    let keys = create_resource(|| (), |_| async move {
+    let (refresh, set_refresh) = create_signal(0);
+
+    let keys = create_resource(move || refresh.get(), |_| async move {
         Request::get("/api/v1/user/keys").send().await.unwrap().json::<Vec<PublicKey>>().await.unwrap_or_default()
     });
 
-    let gpg_keys = create_resource(|| (), |_| async move {
+    let gpg_keys = create_resource(move || refresh.get(), |_| async move {
         Request::get("/api/v1/user/gpg_keys").send().await.unwrap().json::<Vec<GpgKey>>().await.unwrap_or_default()
     });
 
     let (full_name, set_full_name) = create_signal("".to_string());
+
+    let (ssh_title, set_ssh_title) = create_signal("".to_string());
+    let (ssh_key, set_ssh_key) = create_signal("".to_string());
+
+    let (gpg_key_content, set_gpg_key_content) = create_signal("".to_string());
+
+    let on_add_ssh_key = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateKeyOption {
+            title: ssh_title.get(),
+            key: ssh_key.get(),
+        };
+        spawn_local(async move {
+            let _ = Request::post("/api/v1/user/keys").json(&payload).unwrap().send().await;
+            set_ssh_title.set("".to_string());
+            set_ssh_key.set("".to_string());
+            set_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_delete_ssh_key = move |id: u64| {
+        spawn_local(async move {
+            let _ = Request::delete(&format!("/api/v1/user/keys/{}", id)).send().await;
+            set_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_add_gpg_key = move |ev: leptos::ev::SubmitEvent| {
+        ev.prevent_default();
+        let payload = CreateGpgKeyOption {
+            armored_public_key: gpg_key_content.get(),
+        };
+        spawn_local(async move {
+            let _ = Request::post("/api/v1/user/gpg_keys").json(&payload).unwrap().send().await;
+            set_gpg_key_content.set("".to_string());
+            set_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_delete_gpg_key = move |id: u64| {
+        spawn_local(async move {
+            let _ = Request::delete(&format!("/api/v1/user/gpg_keys/{}", id)).send().await;
+            set_refresh.update(|n| *n += 1);
+        });
+    };
 
     let on_update_profile = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -216,30 +264,53 @@ pub fn UserSettings() -> impl IntoView {
                 </form>
             </div>
 
-            <div class="ssh-keys">
+            <div class="ssh-keys" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
                 <h3>"SSH Keys"</h3>
                 <ul>
                     <Suspense fallback=move || view! { <li>"Loading..."</li> }>
                         {move || keys.get().map(|list| view! {
                             <For each=move || list.clone() key=|k| k.id children=move |k| {
-                                view! { <li>{k.title} " - " {k.fingerprint}</li> }
+                                let key_id = k.id;
+                                view! {
+                                    <li>
+                                        {k.title} " - " {k.fingerprint}
+                                        <button on:click=move |_| on_delete_ssh_key(key_id) style="margin-left: 10px; color: red;">"Delete"</button>
+                                    </li>
+                                }
                             }/>
                         })}
                     </Suspense>
                 </ul>
+                <form on:submit=on_add_ssh_key style="margin-top: 10px; padding: 10px; background: #f9f9f9;">
+                    <h4>"Add SSH Key"</h4>
+                    <input type="text" placeholder="Title" prop:value=ssh_title on:input=move |ev| set_ssh_title.set(event_target_value(&ev)) style="display: block; margin-bottom: 5px;" required />
+                    <textarea placeholder="Key starting with ssh-rsa..." prop:value=ssh_key on:input=move |ev| set_ssh_key.set(event_target_value(&ev)) rows="4" style="display: block; width: 100%; margin-bottom: 5px;" required></textarea>
+                    <button type="submit">"Add SSH Key"</button>
+                </form>
             </div>
 
-            <div class="gpg-keys">
+            <div class="gpg-keys" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
                 <h3>"GPG Keys"</h3>
                 <ul>
                     <Suspense fallback=move || view! { <li>"Loading..."</li> }>
                         {move || gpg_keys.get().map(|list| view! {
                             <For each=move || list.clone() key=|k| k.id children=move |k| {
-                                view! { <li>{k.key_id} " - " {k.primary_key_id}</li> }
+                                let key_id = k.id;
+                                view! {
+                                    <li>
+                                        {k.key_id} " - " {k.primary_key_id}
+                                        <button on:click=move |_| on_delete_gpg_key(key_id) style="margin-left: 10px; color: red;">"Delete"</button>
+                                    </li>
+                                }
                             }/>
                         })}
                     </Suspense>
                 </ul>
+                <form on:submit=on_add_gpg_key style="margin-top: 10px; padding: 10px; background: #f9f9f9;">
+                    <h4>"Add GPG Key"</h4>
+                    <textarea placeholder="Armored GPG Public Key..." prop:value=gpg_key_content on:input=move |ev| set_gpg_key_content.set(event_target_value(&ev)) rows="6" style="display: block; width: 100%; margin-bottom: 5px;" required></textarea>
+                    <button type="submit">"Add GPG Key"</button>
+                </form>
             </div>
         </div>
     }
