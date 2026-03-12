@@ -2316,7 +2316,7 @@ async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, u16, std
                 if let Some(addr) = addrs.next() {
                     let ip = addr.ip();
                     if ip.is_loopback() || ip.is_unspecified() {
-                        return None;
+                       return None;
                     }
                     let is_private = match ip {
                         std::net::IpAddr::V4(ipv4) => is_private_ipv4(ipv4),
@@ -2333,7 +2333,7 @@ async fn validate_and_resolve_webhook_url(url: &str) -> Option<(String, u16, std
                     };
 
                     if is_private {
-                        return None;
+                       return None;
                     }
 
                     return Some((host.to_string(), port, addr));

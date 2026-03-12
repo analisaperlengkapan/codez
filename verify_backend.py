@@ -48,7 +48,7 @@ def test_backend():
     print("\nTesting GET /user/pulls...")
     try:
         # Create PR (admin is default creator)
-        pr_payload = {"title": "Verification PR", "body": "Body", "head": "f", "base": "m"}
+        pr_payload = {"title": "Verification PR", "body": "Body", "head": "feature", "base": "main"}
         r = requests.post(f"{BASE_URL}/repos/{repo_owner}/{repo_name}/pulls", json=pr_payload)
         r.raise_for_status()
         pr = r.json()

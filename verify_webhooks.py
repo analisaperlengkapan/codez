@@ -27,6 +27,8 @@ def test_webhooks():
         r.raise_for_status()
         print("Issue Created")
 
+        time.sleep(2)
+
         # 3. Check Deliveries
         print(f"\nTesting GET /repos/:owner/:repo/hooks/{hook_id}/deliveries...")
         r = requests.get(f"{BASE_URL}/repos/{repo_owner}/{repo_name}/hooks/{hook_id}/deliveries")
