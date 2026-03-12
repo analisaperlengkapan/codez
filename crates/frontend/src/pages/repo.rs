@@ -44,12 +44,37 @@ pub fn RepoDetail() -> impl IntoView {
     );
 
     let topics = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
+        move || (owner(), repo_name(), trigger_refresh.get()),
+        |(o, r, _)| async move {
             Request::get(&format!("/api/v1/repos/{}/{}/topics", o, r))
                 .send().await.unwrap().json::<Vec<shared::Topic>>().await.unwrap_or_default()
         }
     );
+
+    let (is_editing_topics, set_is_editing_topics) = create_signal(false);
+    let (topics_input, set_topics_input) = create_signal("".to_string());
+
+    let start_editing_topics = move |_| {
+        let current_topics = topics.get().unwrap_or_default();
+        let topic_names: Vec<String> = current_topics.into_iter().map(|t| t.name).collect();
+        set_topics_input.set(topic_names.join(", "));
+        set_is_editing_topics.set(true);
+    };
+
+    let save_topics = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let input = topics_input.get();
+        let topic_names: Vec<String> = input.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+
+        let payload = RepoTopicOptions { topics: topic_names };
+
+        spawn_local(async move {
+            let _ = Request::put(&format!("/api/v1/repos/{}/{}/topics", o, r)).json(&payload).unwrap().send().await;
+            set_is_editing_topics.set(false);
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
 
     let on_star = move |_| {
         let o = owner();
@@ -119,15 +144,30 @@ pub fn RepoDetail() -> impl IntoView {
                 </Suspense>
             </div>
 
-            <div class="repo-topics" style="margin-bottom: 10px;">
-                <Suspense fallback=move || view! { <span></span> }>
-                    {move || topics.get().map(|list| view! {
-                        <For each=move || list.clone() key=|t| t.id children=move |t| {
-                            let link = format!("/search?q=topic:{}", t.name);
-                            view! { <a href=link style="background: #ddf4ff; color: #0969da; padding: 2px 8px; border-radius: 10px; margin-right: 5px; text-decoration: none; font-size: 0.9em;">{t.name}</a> }
-                        }/>
-                    })}
-                </Suspense>
+            <div class="repo-topics" style="margin-bottom: 10px; display: flex; align-items: center; gap: 10px;">
+                {move || if is_editing_topics.get() {
+                    view! {
+                        <div style="display: flex; gap: 5px;">
+                            <input type="text" placeholder="rust, webassembly, leptos" prop:value=topics_input on:input=move |ev| set_topics_input.set(event_target_value(&ev)) />
+                            <button on:click=save_topics>"Save"</button>
+                            <button on:click=move |_| set_is_editing_topics.set(false)>"Cancel"</button>
+                        </div>
+                    }.into_view()
+                } else {
+                    view! {
+                        <Suspense fallback=move || view! { <span></span> }>
+                            <div style="display: flex; flex-wrap: wrap; gap: 5px; align-items: center;">
+                                {move || topics.get().map(|list| view! {
+                                    <For each=move || list.clone() key=|t| t.id children=move |t| {
+                                        let link = format!("/search?q=topic:{}", t.name);
+                                        view! { <a href=link style="background: #ddf4ff; color: #0969da; padding: 2px 8px; border-radius: 10px; text-decoration: none; font-size: 0.9em;">{t.name}</a> }
+                                    }/>
+                                })}
+                                <button on:click=start_editing_topics style="font-size: 0.8em; padding: 2px 5px; cursor: pointer;">"Edit Topics"</button>
+                            </div>
+                        </Suspense>
+                    }.into_view()
+                }}
             </div>
 
             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
