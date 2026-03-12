@@ -14,7 +14,7 @@ pub fn PackageList() -> impl IntoView {
     let packages = create_resource(
         move || (owner(), refresh.get()),
         |(owner_name, _)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/packages/{}", owner_name)).send().await.unwrap().json::<Vec<Package>>().await.unwrap_or_default()
+            Request::get(&format!("/api/v1/packages/{}", owner_name)).send().await.unwrap().json::<Vec<Package>>().await.unwrap_or_default()
         }
     );
 
@@ -70,7 +70,7 @@ where F: Fn() + Clone + 'static
         let o = owner.clone();
         let on_success_clone = on_success.clone();
         spawn_local(async move {
-            let res = Request::post(&format!("http://127.0.0.1:3000/api/v1/packages/{}", o))
+            let res = Request::post(&format!("/api/v1/packages/{}", o))
                 .json(&payload).unwrap().send().await;
             if let Ok(r) = res {
                 if r.ok() {
@@ -113,7 +113,7 @@ pub fn PackageDetail() -> impl IntoView {
     let package = create_resource(
         move || (owner(), pkg_type(), name(), version()),
         |(o, t, n, v)| async move {
-            Request::get(&format!("http://127.0.0.1:3000/api/v1/packages/{}/{}/{}/{}", o, t, n, v))
+            Request::get(&format!("/api/v1/packages/{}/{}/{}/{}", o, t, n, v))
                 .send().await.unwrap().json::<Option<Package>>().await.unwrap_or(None)
         }
     );

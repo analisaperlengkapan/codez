@@ -3,7 +3,7 @@ use gloo_net::http::Request;
 use shared::Activity;
 
 async fn fetch_activities() -> Vec<Activity> {
-    Request::get("http://127.0.0.1:3000/api/v1/user/feeds").send().await.unwrap().json().await.unwrap_or_default()
+    Request::get("/api/v1/user/feeds").send().await.unwrap().json().await.unwrap_or_default()
 }
 
 #[component]
