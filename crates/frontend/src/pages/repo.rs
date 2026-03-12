@@ -2288,6 +2288,7 @@ pub fn WikiEdit() -> impl IntoView {
 
     let (content, set_content) = create_signal("".to_string());
     let (message, set_message) = create_signal("".to_string());
+    let (is_new, set_is_new) = create_signal(true);
 
     // Load existing content if available
     let _ = create_resource(
@@ -2296,6 +2297,7 @@ pub fn WikiEdit() -> impl IntoView {
              if let Ok(resp) = Request::get(&format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p)).send().await {
                  if let Ok(Some(page)) = resp.json::<Option<WikiPage>>().await {
                      set_content.set(page.content);
+                     set_is_new.set(false);
                  }
              }
         }
@@ -2310,9 +2312,16 @@ pub fn WikiEdit() -> impl IntoView {
         };
         let o = owner();
         let r = repo_name();
+        let p = page_name();
+        let is_n = is_new.get();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r))
-                .json(&payload).unwrap().send().await;
+            if is_n {
+                let _ = Request::post(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r))
+                    .json(&payload).unwrap().send().await;
+            } else {
+                let _ = Request::put(&format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p))
+                    .json(&payload).unwrap().send().await;
+            }
             // Redirect or notify would happen here
         });
     };

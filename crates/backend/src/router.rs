@@ -56,6 +56,7 @@ pub struct AppState {
     pub following: Arc<RwLock<HashMap<u64, Vec<u64>>>>, // user_id -> following_ids
     pub oauth2_apps: Arc<Mutex<Vec<OAuth2Application>>>,
     pub commit_statuses: Arc<RwLock<Vec<CommitStatus>>>,
+    pub wikis: Arc<RwLock<HashMap<(u64, String), shared::WikiPage>>>,
 }
 
 pub fn api_router() -> Router {
@@ -85,6 +86,18 @@ pub fn api_router() -> Router {
     history_map.insert((1, "feature".to_string(), "src/lib.rs".to_string()), "pub fn add(a: i32, b: i32) -> i32 { a + b }".to_string());
     history_map.insert((1, "feature".to_string(), "README.md".to_string()), "# Codeza Repository\n\nThis is a demo repository.".to_string());
     history_map.insert((1, "feature".to_string(), "Cargo.toml".to_string()), "[package]\nname = \"codeza\"\nversion = \"0.1.0\"\n".to_string());
+
+    let mut wikis_map = HashMap::new();
+    wikis_map.insert((1, "Home".to_string()), shared::WikiPage {
+        title: "Home".to_string(),
+        content: "Welcome to the wiki!".to_string(),
+        commit_message: None,
+    });
+    wikis_map.insert((1, "Installation".to_string()), shared::WikiPage {
+        title: "Installation".to_string(),
+        content: "How to install...".to_string(),
+        commit_message: None,
+    });
 
     let state = AppState {
         repos: Arc::new(RwLock::new(vec![
@@ -271,6 +284,7 @@ pub fn api_router() -> Router {
         following: Arc::new(RwLock::new(HashMap::new())),
         oauth2_apps: Arc::new(Mutex::new(vec![])),
         commit_statuses: Arc::new(RwLock::new(vec![])),
+        wikis: Arc::new(RwLock::new(wikis_map)),
     };
 
     Router::new()
