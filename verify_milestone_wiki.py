@@ -88,9 +88,12 @@ def test_milestone_wiki():
         print("\nTesting POST /admin/users...")
         user_payload = {"username": "newuser", "email": "new@example.com", "password": "password"}
         r = requests.post(f"{BASE_URL}/admin/users", json=user_payload)
-        r.raise_for_status()
-        user = r.json()
-        print(f"Created User: {user['id']} - {user['username']}")
+        if r.status_code == 409:
+            print(f"User '{user_payload['username']}' already exists, skipping creation.")
+        else:
+            r.raise_for_status()
+            user = r.json()
+            print(f"Created User: {user['id']} - {user['username']}")
 
     except Exception as e:
         print(f"Error testing milestone/wiki: {e}")
