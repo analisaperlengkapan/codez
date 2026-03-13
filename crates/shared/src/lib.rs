@@ -613,6 +613,7 @@ pub struct Activity {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ActionWorkflow {
     pub id: u64,
+    pub repo_id: u64,
     pub name: String,
     pub status: String,
 }
@@ -627,8 +628,13 @@ pub struct CreateWorkflowRunOption {
 pub struct WorkflowRun {
     pub id: u64,
     pub workflow_id: u64,
-    pub status: String, // "queued", "in_progress", "success", "failure"
+    pub status: String, // "queued", "in_progress", "success", "failure", "cancelled"
     pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateWorkflowRunOption {
+    pub status: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1051,8 +1057,9 @@ mod tests {
 
     #[test]
     fn test_actions_packages_structs() {
-        let wf = ActionWorkflow { id: 1, name: "build".to_string(), status: "success".to_string() };
+        let wf = ActionWorkflow { id: 1, repo_id: 1, name: "build".to_string(), status: "success".to_string() };
         assert_eq!(wf.name, "build");
+        assert_eq!(wf.repo_id, 1);
 
         let pkg = Package { id: 1, owner: "admin".to_string(), name: "pkg".to_string(), version: "1.0".to_string(), package_type: "npm".to_string() };
         assert_eq!(pkg.package_type, "npm");
