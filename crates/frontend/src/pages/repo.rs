@@ -111,7 +111,7 @@ pub fn RepoDetail() -> impl IntoView {
     view! {
         <div class="repo-detail">
             <div class="repo-actions" style="float: right; display: flex; gap: 5px;">
-                <Suspense fallback=move || view! { <span>"Loading..."</span> }>
+                <Transition fallback=move || view! { <span>"Loading..."</span> }>
                     {move || {
                         let status = repo_status.get().unwrap_or(RepoUserStatus { starred: false, watching: false });
                         let repo_data = repo.get().unwrap_or_default().unwrap_or(Repository::new(0, "".to_string(), "".to_string()));
@@ -122,7 +122,7 @@ pub fn RepoDetail() -> impl IntoView {
                             <button on:click=on_watch>{watch_label} " (" {repo_data.watchers_count} ")"</button>
                         }
                     }}
-                </Suspense>
+                </Transition>
                 <button on:click=on_fork>"Fork"</button>
             </div>
             <h3>"Repository: " {owner} " / " {repo_name}</h3>
