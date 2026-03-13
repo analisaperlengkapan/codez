@@ -223,7 +223,7 @@ pub async fn create_issue(
 
     let milestone = if let Some(mid) = payload.milestone {
         let milestones = state.milestones.read().unwrap();
-        milestones.iter().find(|m| m.id == mid).cloned()
+        milestones.iter().find(|m| m.id == mid && m.repo_id == repo_id).cloned()
     } else {
         None
     };
