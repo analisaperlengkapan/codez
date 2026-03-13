@@ -20,7 +20,7 @@ test.describe('Repository Stars and Watches Flow', () => {
     await responsePromise;
 
     // 2. Navigate to the repo manually
-    await page.goto(`http://localhost:8080/repos/admin/${testRepoName}`);
+    await page.goto(`http://127.0.0.1:8080/repos/admin/${testRepoName}`);
     await expect(page.locator('h3')).toContainText(`Repository: admin / ${testRepoName}`, { timeout: 10000 });
 
     // Wait for data load
