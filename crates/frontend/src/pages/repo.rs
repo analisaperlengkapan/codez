@@ -547,7 +547,6 @@ pub fn IssueList() -> impl IntoView {
                 .json(&payload).unwrap().send().await;
             set_new_issue_title.set("".to_string());
             set_new_issue_body.set("".to_string());
-            set_new_issue_milestone.set("".to_string());
             set_show_new_issue.set(false);
             set_refresh.update(|n| *n += 1);
         });

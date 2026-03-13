@@ -223,7 +223,7 @@ pub async fn create_issue(
 
     let milestone = if let Some(mid) = payload.milestone {
         let milestones = state.milestones.read().unwrap();
-        milestones.iter().find(|m| m.id == mid && m.repo_id == repo_id).cloned()
+        milestones.iter().find(|m| m.id == mid).cloned()
     } else {
         None
     };
@@ -382,7 +382,7 @@ pub async fn update_issue(
             } else {
                 // Validate milestone existence
                 let milestones = state.milestones.read().unwrap();
-                if let Some(m) = milestones.iter().find(|m| m.id == milestone_id) {
+                if let Some(m) = milestones.iter().find(|m| m.id == milestone_id && m.repo_id == repo_id) {
                     i.milestone = Some(m.clone());
                 }
             }
