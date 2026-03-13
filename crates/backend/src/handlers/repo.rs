@@ -1419,6 +1419,12 @@ pub async fn migrate_repo(
     let owner = "admin".to_string(); // Mock authenticated user
 
     let mut repos = state.repos.write().unwrap();
+
+    // Check for duplicate repo name (consistent with create_repo)
+    if repos.iter().any(|r| r.owner == owner && r.name == payload.repo_name) {
+        return (StatusCode::CONFLICT, Json(Repository::new(0, "".to_string(), "".to_string())));
+    }
+
     let repo_id = (repos.len() as u64) + 1;
 
     let mut repo = Repository::new(repo_id, payload.repo_name.clone(), owner.clone());
