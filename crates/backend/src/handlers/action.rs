@@ -63,8 +63,22 @@ pub async fn trigger_workflow(
 
 pub async fn list_workflow_runs(
     State(state): State<AppState>,
-    Path((_owner, _repo, id)): Path<(String, String, u64)>
+    Path((owner, repo_name, id)): Path<(String, String, u64)>
 ) -> Json<Vec<WorkflowRun>> {
+    let repo_id = {
+        let repos = state.repos.read().unwrap();
+        repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0)
+    };
+
+    let valid_workflow = {
+        let wfs = state.workflows.read().unwrap();
+        wfs.iter().any(|w| w.id == id && w.repo_id == repo_id)
+    };
+
+    if !valid_workflow {
+        return Json(vec![]);
+    }
+
     let runs = state.workflow_runs.read().unwrap();
     let filtered: Vec<WorkflowRun> = runs.iter().filter(|r| r.workflow_id == id).cloned().collect();
     Json(filtered)
