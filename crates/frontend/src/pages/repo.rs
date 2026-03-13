@@ -2446,17 +2446,26 @@ pub fn CommitStatusList(owner: String, repo: String, sha: String) -> impl IntoVi
 pub fn MigrateRepo() -> impl IntoView {
     let (clone_addr, set_clone_addr) = create_signal("".to_string());
     let (repo_name, set_repo_name) = create_signal("".to_string());
+    let (service, set_service) = create_signal("git".to_string());
+    let navigate = use_navigate();
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let payload = MigrateRepoOption {
             clone_addr: clone_addr.get(),
             repo_name: repo_name.get(),
-            service: "git".to_string(),
+            service: service.get(),
             mirror: false,
         };
+        let r_name = repo_name.get();
+        let navigate = navigate.clone();
         spawn_local(async move {
-            let _ = Request::post("/api/v1/repos/migrate").json(&payload).unwrap().send().await;
+            let res = Request::post("/api/v1/repos/migrate").json(&payload).unwrap().send().await;
+            if let Ok(resp) = res {
+                if resp.ok() {
+                    navigate(&format!("/repos/admin/{}", r_name), NavigateOptions::default());
+                }
+            }
         });
     };
 
@@ -2464,8 +2473,23 @@ pub fn MigrateRepo() -> impl IntoView {
         <div class="migrate-repo">
             <h3>"Migrate Repository"</h3>
             <form on:submit=on_submit>
-                <input type="text" placeholder="Clone URL" prop:value=clone_addr on:input=move |ev| set_clone_addr.set(event_target_value(&ev)) />
-                <input type="text" placeholder="Repository Name" prop:value=repo_name on:input=move |ev| set_repo_name.set(event_target_value(&ev)) />
+                <div class="form-group">
+                    <label>"Migration Service"</label>
+                    <select prop:value=service on:change=move |ev| set_service.set(event_target_value(&ev))>
+                        <option value="git">"Git"</option>
+                        <option value="github">"GitHub"</option>
+                        <option value="gitlab">"GitLab"</option>
+                        <option value="gitea">"Gitea"</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>"Clone URL"</label>
+                    <input type="text" placeholder="Clone URL" prop:value=clone_addr on:input=move |ev| set_clone_addr.set(event_target_value(&ev)) />
+                </div>
+                <div class="form-group">
+                    <label>"Repository Name"</label>
+                    <input type="text" placeholder="Repository Name" prop:value=repo_name on:input=move |ev| set_repo_name.set(event_target_value(&ev)) />
+                </div>
                 <button type="submit">"Migrate"</button>
             </form>
         </div>

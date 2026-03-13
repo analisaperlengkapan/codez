@@ -1412,8 +1412,67 @@ pub async fn mirror_sync(Path((_owner, _repo)): Path<(String, String)>) -> Statu
     StatusCode::OK
 }
 
-pub async fn migrate_repo(Json(payload): Json<MigrateRepoOption>) -> (StatusCode, Json<Repository>) {
-    let repo = Repository::new(4, payload.repo_name, "admin".to_string());
+pub async fn migrate_repo(
+    State(state): State<AppState>,
+    Json(payload): Json<MigrateRepoOption>
+) -> (StatusCode, Json<Repository>) {
+    let owner = "admin".to_string(); // Mock authenticated user
+
+    let mut repos = state.repos.write().unwrap();
+    let repo_id = (repos.len() as u64) + 1;
+
+    let mut repo = Repository::new(repo_id, payload.repo_name.clone(), owner.clone());
+    repo.description = Some(format!("Migrated from {} ({})", payload.clone_addr, payload.service));
+    repos.push(repo.clone());
+    drop(repos);
+
+    // Create mock commit history based on the service
+    let mut commits = state.commits.write().unwrap();
+    commits.push(Commit {
+        sha: format!("migrated-sha-{}", repo_id),
+        repo_id,
+        message: format!("Initial commit migrated from {}", payload.service),
+        author: User::new(1, owner.clone(), Some("admin@example.com".to_string())),
+        date: chrono::Utc::now().to_rfc3339(),
+    });
+    drop(commits);
+
+    if payload.service != "git" {
+        // Mock some issues and PRs being imported if it's from a richer platform like github/gitlab/gitea
+        let mut issues = state.issues.write().unwrap();
+        let issue_id = (issues.len() as u64) + 1;
+        issues.push(Issue {
+            id: issue_id,
+            repo_id,
+            number: 1,
+            title: "Imported Issue 1".to_string(),
+            body: Some(format!("This issue was imported from {}.", payload.service)),
+            state: "open".to_string(),
+            user: User::new(1, owner.clone(), None),
+            assignees: vec![],
+            labels: vec![],
+            milestone: None,
+        });
+        drop(issues);
+
+        let mut pulls = state.pulls.write().unwrap();
+        let pull_id = (pulls.len() as u64) + 1;
+        pulls.push(PullRequest {
+            id: pull_id,
+            repo_id,
+            number: 2,
+            title: "Imported PR 1".to_string(),
+            body: Some(format!("This PR was imported from {}.", payload.service)),
+            state: "open".to_string(),
+            user: User::new(1, owner.clone(), None),
+            merged: false,
+            head_sha: "headsha123".to_string(),
+            base: "main".to_string(),
+            head: "feature".to_string(),
+        });
+        drop(pulls);
+    }
+
     (StatusCode::CREATED, Json(repo))
 }
 
