@@ -113,14 +113,14 @@ pub fn RepoDetail() -> impl IntoView {
             <div class="repo-actions" style="float: right; display: flex; gap: 5px;">
                 <Transition fallback=move || view! { <span>"Loading..."</span> }>
                     {move || {
-                        let status = repo_status.get().unwrap_or(RepoUserStatus { starred: false, watching: false });
-                        let repo_data = repo.get().unwrap_or_default().unwrap_or(Repository::new(0, "".to_string(), "".to_string()));
+                        let status = repo_status.get()?;
+                        let repo_data = repo.get()??;
                         let star_label = if status.starred { "Unstar" } else { "Star" };
                         let watch_label = if status.watching { "Unwatch" } else { "Watch" };
-                        view! {
+                        Some(view! {
                             <button on:click=on_star>{star_label} " (" {repo_data.stars_count} ")"</button>
                             <button on:click=on_watch>{watch_label} " (" {repo_data.watchers_count} ")"</button>
-                        }
+                        })
                     }}
                 </Transition>
                 <button on:click=on_fork>"Fork"</button>
