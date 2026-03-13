@@ -80,6 +80,23 @@ pub async fn update_workflow_run(
         repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0)
     };
 
+    let workflow_id = {
+        let runs = state.workflow_runs.read().unwrap();
+        match runs.iter().find(|r| r.id == run_id) {
+            Some(run) => run.workflow_id,
+            None => return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string() }))
+        }
+    };
+
+    let valid_workflow = {
+        let wfs = state.workflows.read().unwrap();
+        wfs.iter().any(|w| w.id == workflow_id && w.repo_id == repo_id)
+    };
+
+    if !valid_workflow {
+        return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string() }));
+    }
+
     let mut runs = state.workflow_runs.write().unwrap();
     if let Some(run) = runs.iter_mut().find(|r| r.id == run_id) {
         run.status = payload.status.clone();
@@ -110,6 +127,23 @@ pub async fn delete_workflow_run(
         let repos = state.repos.read().unwrap();
         repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0)
     };
+
+    let workflow_id = {
+        let runs = state.workflow_runs.read().unwrap();
+        match runs.iter().find(|r| r.id == run_id) {
+            Some(run) => run.workflow_id,
+            None => return StatusCode::NOT_FOUND,
+        }
+    };
+
+    let valid_workflow = {
+        let wfs = state.workflows.read().unwrap();
+        wfs.iter().any(|w| w.id == workflow_id && w.repo_id == repo_id)
+    };
+
+    if !valid_workflow {
+        return StatusCode::NOT_FOUND;
+    }
 
     let mut runs = state.workflow_runs.write().unwrap();
     if let Some(pos) = runs.iter().position(|r| r.id == run_id) {
