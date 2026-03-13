@@ -1429,6 +1429,7 @@ pub async fn migrate_repo(
 
     let mut repo = Repository::new(repo_id, payload.repo_name.clone(), owner.clone());
     repo.description = Some(format!("Migrated from {} ({})", payload.clone_addr, payload.service));
+    repo.is_mirror = payload.mirror;
     repos.push(repo.clone());
     drop(repos);
 
