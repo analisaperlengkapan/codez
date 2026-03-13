@@ -75,6 +75,11 @@ pub async fn update_workflow_run(
     Path((owner, repo_name, run_id)): Path<(String, String, u64)>,
     Json(payload): Json<UpdateWorkflowRunOption>
 ) -> (StatusCode, Json<WorkflowRun>) {
+    let repo_id = {
+        let repos = state.repos.read().unwrap();
+        repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0)
+    };
+
     let mut runs = state.workflow_runs.write().unwrap();
     if let Some(run) = runs.iter_mut().find(|r| r.id == run_id) {
         run.status = payload.status.clone();
@@ -83,7 +88,7 @@ pub async fn update_workflow_run(
         let activity_id = (activities.len() as u64) + 1;
         activities.push(Activity {
             id: activity_id,
-            repo_id: 0, // Mock
+            repo_id,
             user_id: 1, // Mock
             user_name: "admin".to_string(),
             op_type: "update_workflow_run".to_string(),
@@ -101,6 +106,11 @@ pub async fn delete_workflow_run(
     State(state): State<AppState>,
     Path((owner, repo_name, run_id)): Path<(String, String, u64)>
 ) -> StatusCode {
+    let repo_id = {
+        let repos = state.repos.read().unwrap();
+        repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0)
+    };
+
     let mut runs = state.workflow_runs.write().unwrap();
     if let Some(pos) = runs.iter().position(|r| r.id == run_id) {
         runs.remove(pos);
@@ -109,7 +119,7 @@ pub async fn delete_workflow_run(
         let activity_id = (activities.len() as u64) + 1;
         activities.push(Activity {
             id: activity_id,
-            repo_id: 0, // Mock
+            repo_id,
             user_id: 1, // Mock
             user_name: "admin".to_string(),
             op_type: "delete_workflow_run".to_string(),
