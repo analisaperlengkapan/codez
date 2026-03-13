@@ -36,7 +36,7 @@ pub async fn trigger_workflow(
     }
 
     let mut runs = state.workflow_runs.write().unwrap();
-    let run_id = (runs.len() as u64) + 1;
+    let run_id = runs.iter().map(|r| r.id).max().unwrap_or(0) + 1;
     let run = WorkflowRun {
         id: run_id,
         workflow_id: id,
@@ -50,7 +50,7 @@ pub async fn trigger_workflow(
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
-        repo_id: 0, // Should look up repo ID
+        repo_id,
         user_id: 1, // mock admin
         user_name: "admin".to_string(),
         op_type: "trigger_workflow".to_string(),
