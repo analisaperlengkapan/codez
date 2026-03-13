@@ -6,7 +6,7 @@ use shared::{
     Issue, PullRequest, Release, Label, Milestone, Comment, Notification, PublicKey, Webhook,
     Repository, User, Activity, Commit, LfsLock, Topic, Package, Team, Project, ProjectColumn, ProjectCard, Review,
     Organization, OrgMember, WorkflowRun, WebhookDelivery, Discussion, DiscussionComment, GpgKey, OAuth2Application,
-    CommitStatus
+    CommitStatus, ActionWorkflow
 };
 use std::sync::{Arc, RwLock, Mutex};
 use std::collections::HashMap;
@@ -42,6 +42,7 @@ pub struct AppState {
     pub reviews: Arc<RwLock<Vec<Review>>>,
     pub orgs: Arc<RwLock<Vec<Organization>>>,
     pub org_members: Arc<RwLock<Vec<OrgMember>>>,
+    pub workflows: Arc<RwLock<Vec<ActionWorkflow>>>,
     pub workflow_runs: Arc<RwLock<Vec<WorkflowRun>>>,
     pub webhook_deliveries: Arc<RwLock<Vec<WebhookDelivery>>>,
     pub protected_branches: Arc<RwLock<Vec<shared::ProtectedBranch>>>,
@@ -271,6 +272,14 @@ pub fn api_router() -> Router {
             }
         ])),
         org_members: Arc::new(RwLock::new(vec![])),
+        workflows: Arc::new(RwLock::new(vec![
+            ActionWorkflow {
+                id: 1,
+                repo_id: 1,
+                name: "CI".to_string(),
+                status: "active".to_string(),
+            }
+        ])),
         workflow_runs: Arc::new(RwLock::new(vec![])),
         webhook_deliveries: Arc::new(RwLock::new(vec![])),
         protected_branches: Arc::new(RwLock::new(vec![])),
@@ -344,6 +353,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/user/feeds", get(list_feeds))
         .route("/api/v1/repos/:owner/:repo/actions/workflows", get(list_workflows))
         .route("/api/v1/repos/:owner/:repo/actions/workflows/:id/runs", get(list_workflow_runs).post(trigger_workflow))
+        .route("/api/v1/repos/:owner/:repo/actions/runs/:run_id", patch(update_workflow_run).delete(delete_workflow_run))
         .route("/api/v1/packages/:owner", get(list_packages).post(upload_package))
         .route("/api/v1/repos/:owner/:repo/secrets", get(list_secrets).post(create_secret))
         .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))
