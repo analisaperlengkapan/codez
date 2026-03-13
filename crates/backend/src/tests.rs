@@ -80,6 +80,7 @@ mod tests {
         let payload = CreateIssueOption {
             title: "Test Bug".to_string(),
             body: Some("Description".to_string()),
+            milestone: None,
         };
 
         let response = app.clone()
@@ -248,6 +249,7 @@ mod tests {
             let payload = CreateIssueOption {
                 title: format!("Issue {}", i),
                 body: None,
+                milestone: None,
             };
             let _ = app.clone()
                 .oneshot(
@@ -484,6 +486,7 @@ mod tests {
         let payload = CreateIssueOption {
             title: "Assigned Task".to_string(),
             body: None,
+            milestone: None,
         };
         let response = app.clone()
             .oneshot(
@@ -697,7 +700,7 @@ mod tests {
 
         // 6. Create Card Linked to Issue
         // Create Issue first to check if we can link it
-        let issue_payload = CreateIssueOption { title: "Issue for card".to_string(), body: None };
+        let issue_payload = CreateIssueOption { title: "Issue for card".to_string(), body: None, milestone: None };
         let _ = app.clone()
             .oneshot(
                 Request::builder()
@@ -907,6 +910,7 @@ mod tests {
         let issue_payload = CreateIssueOption {
             title: "Webhook Test Issue".to_string(),
             body: None,
+            milestone: None,
         };
         let _ = app.clone()
             .oneshot(
@@ -978,6 +982,7 @@ async fn test_webhook_ssrf_prevention() {
     let issue_payload = CreateIssueOption {
         title: "SSRF Test Issue".to_string(),
         body: None,
+        milestone: None,
     };
     let _ = app.clone()
         .oneshot(
@@ -1438,7 +1443,7 @@ async fn test_webhook_ssrf_prevention() {
 
         // 1. Create 2 Issues
         for i in 1..=2 {
-            let payload = CreateIssueOption { title: format!("Issue {}", i), body: None };
+            let payload = CreateIssueOption { title: format!("Issue {}", i), body: None, milestone: None };
             let _ = app.clone()
                 .oneshot(
                     Request::builder()

@@ -474,23 +474,30 @@ pub fn IssueList() -> impl IntoView {
     let (search_query, set_search_query) = create_signal("".to_string());
     let (label_filter, set_label_filter) = create_signal("".to_string());
     let (assignee_filter, set_assignee_filter) = create_signal("".to_string());
+    let query_map = use_query_map();
+    let initial_milestone = query_map.with(|q| q.get("milestone_id").cloned().unwrap_or_default());
+    let (milestone_filter, set_milestone_filter) = create_signal(initial_milestone);
     let (sort, set_sort) = create_signal("created".to_string());
     let (direction, set_direction) = create_signal("desc".to_string());
     let (page, set_page) = create_signal(1);
     let (show_new_issue, set_show_new_issue) = create_signal(false);
     let (new_issue_title, set_new_issue_title) = create_signal("".to_string());
     let (new_issue_body, set_new_issue_body) = create_signal("".to_string());
+    let (new_issue_milestone, set_new_issue_milestone) = create_signal("".to_string());
     let (refresh, set_refresh) = create_signal(0);
 
     let issues = create_resource(
-        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get(), sort.get(), direction.get(), page.get(), refresh.get()),
-        |(o, r, s, q, l, a, srt, dir, p, _)| async move {
+        move || (owner(), repo_name(), state_filter.get(), search_query.get(), label_filter.get(), assignee_filter.get(), milestone_filter.get(), sort.get(), direction.get(), page.get(), refresh.get()),
+        |(o, r, s, q, l, a, m, srt, dir, p, _)| async move {
             let mut url = format!("/api/v1/repos/{}/{}/issues?state={}&q={}&sort={}&direction={}&page={}&limit=10", o, r, s, q, srt, dir, p);
             if !l.is_empty() {
                 url.push_str(&format!("&label_id={}", l));
             }
             if !a.is_empty() {
                 url.push_str(&format!("&assignee_username={}", a));
+            }
+            if !m.is_empty() {
+                url.push_str(&format!("&milestone_id={}", m));
             }
             Request::get(&url)
                 .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
@@ -516,11 +523,22 @@ pub fn IssueList() -> impl IntoView {
         }
     );
 
+    let milestones = create_resource(
+        move || (owner(), repo_name()),
+        |(o, r)| async move {
+            Request::get(&format!("/api/v1/repos/{}/{}/milestones", o, r))
+                .send().await.unwrap().json::<Vec<shared::Milestone>>().await.unwrap_or_default()
+        }
+    );
+
     let on_create_issue = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
+        let ms_val = new_issue_milestone.get();
+        let milestone = if ms_val.is_empty() { None } else { ms_val.parse::<u64>().ok() };
         let payload = CreateIssueOption {
             title: new_issue_title.get(),
             body: Some(new_issue_body.get()),
+            milestone,
         };
         let o = owner();
         let r = repo_name();
@@ -548,6 +566,16 @@ pub fn IssueList() -> impl IntoView {
                     <form on:submit=on_create_issue style="background: #f9f9f9; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd;">
                         <input type="text" placeholder="Title" prop:value=new_issue_title on:input=move |ev| set_new_issue_title.set(event_target_value(&ev)) style="display: block; width: 100%; margin-bottom: 5px;" required />
                         <textarea placeholder="Body" prop:value=new_issue_body on:input=move |ev| set_new_issue_body.set(event_target_value(&ev)) style="display: block; width: 100%; margin-bottom: 5px;" rows="5"></textarea>
+                        <select on:change=move |ev| set_new_issue_milestone.set(event_target_value(&ev)) style="display: block; width: 100%; margin-bottom: 5px;">
+                            <option value="">"No Milestone"</option>
+                            <Suspense fallback=move || view! { <option>"Loading..."</option> }>
+                                {move || milestones.get().map(|list| {
+                                    list.into_iter().map(|m| {
+                                        view! { <option value=m.id.to_string()>{m.title}</option> }
+                                    }).collect_view()
+                                })}
+                            </Suspense>
+                        </select>
                         <button type="submit">"Create Issue"</button>
                     </form>
                 }.into_view()
@@ -561,6 +589,17 @@ pub fn IssueList() -> impl IntoView {
                 <button on:click=move |_| set_state_filter.set("all".to_string()) class:active=move || state_filter.get() == "all">"All"</button>
 
                 <input type="text" placeholder="Search issues..." prop:value=search_query on:input=move |ev| set_search_query.set(event_target_value(&ev)) />
+
+                <select on:change=move |ev| set_milestone_filter.set(event_target_value(&ev))>
+                    <option value="">"Milestone"</option>
+                    <Suspense fallback=move || view! { <option>"Loading..."</option> }>
+                        {move || milestones.get().map(|list| {
+                            list.into_iter().map(|m| {
+                                view! { <option value=m.id.to_string() selected=move || milestone_filter.get() == m.id.to_string()>{m.title}</option> }
+                            }).collect_view()
+                        })}
+                    </Suspense>
+                </select>
 
                 <Suspense fallback=move || view! { <span>"Loading labels..."</span> }>
                     {move || labels.get().map(|list| view! {

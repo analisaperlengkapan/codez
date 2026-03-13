@@ -59,6 +59,7 @@ pub struct IssueFilterOptions {
     pub q: Option<String>,     // search query
     pub label_id: Option<u64>,
     pub assignee_username: Option<String>,
+    pub milestone_id: Option<u64>,
     pub page: Option<u64>,
     pub limit: Option<u64>,
     pub sort: Option<String>, // "created", "updated", "comments"
@@ -145,6 +146,7 @@ pub struct Issue {
 pub struct CreateIssueOption {
     pub title: String,
     pub body: Option<String>,
+    pub milestone: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1336,6 +1338,7 @@ mod tests {
         let opts = CreateIssueOption {
             title: "New Bug".to_string(),
             body: Some("Description".to_string()),
+            milestone: None,
         };
         assert_eq!(opts.title, "New Bug");
 
@@ -1346,6 +1349,20 @@ mod tests {
             milestone_id: None,
         };
         assert_eq!(update.title, Some("Updated".to_string()));
+
+        let filter = IssueFilterOptions {
+            state: Some("open".to_string()),
+            q: Some("bug".to_string()),
+            label_id: Some(1),
+            assignee_username: Some("admin".to_string()),
+            milestone_id: Some(2),
+            page: Some(1),
+            limit: Some(10),
+            sort: Some("created".to_string()),
+            direction: Some("desc".to_string()),
+        };
+        assert_eq!(filter.state.unwrap(), "open");
+        assert_eq!(filter.milestone_id.unwrap(), 2);
     }
 
     #[test]

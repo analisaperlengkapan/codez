@@ -39,5 +39,44 @@ test.describe('Issues Feature', () => {
 
     // Verify comment appears in the UI
     await expect(page.getByText(commentText)).toBeVisible();
+
+    // Now test filtering by milestone
+    // Create a milestone first via API
+    const milestoneResponse = await page.request.post('http://127.0.0.1:3000/api/v1/repos/admin/codeza/milestones', {
+      data: {
+        title: 'Filter Test Milestone ' + Date.now(),
+        state: 'open'
+      }
+    });
+    expect(milestoneResponse.ok()).toBeTruthy();
+    const milestone = await milestoneResponse.json();
+
+    // Create an issue assigned to this milestone via API
+    const filteredIssueTitle = 'Milestone Filter Issue ' + Date.now();
+    const issueResponse = await page.request.post('http://127.0.0.1:3000/api/v1/repos/admin/codeza/issues', {
+      data: {
+        title: filteredIssueTitle,
+        body: 'Testing filtering',
+        milestone: milestone.id
+      }
+    });
+    expect(issueResponse.ok()).toBeTruthy();
+
+    // Create another issue not assigned to this milestone via API
+    const unfilteredIssueTitle = 'Unfiltered Issue ' + Date.now();
+    const unfilteredIssueResponse = await page.request.post('http://127.0.0.1:3000/api/v1/repos/admin/codeza/issues', {
+      data: {
+        title: unfilteredIssueTitle,
+        body: 'Testing filtering'
+      }
+    });
+    expect(unfilteredIssueResponse.ok()).toBeTruthy();
+
+    // Navigate back to the issues page, applying the milestone filter
+    await page.goto(`http://127.0.0.1:8080/repos/admin/codeza/issues?milestone_id=${milestone.id}`);
+
+    // Verify only the issue with the milestone is listed
+    await expect(page.getByRole('link', { name: filteredIssueTitle }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: unfilteredIssueTitle }).first()).toBeHidden();
   });
 });

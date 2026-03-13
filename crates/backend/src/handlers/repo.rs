@@ -155,6 +155,9 @@ pub async fn list_issues(State(state): State<AppState>, Path((owner, repo_name))
     if let Some(assignee) = filter.assignee_username {
         filtered_issues.retain(|i| i.assignees.iter().any(|u| u.username == assignee));
     }
+    if let Some(milestone_id) = filter.milestone_id {
+        filtered_issues.retain(|i| i.milestone.as_ref().map(|m| m.id) == Some(milestone_id));
+    }
 
     // Sort issues
     if let Some(sort) = &filter.sort {
@@ -218,6 +221,13 @@ pub async fn create_issue(
         }));
     };
 
+    let milestone = if let Some(mid) = payload.milestone {
+        let milestones = state.milestones.read().unwrap();
+        milestones.iter().find(|m| m.id == mid).cloned()
+    } else {
+        None
+    };
+
     let mut issues = state.issues.write().unwrap();
     let id = (issues.len() as u64) + 1;
     let issue = Issue {
@@ -230,7 +240,7 @@ pub async fn create_issue(
         user: User::new(1, "admin".to_string(), None),
         assignees: vec![],
         labels: vec![],
-        milestone: None,
+        milestone,
     };
     issues.push(issue.clone());
 
