@@ -9,7 +9,7 @@ test.describe('Repository Topics Feature', () => {
     await expect(page.getByRole('heading', { name: 'Create New Repository' })).toBeVisible();
 
     // Fill in the repository details
-    const repoName = 'test-topics-repo';
+    const repoName = 'test-topics-repo-' + Date.now();
     await page.getByPlaceholder('Repository Name').fill(repoName);
     await page.getByPlaceholder('Description').fill('A repository to test topics feature.');
 
