@@ -19,7 +19,7 @@ test.describe('Branch Protection Feature', () => {
     await page.getByPlaceholder('e.g. main, release-*').fill(branchName);
 
     // Check 'Enable Push'
-    await page.getByLabel('Enable Push').check();
+    await page.getByLabel('Enable Push', { exact: true }).check();
 
     // Fill 'Required Status Checks'
     await page.getByPlaceholder('e.g. ci/test, security-scan').fill('ci/test, lint');
