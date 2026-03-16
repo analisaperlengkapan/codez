@@ -1,5 +1,5 @@
 use axum::{
-    routing::{get, post, delete, patch},
+    routing::{get, post, delete, patch, put},
     Router,
 };
 use shared::{
@@ -119,6 +119,7 @@ pub fn api_router() -> Router {
                 assignees: vec![],
                 labels: vec![],
                 milestone: None,
+                 is_locked: false,
             }
         ])),
         users: Arc::new(RwLock::new(vec![
@@ -320,6 +321,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/orgs/:org", get(get_org))
         .route("/api/v1/orgs/:org/repos", get(list_org_repos))
         .route("/api/v1/repos/:owner/:repo/issues/:index", get(get_issue).patch(update_issue))
+        .route("/api/v1/repos/:owner/:repo/issues/:index/lock", put(lock_issue).delete(unlock_issue))
         .route("/api/v1/repos/:owner/:repo/issues/:index/comments", get(list_comments).post(create_comment))
         .route("/api/v1/repos/:owner/:repo/issues/comments/:id", patch(update_comment).delete(delete_comment))
         .route("/api/v1/repos/:owner/:repo/pulls/:index/merge", post(merge_pull))

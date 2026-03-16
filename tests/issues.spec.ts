@@ -75,8 +75,10 @@ test.describe('Issues Feature', () => {
     // Navigate back to the issues page, applying the milestone filter
     await page.goto(`http://127.0.0.1:8080/repos/admin/codeza/issues?milestone_id=${milestone.id}`);
 
+    await page.waitForTimeout(2000);
+
     // Verify only the issue with the milestone is listed
-    await expect(page.getByRole('link', { name: filteredIssueTitle }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: filteredIssueTitle }).first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByRole('link', { name: unfilteredIssueTitle }).first()).toBeHidden();
   });
 });

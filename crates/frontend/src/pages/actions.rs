@@ -105,8 +105,8 @@ pub fn WorkflowRunsList() -> impl IntoView {
                             let status = r.status.clone();
                             let is_active = status == "queued" || status == "in_progress";
                             let run_id = r.id;
-                            let on_cancel = { let on_cancel_run = on_cancel_run.clone(); move |_| on_cancel_run(run_id) };
-                            let on_delete = { let on_delete_run = on_delete_run.clone(); move |_| on_delete_run(run_id) };
+                                    let on_cancel = { move |_| on_cancel_run(run_id) };
+                                    let on_delete = { move |_| on_delete_run(run_id) };
                             view! {
                                 <li class="run-item" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                                     <span>"Run #" {r.id} " - " <span class="run-status">{r.status}</span> " (" {r.created_at} ")"</span>

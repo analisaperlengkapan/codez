@@ -543,7 +543,7 @@ pub fn IssueList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/issues", o, r))
+            let res = Request::post(&format!("/api/v1/repos/{}/{}/issues", o, r))
                 .json(&payload).unwrap().send().await;
             set_new_issue_title.set("".to_string());
             set_new_issue_body.set("".to_string());
@@ -698,6 +698,28 @@ pub fn IssueDetail() -> impl IntoView {
             ]
         }
     );
+
+    let on_lock = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        spawn_local(async move {
+            let _ = Request::put(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
+
+    let on_unlock = move |_| {
+        let o = owner();
+        let r = repo_name();
+        let i = index();
+        spawn_local(async move {
+            let _ = Request::delete(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i))
+                .send().await;
+            set_trigger_refresh.update(|n| *n += 1);
+        });
+    };
 
     let on_submit_comment = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -919,6 +941,11 @@ pub fn IssueDetail() -> impl IntoView {
                                 } else {
                                      view! { <span></span> }.into_view()
                                 }}
+                                {if i.is_locked {
+                                    view! { <button on:click=on_unlock style="margin-left: 5px; color: red;">"Unlock Conversation"</button> }.into_view()
+                                } else {
+                                    view! { <button on:click=on_lock style="margin-left: 5px; color: red;">"Lock Conversation"</button> }.into_view()
+                                }}
                             </div>
                             <div class="issue-container" style="display: flex;">
                                 <div class="issue-main" style="flex: 3;">
@@ -1069,14 +1096,28 @@ pub fn IssueDetail() -> impl IntoView {
                     })}
                 </Suspense>
 
-                <form on:submit=on_submit_comment class="comment-form">
-                    <textarea
-                        prop:value=new_comment
-                        on:input=move |ev| set_new_comment.set(event_target_value(&ev))
-                        placeholder="Leave a comment"
-                    ></textarea>
-                    <button type="submit">"Comment"</button>
-                </form>
+                {
+                    let issue_for_form = issue.clone();
+                    move || {
+                        match issue_for_form.get() {
+                            Some(Some(i)) if i.is_locked => {
+                                view! { <p style="color: red; font-weight: bold;">"This conversation is locked"</p> }.into_view()
+                            },
+                            _ => {
+                                view! {
+                                    <form on:submit=on_submit_comment class="comment-form">
+                                        <textarea
+                                            prop:value=new_comment
+                                            on:input=move |ev| set_new_comment.set(event_target_value(&ev))
+                                            placeholder="Leave a comment"
+                                        ></textarea>
+                                        <button type="submit">"Comment"</button>
+                                    </form>
+                                }.into_view()
+                            }
+                        }
+                    }
+                }
             </div>
         </div>
     }

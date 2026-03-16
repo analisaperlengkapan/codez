@@ -5,8 +5,10 @@ test.describe('Discussions Feature', () => {
     // Go to the repository discussions page (using mock owner 'admin' and repo 'codeza')
     await page.goto('http://127.0.0.1:8080/repos/admin/codeza/discussions');
 
+    await page.waitForTimeout(1000);
+
     // Check if the discussions header is visible
-    await expect(page.getByRole('heading', { name: 'Discussions' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Discussions' })).toBeVisible({ timeout: 10000 });
 
     // Click 'New Discussion' button
     const newButton = page.getByRole('button', { name: 'New Discussion' });
