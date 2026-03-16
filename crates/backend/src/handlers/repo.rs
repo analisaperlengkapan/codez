@@ -217,7 +217,7 @@ pub async fn create_issue(
     } else {
         return (StatusCode::NOT_FOUND, Json(Issue {
             id: 0, repo_id: 0, number: 0, title: "".to_string(), body: None, state: "".to_string(),
-            user: User::new(0, "".to_string(), None), assignees: vec![], labels: vec![], milestone: None
+            user: User::new(0, "".to_string(), None), assignees: vec![], labels: vec![], milestone: None, is_locked: false
         }));
     };
 
@@ -241,6 +241,7 @@ pub async fn create_issue(
         assignees: vec![],
         labels: vec![],
         milestone,
+        is_locked: false,
     };
     issues.push(issue.clone());
 
@@ -592,7 +593,13 @@ pub async fn create_comment(
             id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string(), reactions: vec![]
         }));
     }
-    let issue_id = issue.unwrap().id;
+    let issue_ref = issue.unwrap();
+    if issue_ref.is_locked {
+         return (StatusCode::FORBIDDEN, Json(Comment {
+            id: 0, issue_id: 0, body: "".to_string(), user: User::new(0, "".to_string(), None), created_at: "".to_string(), reactions: vec![]
+        }));
+    }
+    let issue_id = issue_ref.id;
 
     let body = payload.body;
     let mut comments = state.comments.write().unwrap();
@@ -649,6 +656,9 @@ pub async fn update_comment(
     if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
         if let Some(issue) = issues.iter().find(|i| i.id == comment.issue_id) {
             if issue.repo_id == repo_id {
+                if issue.is_locked {
+                    return (StatusCode::FORBIDDEN, Json(None));
+                }
                 // Check for mentions
                 let mentions = process_mentions(&payload.body);
                 if !mentions.is_empty() {
@@ -677,6 +687,38 @@ pub async fn update_comment(
     (StatusCode::NOT_FOUND, Json(None))
 }
 
+pub async fn lock_issue(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let mut issues = state.issues.write().unwrap();
+    if let Some(issue) = issues.iter_mut().find(|i| i.repo_id == repo_id && i.id == index) {
+        issue.is_locked = true;
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+pub async fn unlock_issue(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>
+) -> StatusCode {
+    let repos = state.repos.read().unwrap();
+    let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
+
+    let mut issues = state.issues.write().unwrap();
+    if let Some(issue) = issues.iter_mut().find(|i| i.repo_id == repo_id && i.id == index) {
+        issue.is_locked = false;
+        StatusCode::OK
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
 pub async fn delete_comment(
     State(state): State<AppState>,
     Path((owner, repo_name, id)): Path<(String, String, u64)>
@@ -690,6 +732,9 @@ pub async fn delete_comment(
     if let Some(pos) = comments.iter().position(|c| c.id == id) {
         if let Some(issue) = issues.iter().find(|i| i.id == comments[pos].issue_id) {
             if issue.repo_id == repo_id {
+                if issue.is_locked {
+                    return StatusCode::FORBIDDEN;
+                }
                 comments.remove(pos);
                 return StatusCode::NO_CONTENT;
             }
@@ -1469,6 +1514,7 @@ pub async fn migrate_repo(
             assignees: vec![],
             labels: vec![],
             milestone: None,
+            is_locked: false,
         });
         drop(issues);
 
