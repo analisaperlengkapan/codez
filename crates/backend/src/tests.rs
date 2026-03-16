@@ -10,7 +10,7 @@ mod tests {
         CreateRepoOption, Repository, Activity, CreateIssueOption, Issue, UpdateFileOption, FileEntry, UpdateIssueOption,
         CreateCommentOption, Comment, UpdateCommentOption, CreatePullRequestOption, UpdatePullRequestOption, PullRequest,
         CreateProjectOption, Project, CreateProjectColumnOption, ProjectColumn, CreateProjectCardOption, ProjectCard, MoveProjectCardOption,
-        CreateProtectedBranchOption, CreateStatusOption, CommitStatus, MergePullRequestOption
+        CreateProtectedBranchOption, CreateStatusOption, MergePullRequestOption
     };
 
     #[tokio::test]

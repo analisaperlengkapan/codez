@@ -7,7 +7,7 @@ use shared::{
     Milestone, CreateMilestoneOption, MilestoneStats, WikiPage, CreateWikiPageOption,
     CodeSearchResult, Collaborator, MigrateRepoOption, TransferRepoOption,
     Webhook, CreateHookOption, Secret, CreateSecretOption, DeployKey, CreateKeyOption,
-    LanguageStat, ProtectedBranch, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
+    LanguageStat, ProtectedBranch, CreateProtectedBranchOption, LfsLock, RepoTopicOptions, LicenseTemplate, GitignoreTemplate, UpdateFileOption,
     UpdateIssueOption, UpdatePullRequestOption, Review, CreateReviewOption, WebhookDelivery, CreateIssueOption,
     RepoUserStatus, CommitStatus, RepoPulseStats
 };
@@ -1097,7 +1097,7 @@ pub fn IssueDetail() -> impl IntoView {
                 </Suspense>
 
                 {
-                    let issue_for_form = issue.clone();
+                    let issue_for_form = issue;
                     move || {
                         match issue_for_form.get() {
                             Some(Some(i)) if i.is_locked => {
@@ -1803,43 +1803,135 @@ pub fn RepoSettings() -> impl IntoView {
 }
 
 #[component]
+pub fn CreateProtectedBranch(owner: Signal<String>, repo: Signal<String>, on_success: Action<(), ()>) -> impl IntoView {
+    let (name, set_name) = create_signal(String::new());
+    let (enable_push, set_enable_push) = create_signal(false);
+    let (enable_force_push, set_enable_force_push) = create_signal(false);
+    let (status_checks, set_status_checks) = create_signal(String::new());
+
+    let create_action = create_action(move |_: &()| {
+        let name_val = name.get();
+        let enable_push_val = enable_push.get();
+        let enable_force_push_val = enable_force_push.get();
+        let status_checks_str = status_checks.get();
+
+        let req_status_checks = if status_checks_str.trim().is_empty() {
+            None
+        } else {
+            Some(status_checks_str.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        };
+
+        let opt = CreateProtectedBranchOption {
+            name: name_val,
+            enable_push: enable_push_val,
+            enable_force_push: enable_force_push_val,
+            required_status_checks: req_status_checks,
+        };
+
+        let o = owner.get();
+        let r = repo.get();
+        let on_success_clone = on_success;
+
+        async move {
+            let res = Request::post(&format!("/api/v1/repos/{}/{}/branch_protections", o, r))
+                .json(&opt).unwrap()
+                .send().await.unwrap();
+
+            if res.ok() {
+                on_success_clone.dispatch(());
+                set_name.set(String::new());
+                set_enable_push.set(false);
+                set_enable_force_push.set(false);
+                set_status_checks.set(String::new());
+            } else {
+                window().alert_with_message("Failed to create branch protection").unwrap();
+            }
+        }
+    });
+
+    view! {
+        <div class="box create-protected-branch">
+            <h4>"Add Branch Protection Rule"</h4>
+            <form on:submit=move |ev| {
+                ev.prevent_default();
+                create_action.dispatch(());
+            }>
+                <div class="form-group">
+                    <label>"Branch Name Pattern"</label>
+                    <input type="text" placeholder="e.g. main, release-*" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) required />
+                </div>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" prop:checked=enable_push on:change=move |ev| set_enable_push.set(event_target_checked(&ev)) />
+                        " Enable Push"
+                    </label>
+                </div>
+                <div class="form-group checkbox-group">
+                    <label>
+                        <input type="checkbox" prop:checked=enable_force_push on:change=move |ev| set_enable_force_push.set(event_target_checked(&ev)) />
+                        " Enable Force Push"
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>"Required Status Checks (comma separated)"</label>
+                    <input type="text" placeholder="e.g. ci/test, security-scan" prop:value=status_checks on:input=move |ev| set_status_checks.set(event_target_value(&ev)) />
+                </div>
+                <button type="submit" class="btn primary">"Create Rule"</button>
+            </form>
+        </div>
+    }
+}
+
+#[component]
 pub fn ProtectedBranchList() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
+    let owner_sig = Signal::derive(owner);
+    let repo_sig = Signal::derive(repo_name);
+
+    let (refetch_trigger, set_refetch_trigger) = create_signal(0);
 
     let branches = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
+        move || (owner(), repo_name(), refetch_trigger.get()),
+        |(o, r, _)| async move {
             Request::get(&format!("/api/v1/repos/{}/{}/branch_protections", o, r))
                 .send().await.unwrap().json::<Vec<ProtectedBranch>>().await.unwrap_or_default()
         }
     );
 
+    let on_success = create_action(move |_: &()| {
+        set_refetch_trigger.update(|v| *v += 1);
+        async {}
+    });
+
     view! {
-        <div class="protected-branches">
-            <h3>"Protected Branches"</h3>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
-                    {move || branches.get().map(|list| view! {
-                        <For each=move || list.clone() key=|b| b.name.clone() children=move |b| {
-                            view! {
-                                <li>
-                                    {b.name}
-                                    " (Push: " {b.enable_push}
-                                    ", Force: " {b.enable_force_push}
-                                    {if !b.required_status_checks.is_empty() {
-                                        format!(", Checks: {}", b.required_status_checks.join(", "))
-                                    } else {
-                                        "".to_string()
-                                    }}
-                                    ")"
-                                </li>
-                            }
-                        }/>
-                    })}
-                </Suspense>
-            </ul>
+        <div class="protected-branches-page">
+            <CreateProtectedBranch owner=owner_sig repo=repo_sig on_success=on_success/>
+            <div class="protected-branches">
+                <h3>"Protected Branches"</h3>
+                <ul>
+                    <Suspense fallback=move || view! { <li>"Loading..."</li> }>
+                        {move || branches.get().map(|list| view! {
+                            <For each=move || list.clone() key=|b| b.name.clone() children=move |b| {
+                                view! {
+                                    <li>
+                                        {b.name}
+                                        " (Push: " {b.enable_push}
+                                        ", Force: " {b.enable_force_push}
+                                        {if !b.required_status_checks.is_empty() {
+                                            format!(", Checks: {}", b.required_status_checks.join(", "))
+                                        } else {
+                                            "".to_string()
+                                        }}
+                                        ")"
+                                    </li>
+                                }
+                            }/>
+                        })}
+                    </Suspense>
+                </ul>
+            </div>
         </div>
     }
 }
