@@ -16,11 +16,8 @@ def test_final():
         print("\nTesting POST /user/repos...")
         repo_payload = {"name": repo_name, "auto_init": True, "private": False}
         r = requests.post(f"{BASE_URL}/user/repos", json=repo_payload)
-        # It might fail if already exists from previous runs, handle that
-        if r.status_code != 201 and r.status_code != 409:
-            print(f"Failed to create repo: {r.status_code}")
-            sys.exit(1)
-        print("Repo created/exists")
+        r.raise_for_status()
+        print("Repo created")
 
         # 2. Update Topics
         print(f"\nTesting PUT /repos/{repo_owner}/{repo_name}/topics...")
