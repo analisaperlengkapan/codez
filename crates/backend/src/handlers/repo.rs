@@ -695,7 +695,7 @@ pub async fn lock_issue(
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
     let mut issues = state.issues.write().unwrap();
-    if let Some(issue) = issues.iter_mut().find(|i| i.repo_id == repo_id && i.number == index) {
+    if let Some(issue) = issues.iter_mut().find(|i| i.repo_id == repo_id && i.id == index) {
         issue.is_locked = true;
         StatusCode::OK
     } else {
@@ -711,7 +711,7 @@ pub async fn unlock_issue(
     let repo_id = repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0);
 
     let mut issues = state.issues.write().unwrap();
-    if let Some(issue) = issues.iter_mut().find(|i| i.repo_id == repo_id && i.number == index) {
+    if let Some(issue) = issues.iter_mut().find(|i| i.repo_id == repo_id && i.id == index) {
         issue.is_locked = false;
         StatusCode::OK
     } else {
