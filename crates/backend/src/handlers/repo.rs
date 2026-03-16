@@ -656,6 +656,9 @@ pub async fn update_comment(
     if let Some(comment) = comments.iter_mut().find(|c| c.id == id) {
         if let Some(issue) = issues.iter().find(|i| i.id == comment.issue_id) {
             if issue.repo_id == repo_id {
+                if issue.is_locked {
+                    return (StatusCode::FORBIDDEN, Json(None));
+                }
                 // Check for mentions
                 let mentions = process_mentions(&payload.body);
                 if !mentions.is_empty() {
@@ -729,6 +732,9 @@ pub async fn delete_comment(
     if let Some(pos) = comments.iter().position(|c| c.id == id) {
         if let Some(issue) = issues.iter().find(|i| i.id == comments[pos].issue_id) {
             if issue.repo_id == repo_id {
+                if issue.is_locked {
+                    return StatusCode::FORBIDDEN;
+                }
                 comments.remove(pos);
                 return StatusCode::NO_CONTENT;
             }

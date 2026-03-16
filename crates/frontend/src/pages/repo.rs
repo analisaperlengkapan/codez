@@ -543,7 +543,7 @@ pub fn IssueList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/repos/{}/{}/issues", o, r))
+            let _ = Request::post(&format!("/api/v1/repos/{}/{}/issues", o, r))
                 .json(&payload).unwrap().send().await;
             set_new_issue_title.set("".to_string());
             set_new_issue_body.set("".to_string());
