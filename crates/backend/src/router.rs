@@ -58,6 +58,7 @@ pub struct AppState {
     pub oauth2_apps: Arc<Mutex<Vec<OAuth2Application>>>,
     pub commit_statuses: Arc<RwLock<Vec<CommitStatus>>>,
     pub wikis: Arc<RwLock<HashMap<(u64, String), shared::WikiPage>>>,
+    pub audit_logs: Arc<RwLock<Vec<shared::AuditLog>>>,
 }
 
 pub fn api_router_with_state() -> (Router, AppState) {
@@ -306,6 +307,18 @@ fn build_app_state() -> AppState {
         oauth2_apps: Arc::new(Mutex::new(vec![])),
         commit_statuses: Arc::new(RwLock::new(vec![])),
         wikis: Arc::new(RwLock::new(wikis_map)),
+        audit_logs: Arc::new(RwLock::new(vec![
+            shared::AuditLog {
+                id: 1,
+                actor: user.clone(),
+                action: "org.create".to_string(),
+                target_type: "org".to_string(),
+                target_name: "codeza-org".to_string(),
+                details: "Created organization codeza-org with Owner role".to_string(),
+                ip_address: Some("127.0.0.1".to_string()),
+                created_at: "2023-01-01T00:00:00Z".to_string(),
+            }
+        ])),
     };
     state
 }
@@ -393,7 +406,8 @@ fn build_router(state: AppState) -> Router {
         .route("/api/v1/users/:username/follow", post(follow_user).delete(unfollow_user))
         .route("/api/v1/users/:username/heatmap", get(get_user_heatmap))
         .route("/api/v1/orgs/:org/members", get(list_org_members))
-        .route("/api/v1/orgs/:org/members/:username", post(add_org_member).delete(remove_org_member))
+        .route("/api/v1/orgs/:org/members/:username", post(add_org_member).delete(remove_org_member).put(update_org_member_role))
+        .route("/api/v1/orgs/:org/audit-logs", get(list_org_audit_logs))
         .route("/api/v1/licenses", get(list_licenses))
         .route("/api/v1/gitignore/templates", get(list_gitignores))
         .route("/api/v1/repos/:owner/:repo/issues/:index/assignees", post(add_issue_assignee))

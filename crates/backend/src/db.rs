@@ -70,6 +70,18 @@ pub async fn init_postgres_db(state: &AppState) {
             logs_json TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id BIGINT PRIMARY KEY,
+            actor_id BIGINT NOT NULL,
+            actor_username TEXT NOT NULL,
+            action TEXT NOT NULL,
+            target_type TEXT NOT NULL,
+            target_name TEXT NOT NULL,
+            details TEXT NOT NULL,
+            ip_address TEXT,
+            created_at TEXT NOT NULL
+        );
     ").await;
 
     // Load users from DB if existing

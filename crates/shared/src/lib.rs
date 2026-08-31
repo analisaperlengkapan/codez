@@ -995,6 +995,23 @@ pub struct SecurityScanReport {
     pub scanned_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AuditLog {
+    pub id: u64,
+    pub actor: User,
+    pub action: String, // e.g. "org.member_role_update", "repo.transfer", "secret.create"
+    pub target_type: String, // "org", "repo", "user", "secret"
+    pub target_name: String,
+    pub details: String,
+    pub ip_address: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateMemberRoleOption {
+    pub role: String, // "owner", "maintainer", "developer", "reporter", "guest"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1440,6 +1457,23 @@ mod tests {
     fn test_repo_action() {
         let act = RepoActionOption { action: "star".to_string() };
         assert_eq!(act.action, "star");
+    }
+
+    #[test]
+    fn test_audit_log_struct() {
+        let user = User::new(1, "admin".to_string(), None);
+        let log = AuditLog {
+            id: 1,
+            actor: user,
+            action: "org.member_role_update".to_string(),
+            target_type: "org".to_string(),
+            target_name: "codeza-org".to_string(),
+            details: "Changed role of user 'jules' to maintainer".to_string(),
+            ip_address: Some("127.0.0.1".to_string()),
+            created_at: "now".to_string(),
+        };
+        assert_eq!(log.action, "org.member_role_update");
+        assert_eq!(log.target_name, "codeza-org");
     }
 
     #[test]

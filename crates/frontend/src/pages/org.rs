@@ -1,7 +1,7 @@
 use leptos::*;
 use gloo_net::http::Request;
 use leptos_router::*;
-use shared::{Organization, Repository, Team, OrgMember, CreateOrgOption, CreateTeamOption};
+use shared::{Organization, Repository, Team, OrgMember, CreateOrgOption, CreateTeamOption, AuditLog, UpdateMemberRoleOption};
 
 #[component]
 pub fn OrgProfile() -> impl IntoView {
@@ -87,6 +87,9 @@ pub fn OrgProfile() -> impl IntoView {
                             <button on:click=move |_| set_active_tab.set("teams".to_string())>
                                 "Teams"
                             </button>
+                            <button on:click=move |_| set_active_tab.set("audit".to_string())>
+                                "📋 Audit Logs"
+                            </button>
                         </div>
                         <div class="org-content" style="margin-top: 20px;">
                             {move || match active_tab.get().as_str() {
@@ -103,15 +106,45 @@ pub fn OrgProfile() -> impl IntoView {
                                     </ul>
                                 }.into_view(),
                                 "people" => view! {
-                                    <ul>
-                                        <Suspense fallback=move || view! { <li>"Loading members..."</li> }>
-                                            {move || members.get().map(|list| view! {
-                                                <For each=move || list.clone() key=|m| m.user.id children=move |m| {
-                                                    view! { <li>{m.user.username} " (" {m.role} ")"</li> }
-                                                }/>
-                                            })}
-                                        </Suspense>
-                                    </ul>
+                                    <div>
+                                        <h3>"Members & Role Management"</h3>
+                                        <ul style="list-style: none; padding: 0;">
+                                            <Suspense fallback=move || view! { <li>"Loading members..."</li> }>
+                                                {move || members.get().map(|list| view! {
+                                                    <For each=move || list.clone() key=|m| m.user.id children=move |m| {
+                                                        let username = m.user.username.clone();
+                                                        let current_role = m.role.clone();
+                                                        let on_change_role = move |ev: leptos::ev::Event| {
+                                                            let new_role = event_target_value(&ev);
+                                                            let org_n = org_name();
+                                                            let user_n = username.clone();
+                                                            let payload = UpdateMemberRoleOption { role: new_role };
+                                                            spawn_local(async move {
+                                                                let _ = Request::put(&format!("/api/v1/orgs/{}/members/{}", org_n, user_n))
+                                                                    .json(&payload).unwrap().send().await;
+                                                                set_refresh.update(|n| *n += 1);
+                                                            });
+                                                        };
+                                                        view! {
+                                                            <li style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 10px 0;">
+                                                                <span><strong>{m.user.username.clone()}</strong></span>
+                                                                <select on:change=on_change_role prop:value=current_role>
+                                                                    <option value="owner">"Owner"</option>
+                                                                    <option value="maintainer">"Maintainer"</option>
+                                                                    <option value="developer">"Developer"</option>
+                                                                    <option value="reporter">"Reporter"</option>
+                                                                    <option value="guest">"Guest"</option>
+                                                                </select>
+                                                            </li>
+                                                        }
+                                                    }/>
+                                                })}
+                                            </Suspense>
+                                        </ul>
+                                    </div>
+                                }.into_view(),
+                                "audit" => view! {
+                                    <OrgAuditLogs org_name=org_name() />
                                 }.into_view(),
                                 "teams" => view! {
                                     <div>
@@ -137,6 +170,43 @@ pub fn OrgProfile() -> impl IntoView {
                     _ => view! { <h3>"Organization Not Found"</h3> }.into_view()
                 }}
             </Suspense>
+        </div>
+    }
+}
+
+#[component]
+pub fn OrgAuditLogs(org_name: String) -> impl IntoView {
+    let logs = create_resource(
+        move || org_name.clone(),
+        |name| async move {
+            Request::get(&format!("/api/v1/orgs/{}/audit-logs", name))
+                .send().await.unwrap().json::<Vec<AuditLog>>().await.unwrap_or_default()
+        }
+    );
+
+    view! {
+        <div class="org-audit-logs">
+            <h3>"Security Audit Trail Logs"</h3>
+            <ul style="list-style: none; padding: 0;">
+                <Suspense fallback=move || view! { <li>"Loading audit logs..."</li> }>
+                    {move || logs.get().map(|list| view! {
+                        <For each=move || list.clone() key=|l| l.id children=move |l| {
+                            view! {
+                                <li style="border: 1px solid #e1e4e8; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafbfc;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                        <strong style="color: #0969da;">{l.action}</strong>
+                                        <span style="font-size: 12px; color: #57606a;">{l.created_at}</span>
+                                    </div>
+                                    <p style="margin: 0; font-size: 14px; color: #24292f;">{l.details}</p>
+                                    <div style="font-size: 12px; color: #57606a; margin-top: 5px;">
+                                        "Actor: " <strong>{l.actor.username}</strong> " | Target: " {l.target_name}
+                                    </div>
+                                </li>
+                            }
+                        }/>
+                    })}
+                </Suspense>
+            </ul>
         </div>
     }
 }
