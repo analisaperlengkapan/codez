@@ -2,6 +2,7 @@ pub mod dashboard;
 pub mod admin;
 pub mod repo;
 pub mod user;
+pub mod security;
 pub mod org;
 pub mod projects;
 pub mod packages;
