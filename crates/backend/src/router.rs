@@ -60,7 +60,18 @@ pub struct AppState {
     pub wikis: Arc<RwLock<HashMap<(u64, String), shared::WikiPage>>>,
 }
 
+pub fn api_router_with_state() -> (Router, AppState) {
+    let state = build_app_state();
+    let router = build_router(state.clone());
+    (router, state)
+}
+
 pub fn api_router() -> Router {
+    let state = build_app_state();
+    build_router(state)
+}
+
+fn build_app_state() -> AppState {
     let user = User::new(1, "admin".to_string(), Some("admin@codeza.com".to_string()));
 
     let mut file_map = HashMap::new();
@@ -296,7 +307,10 @@ pub fn api_router() -> Router {
         commit_statuses: Arc::new(RwLock::new(vec![])),
         wikis: Arc::new(RwLock::new(wikis_map)),
     };
+    state
+}
 
+fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/v1/repos", get(list_repos))
         .route("/api/v1/users/:username", get(get_user))
@@ -356,6 +370,8 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/actions/workflows", get(list_workflows))
         .route("/api/v1/repos/:owner/:repo/actions/workflows/:id/runs", get(list_workflow_runs).post(trigger_workflow))
         .route("/api/v1/repos/:owner/:repo/actions/runs/:run_id", patch(update_workflow_run).delete(delete_workflow_run))
+        .route("/api/v1/repos/:owner/:repo/actions/runs/:run_id/logs", get(get_workflow_run_logs))
+        .route("/api/v1/repos/:owner/:repo/actions/runs/:run_id/rerun", post(rerun_workflow_run))
         .route("/api/v1/packages/:owner", get(list_packages).post(upload_package))
         .route("/api/v1/repos/:owner/:repo/secrets", get(list_secrets).post(create_secret))
         .route("/api/v1/repos/:owner/:repo/keys", get(list_deploy_keys).post(create_deploy_key))
@@ -403,6 +419,7 @@ pub fn api_router() -> Router {
         .route("/api/v1/repos/:owner/:repo/issues/:index/labels/:id", delete(remove_issue_label))
         .route("/api/v1/repos/:owner/:repo/search", get(search_repo_code))
         .route("/api/v1/repos/:owner/:repo/pulse", get(get_repo_pulse))
+        .route("/api/v1/repos/:owner/:repo/security/scan", post(run_security_scan).get(run_security_scan))
         .route("/api/v1/packages/:owner/:type/:name/:version", get(get_package_detail).delete(delete_package))
         .route("/api/v1/repos/:owner/:repo/wiki/pages", get(list_wiki_pages).post(create_wiki_page))
         .route("/api/v1/repos/:owner/:repo/wiki/pages/:page_name", get(get_wiki_page).put(update_wiki_page))

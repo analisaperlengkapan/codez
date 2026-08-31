@@ -628,11 +628,19 @@ pub struct CreateWorkflowRunOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkflowStepLog {
+    pub name: String,
+    pub status: String,
+    pub logs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorkflowRun {
     pub id: u64,
     pub workflow_id: u64,
     pub status: String, // "queued", "in_progress", "success", "failure", "cancelled"
     pub created_at: String,
+    pub step_logs: Vec<WorkflowStepLog>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -964,6 +972,27 @@ pub struct RepoPulseStats {
     pub merged_prs: u64,
     pub new_commits: u64,
     pub active_authors: Vec<User>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SecurityVulnerability {
+    pub id: String,
+    pub severity: String, // "CRITICAL", "HIGH", "MEDIUM", "LOW"
+    pub title: String,
+    pub description: String,
+    pub file_path: String,
+    pub line_no: u64,
+    pub recommendation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SecurityScanReport {
+    pub id: String,
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub score: u8, // 0 to 100
+    pub vulnerabilities: Vec<SecurityVulnerability>,
+    pub scanned_at: String,
 }
 
 #[cfg(test)]

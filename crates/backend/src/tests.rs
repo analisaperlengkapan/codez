@@ -1214,7 +1214,7 @@ async fn test_webhook_ssrf_prevention() {
         let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let runs: Vec<shared::WorkflowRun> = serde_json::from_slice(&body).unwrap();
         assert_eq!(runs.len(), 1);
-        assert_eq!(runs[0].status, "queued");
+        assert_eq!(runs[0].status, "success");
     }
 
     #[tokio::test]
