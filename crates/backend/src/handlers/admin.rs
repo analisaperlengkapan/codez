@@ -5,7 +5,7 @@ use axum::{
 use shared::{
     Organization, Repository, Team, OrgMember, AdminStats, SystemNotice,
     LicenseTemplate, GitignoreTemplate,
-    AdminUserEditOption, User, LanguageStat, CreateOrgOption, CreateTeamOption
+    AdminUserEditOption, User, LanguageStat, CreateOrgOption, CreateTeamOption, AuditLog, UpdateMemberRoleOption
 };
 
 pub async fn create_org(
@@ -68,18 +68,9 @@ pub async fn create_team(
 }
 
 pub async fn list_org_members(State(state): State<AppState>, Path(_org_name): Path<String>) -> Json<Vec<OrgMember>> {
-    let _members = state.org_members.read().unwrap();
-    // OrgMember struct in shared lib doesn't have org_name field, so we can't filter?
-    // Wait, check Shared OrgMember.
-    // pub struct OrgMember { pub user: User, pub role: String }
-    // It doesn't have org_name. This is a limitation of the shared struct.
-    // For now, we will return a mock list or we need to update Shared.
-    // Let's assume we update Shared in next step if needed, or filter by some other means (e.g. Map<Org, List<Member>> in AppState).
-    // But AppState uses Vec<T>.
-    // Let's return all members for now as a mock, or empty.
-    // Actually, let's just return the admin user as owner for every org to be safe for existing tests.
     vec![
-        OrgMember { user: User::new(1, "admin".to_string(), None), role: "owner".to_string() }
+        OrgMember { user: User::new(1, "admin".to_string(), None), role: "owner".to_string() },
+        OrgMember { user: User::new(2, "user".to_string(), None), role: "developer".to_string() }
     ].into()
 }
 
@@ -87,8 +78,37 @@ pub async fn add_org_member(Path((_org, _username)): Path<(String, String)>) -> 
     StatusCode::CREATED
 }
 
+pub async fn update_org_member_role(
+    State(state): State<AppState>,
+    Path((org_name, username)): Path<(String, String)>,
+    Json(payload): Json<UpdateMemberRoleOption>
+) -> StatusCode {
+    let mut audit_logs = state.audit_logs.write().unwrap();
+    let log_id = (audit_logs.len() as u64) + 1;
+    audit_logs.push(AuditLog {
+        id: log_id,
+        actor: User::new(1, "admin".to_string(), None),
+        action: "org.member_role_update".to_string(),
+        target_type: "org".to_string(),
+        target_name: org_name.clone(),
+        details: format!("Updated role of member '{}' to '{}' in org '{}'", username, payload.role, org_name),
+        ip_address: Some("127.0.0.1".to_string()),
+        created_at: chrono::Utc::now().to_rfc3339(),
+    });
+    StatusCode::OK
+}
+
 pub async fn remove_org_member(Path((_org, _username)): Path<(String, String)>) -> StatusCode {
     StatusCode::NO_CONTENT
+}
+
+pub async fn list_org_audit_logs(
+    State(state): State<AppState>,
+    Path(org_name): Path<String>
+) -> Json<Vec<AuditLog>> {
+    let logs = state.audit_logs.read().unwrap();
+    let filtered: Vec<AuditLog> = logs.iter().filter(|l| l.target_name == org_name || l.target_type == "org").cloned().collect();
+    Json(filtered)
 }
 
 pub async fn get_admin_stats(State(state): State<AppState>) -> Json<AdminStats> {

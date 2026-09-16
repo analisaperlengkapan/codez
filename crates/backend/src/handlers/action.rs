@@ -2,7 +2,7 @@ use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
-use shared::{ActionWorkflow, CreateWorkflowRunOption, WorkflowRun, Activity, UpdateWorkflowRunOption};
+use shared::{ActionWorkflow, CreateWorkflowRunOption, WorkflowRun, Activity, UpdateWorkflowRunOption, WorkflowStepLog};
 use crate::router::AppState;
 
 pub async fn list_workflows(State(state): State<AppState>, Path((owner, repo_name)): Path<(String, String)>) -> Json<Vec<ActionWorkflow>> {
@@ -32,7 +32,7 @@ pub async fn trigger_workflow(
     };
 
     if !exists {
-        return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string() }));
+        return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string(), step_logs: vec![] }));
     }
 
     let mut runs = state.workflow_runs.write().unwrap();
@@ -40,8 +40,25 @@ pub async fn trigger_workflow(
     let run = WorkflowRun {
         id: run_id,
         workflow_id: id,
-        status: "queued".to_string(),
-        created_at: "now".to_string(),
+        status: "success".to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        step_logs: vec![
+            WorkflowStepLog {
+                name: "Set up job".to_string(),
+                status: "success".to_string(),
+                logs: vec!["Preparing build environment...".to_string(), "Initialized cargo workspace.".to_string()],
+            },
+            WorkflowStepLog {
+                name: "Run tests".to_string(),
+                status: "success".to_string(),
+                logs: vec!["Running 24 tests in shared...".to_string(), "test result: ok. 24 passed.".to_string()],
+            },
+            WorkflowStepLog {
+                name: "Complete pipeline".to_string(),
+                status: "success".to_string(),
+                logs: vec!["Artifacts saved successfully.".to_string()],
+            },
+        ],
     };
     runs.push(run.clone());
 
@@ -84,6 +101,68 @@ pub async fn list_workflow_runs(
     Json(filtered)
 }
 
+pub async fn get_workflow_run_logs(
+    State(state): State<AppState>,
+    Path((_owner, _repo, run_id)): Path<(String, String, u64)>
+) -> (StatusCode, Json<Vec<WorkflowStepLog>>) {
+    let runs = state.workflow_runs.read().unwrap();
+    if let Some(run) = runs.iter().find(|r| r.id == run_id) {
+        (StatusCode::OK, Json(run.step_logs.clone()))
+    } else {
+        (StatusCode::NOT_FOUND, Json(vec![]))
+    }
+}
+
+pub async fn rerun_workflow_run(
+    State(state): State<AppState>,
+    Path((owner, repo_name, run_id)): Path<(String, String, u64)>
+) -> (StatusCode, Json<WorkflowRun>) {
+    let repo_id = {
+        let repos = state.repos.read().unwrap();
+        repos.iter().find(|r| r.owner == owner && r.name == repo_name).map(|r| r.id).unwrap_or(0)
+    };
+
+    let mut runs = state.workflow_runs.write().unwrap();
+    if let Some(run) = runs.iter_mut().find(|r| r.id == run_id) {
+        run.status = "success".to_string();
+        run.created_at = chrono::Utc::now().to_rfc3339();
+        run.step_logs = vec![
+            WorkflowStepLog {
+                name: "Set up job (Re-run)".to_string(),
+                status: "success".to_string(),
+                logs: vec!["Re-running workflow steps...".to_string()],
+            },
+            WorkflowStepLog {
+                name: "Execute build & test".to_string(),
+                status: "success".to_string(),
+                logs: vec!["Cargo test completed without errors.".to_string()],
+            },
+        ];
+
+        let mut activities = state.activities.write().unwrap();
+        let activity_id = (activities.len() as u64) + 1;
+        activities.push(Activity {
+            id: activity_id,
+            repo_id,
+            user_id: 1,
+            user_name: "admin".to_string(),
+            op_type: "rerun_workflow".to_string(),
+            content: format!("re-ran workflow run #{} on {}/{}", run_id, owner, repo_name),
+            created: "now".to_string(),
+        });
+
+        (StatusCode::OK, Json(run.clone()))
+    } else {
+        (StatusCode::NOT_FOUND, Json(WorkflowRun {
+            id: 0,
+            workflow_id: 0,
+            status: "".to_string(),
+            created_at: "".to_string(),
+            step_logs: vec![],
+        }))
+    }
+}
+
 pub async fn update_workflow_run(
     State(state): State<AppState>,
     Path((owner, repo_name, run_id)): Path<(String, String, u64)>,
@@ -98,7 +177,7 @@ pub async fn update_workflow_run(
         let runs = state.workflow_runs.read().unwrap();
         match runs.iter().find(|r| r.id == run_id) {
             Some(run) => run.workflow_id,
-            None => return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string() }))
+            None => return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string(), step_logs: vec![] }))
         }
     };
 
@@ -108,7 +187,7 @@ pub async fn update_workflow_run(
     };
 
     if !valid_workflow {
-        return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string() }));
+        return (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string(), step_logs: vec![] }));
     }
 
     let mut runs = state.workflow_runs.write().unwrap();
@@ -129,7 +208,7 @@ pub async fn update_workflow_run(
 
         (StatusCode::OK, Json(run.clone()))
     } else {
-        (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string() }))
+        (StatusCode::NOT_FOUND, Json(WorkflowRun { id: 0, workflow_id: 0, status: "".to_string(), created_at: "".to_string(), step_logs: vec![] }))
     }
 }
 

@@ -628,11 +628,19 @@ pub struct CreateWorkflowRunOption {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkflowStepLog {
+    pub name: String,
+    pub status: String,
+    pub logs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WorkflowRun {
     pub id: u64,
     pub workflow_id: u64,
     pub status: String, // "queued", "in_progress", "success", "failure", "cancelled"
     pub created_at: String,
+    pub step_logs: Vec<WorkflowStepLog>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -964,6 +972,44 @@ pub struct RepoPulseStats {
     pub merged_prs: u64,
     pub new_commits: u64,
     pub active_authors: Vec<User>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SecurityVulnerability {
+    pub id: String,
+    pub severity: String, // "CRITICAL", "HIGH", "MEDIUM", "LOW"
+    pub title: String,
+    pub description: String,
+    pub file_path: String,
+    pub line_no: u64,
+    pub recommendation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SecurityScanReport {
+    pub id: String,
+    pub repo_owner: String,
+    pub repo_name: String,
+    pub score: u8, // 0 to 100
+    pub vulnerabilities: Vec<SecurityVulnerability>,
+    pub scanned_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AuditLog {
+    pub id: u64,
+    pub actor: User,
+    pub action: String, // e.g. "org.member_role_update", "repo.transfer", "secret.create"
+    pub target_type: String, // "org", "repo", "user", "secret"
+    pub target_name: String,
+    pub details: String,
+    pub ip_address: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UpdateMemberRoleOption {
+    pub role: String, // "owner", "maintainer", "developer", "reporter", "guest"
 }
 
 #[cfg(test)]
@@ -1411,6 +1457,23 @@ mod tests {
     fn test_repo_action() {
         let act = RepoActionOption { action: "star".to_string() };
         assert_eq!(act.action, "star");
+    }
+
+    #[test]
+    fn test_audit_log_struct() {
+        let user = User::new(1, "admin".to_string(), None);
+        let log = AuditLog {
+            id: 1,
+            actor: user,
+            action: "org.member_role_update".to_string(),
+            target_type: "org".to_string(),
+            target_name: "codeza-org".to_string(),
+            details: "Changed role of user 'jules' to maintainer".to_string(),
+            ip_address: Some("127.0.0.1".to_string()),
+            created_at: "now".to_string(),
+        };
+        assert_eq!(log.action, "org.member_role_update");
+        assert_eq!(log.target_name, "codeza-org");
     }
 
     #[test]
