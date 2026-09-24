@@ -158,6 +158,10 @@ img { max-width: 100%; }
 
 .app-header .spacer { flex: 1; }
 
+/* The search link duplicates the header search box; show it only where that
+   box is hidden (≤768px) so search stays reachable on mobile. */
+.app-header .nav-links a.search-link { display: none; }
+
 .app-header .global-search {
   width: 280px;
   padding: 6px 12px;
@@ -939,6 +943,8 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
   .app-header { padding: 0 12px; gap: 8px; overflow-x: auto; overflow-y: hidden; }
   .app-header .nav-links { flex-shrink: 0; }
   .app-header .global-search { display: none; }
+  /* Search box is hidden here, so surface the Search link instead. */
+  .app-header .nav-links a.search-link { display: inline-block; }
   .page { padding: 16px; }
   .repo-shell { flex-direction: column; }
   .repo-sidebar { flex-basis: auto; width: 100%; }

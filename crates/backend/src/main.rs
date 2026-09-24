@@ -53,7 +53,7 @@ async fn spa_fallback(static_dir: String, uri: Uri) -> Response {
 
     let root = PathBuf::from(&static_dir);
     if let Some(file) = resolve_static_file(&root, uri.path()) {
-        if let Ok(bytes) = tokio::fs::read(&file).await {
+        if let Some(bytes) = read_within_root(&root, &file).await {
             return (
                 [(header::CONTENT_TYPE, content_type(&file.to_string_lossy()))],
                 bytes,
@@ -65,14 +65,32 @@ async fn spa_fallback(static_dir: String, uri: Uri) -> Response {
         }
     }
 
-    match tokio::fs::read(root.join("index.html")).await {
-        Ok(index) => ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], index).into_response(),
-        Err(_) => (
+    match read_within_root(&root, &root.join("index.html")).await {
+        Some(index) => {
+            ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], index).into_response()
+        }
+        None => (
             StatusCode::SERVICE_UNAVAILABLE,
             "Frontend assets are not built. Run `trunk build` in crates/frontend.",
         )
             .into_response(),
     }
+}
+
+/// Read `candidate`, but only when its canonical destination stays inside
+/// `root`.
+///
+/// Normalizing the request path is not enough on its own: a symlink *inside*
+/// the asset tree can point at a file outside it, so the resolved filesystem
+/// destination must be checked too - CWE-22 (path traversal). A candidate that
+/// is absent, or whose real path escapes `root`, yields `None`.
+async fn read_within_root(root: &Path, candidate: &Path) -> Option<Vec<u8>> {
+    let canonical_root = tokio::fs::canonicalize(root).await.ok()?;
+    let canonical = tokio::fs::canonicalize(candidate).await.ok()?;
+    if !canonical.starts_with(&canonical_root) {
+        return None;
+    }
+    tokio::fs::read(&canonical).await.ok()
 }
 
 /// Resolve a request path to a file under `root`, or `None` if the path escapes
@@ -147,8 +165,16 @@ async fn main() {
 
 #[cfg(test)]
 mod static_asset_tests {
-    use super::{is_asset_request, resolve_static_file};
+    use super::{is_asset_request, read_within_root, resolve_static_file};
     use std::path::{Path, PathBuf};
+
+    /// Create a unique scratch directory for filesystem-backed tests.
+    fn scratch_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("codeza-{}-{}", name, std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
 
     #[test]
     fn top_level_assets_are_assets() {
@@ -193,5 +219,53 @@ mod static_asset_tests {
             );
         }
         assert_eq!(resolve_static_file(Path::new("/srv/dist"), "/"), None);
+    }
+
+    #[tokio::test]
+    async fn regular_files_inside_the_root_are_served() {
+        let root = scratch_dir("static-ok");
+        std::fs::write(root.join("index.html"), b"shell").unwrap();
+        std::fs::write(root.join("app.js"), b"asset").unwrap();
+
+        assert_eq!(
+            read_within_root(&root, &root.join("app.js")).await,
+            Some(b"asset".to_vec())
+        );
+        assert_eq!(
+            read_within_root(&root, &root.join("index.html")).await,
+            Some(b"shell".to_vec())
+        );
+        assert_eq!(
+            read_within_root(&root, &root.join("missing.js")).await,
+            None
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn symlinks_pointing_outside_the_root_are_not_served() {
+        let root = scratch_dir("static-symlink-root");
+        let outside = scratch_dir("static-symlink-outside");
+        std::fs::write(outside.join("secret.txt"), b"top secret").unwrap();
+        std::fs::write(root.join("app.js"), b"asset").unwrap();
+
+        // A file symlink inside the asset tree aimed at an outside file.
+        std::os::unix::fs::symlink(outside.join("secret.txt"), root.join("escape.txt")).unwrap();
+        // A directory symlink escaping the root, reachable via a deeper path.
+        std::os::unix::fs::symlink(&outside, root.join("escape-dir")).unwrap();
+
+        assert_eq!(
+            read_within_root(&root, &root.join("escape.txt")).await,
+            None
+        );
+        assert_eq!(
+            read_within_root(&root, &root.join("escape-dir").join("secret.txt")).await,
+            None
+        );
+        // The legitimate asset still resolves.
+        assert_eq!(
+            read_within_root(&root, &root.join("app.js")).await,
+            Some(b"asset".to_vec())
+        );
     }
 }

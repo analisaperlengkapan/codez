@@ -83,18 +83,24 @@ test.describe('Route smoke coverage', () => {
 
 test.describe('Repository chrome', () => {
   test('RepoNav marks the active section on every sub-page', async ({ page }) => {
-    const sections: Array<[string, string]> = [
-      ['issues', 'Issues'],
-      ['pulls', 'Pull requests'],
-      ['commits', 'Commits'],
-      ['security', 'Security'],
-      ['settings', 'Settings'],
+    // `slug` is a bare section; `path` covers sub-views that map onto a tab
+    // (edit/search belong to Code, compare belongs to Pull requests).
+    const sections: Array<{ path: string; label: string }> = [
+      { path: 'issues', label: 'Issues' },
+      { path: 'pulls', label: 'Pull requests' },
+      { path: 'commits', label: 'Commits' },
+      { path: 'security', label: 'Security' },
+      { path: 'settings', label: 'Settings' },
+      { path: 'src/src/main.rs', label: 'Code' },
+      { path: 'edit/README.md', label: 'Code' },
+      { path: 'search', label: 'Code' },
+      { path: 'compare', label: 'Pull requests' },
     ];
-    for (const [slug, label] of sections) {
-      await page.goto(`/repos/admin/codeza/${slug}`);
+    for (const { path, label } of sections) {
+      await page.goto(`/repos/admin/codeza/${path}`);
       const active = page.locator('nav.repo-nav a.active');
-      await expect(active).toHaveText(label);
-      await expect(active).toHaveAttribute('aria-current', 'page');
+      await expect(active, `active tab on /${path}`).toHaveText(label);
+      await expect(active, `aria-current on /${path}`).toHaveAttribute('aria-current', 'page');
     }
   });
 

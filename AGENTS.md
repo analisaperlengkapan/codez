@@ -138,6 +138,12 @@ seeded org slug is `codeza-org`, not `admin`).
 
 - In Axum, `.fallback()` replaces any previously set `.fallback_service()`. The static file
   handler in `main.rs` is intentionally a single `.fallback()` that resolves assets itself.
+- The static handler serves a file only if its canonicalized real path stays inside the
+  asset root (`read_within_root`). Normalizing `..` is not enough on its own: a symlink
+  placed in `dist/` can point outside it, so keep the resolved-destination check when
+  touching that code.
+- The header hides the search box at ≤768px and shows a plain Search link (`.search-link`)
+  instead; keep both in sync when changing the global nav.
 - The frontend build output (`crates/frontend/dist/`) is gitignored — build it locally.
 - `node_modules/` is gitignored; run `npm install` for Playwright.
 - The detail endpoints return `200` with a JSON `null` body for a missing entity

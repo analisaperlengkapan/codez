@@ -50,6 +50,9 @@ pub fn Nav() -> impl IntoView {
                 <a href="/packages/admin" class:active=move || is_active("/packages")>"Packages"</a>
                 <a href="/notifications" class:active=move || is_active("/notifications")>"Notifications"</a>
                 <a href="/admin" class:active=move || is_active("/admin")>"Admin"</a>
+                // The header search box is hidden at narrow widths, so keep a
+                // plain link as the search entry point on small screens.
+                <a href="/search" class="search-link" class:active=move || is_active("/search")>"Search"</a>
             </nav>
             <div class="spacer"></div>
             <form on:submit=on_search>

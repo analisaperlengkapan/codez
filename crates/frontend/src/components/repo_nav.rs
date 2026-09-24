@@ -115,11 +115,19 @@ pub fn RepoNav() -> impl IntoView {
     let is_active = move |suffix: &str| {
         let path = location.pathname.get();
         let root = base();
+        let at = |sub: &str| {
+            path == format!("{root}{sub}") || path.starts_with(&format!("{root}{sub}/"))
+        };
         if suffix.is_empty() {
-            // The code browser lives both at the repo root and under /src.
-            path == root || path == format!("{root}/") || path.starts_with(&format!("{root}/src"))
+            // Code covers the root browser, /src, file edit and code search —
+            // these are all sub-views of the repository's code, not tabs of
+            // their own.
+            path == root || path == format!("{root}/") || at("/src") || at("/edit") || at("/search")
+        } else if suffix == "/pulls" {
+            // The compare view opens a pull request, so it belongs under Pulls.
+            at(suffix) || path == format!("{root}/compare")
         } else {
-            path == format!("{root}{suffix}") || path.starts_with(&format!("{root}{suffix}/"))
+            at(suffix)
         }
     };
 
