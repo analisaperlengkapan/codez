@@ -34,7 +34,7 @@ pub fn PullRequestList() -> impl IntoView {
                 <Suspense fallback=move || view! { <li>"Loading pull requests..."</li> }>
                     {move || pulls.get().map(|list| view! {
                         <For each=move || list.clone() key=|p| p.id children=move |p| {
-                            let href = format!("/repos/{}/{}/pulls/{}", owner(), repo_name(), p.id);
+                            let href = format!("/repos/{}/{}/pulls/{}", owner(), repo_name(), p.number);
                             view! { <li><a href=href>"#" {p.number} " " {p.title}</a> " (" {p.state} ")"</li> }
                         }/>
                     })}

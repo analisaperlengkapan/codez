@@ -87,6 +87,7 @@ test.describe('Repository chrome', () => {
       ['issues', 'Issues'],
       ['pulls', 'Pull requests'],
       ['commits', 'Commits'],
+      ['security', 'Security'],
       ['settings', 'Settings'],
     ];
     for (const [slug, label] of sections) {

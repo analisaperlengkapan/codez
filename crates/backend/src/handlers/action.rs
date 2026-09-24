@@ -67,9 +67,9 @@ pub async fn trigger_workflow(
         .write()
         .unwrap_or_else(|e| e.into_inner());
     let run_id = runs.iter().map(|r| r.id).max().unwrap_or(0) + 1;
-    // There is no background executor in the in-memory demo, so a triggered run
-    // completes synchronously with canned step logs. Without this it would stay
-    // "queued" forever and the Actions page would treat it as permanently active.
+    // The in-memory demo has no background executor, so a triggered run is
+    // stored already completed with canned step logs rather than left pending
+    // on a worker that does not exist.
     let run = WorkflowRun {
         id: run_id,
         workflow_id: id,

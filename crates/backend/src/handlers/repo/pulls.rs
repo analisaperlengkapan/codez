@@ -22,10 +22,10 @@ pub async fn list_pulls(
 
 /// Repository-scoped lookup for a single pull request.
 ///
-/// Mirrors the issue detail handlers: the `:index` path segment is the pull's
-/// id (which is what the list page links with), and a missing pull is a `200`
-/// with a `null` body rather than a `404`, matching the frontend `get_opt`
-/// helper.
+/// The `:index` path segment is the pull's repository-scoped `number` (the
+/// value the list/detail links use), matching `update_pull`, `merge_pull` and
+/// the review handlers. A missing pull is a `200` with a `null` body rather
+/// than a `404`, matching the frontend `get_opt` helper.
 pub async fn get_pull(
     State(state): State<AppState>,
     Path((owner, repo_name, index)): Path<(String, String, u64)>,
@@ -41,7 +41,7 @@ pub async fn get_pull(
     Json(
         pulls
             .iter()
-            .find(|p| p.repo_id == repo_id && p.id == index)
+            .find(|p| p.repo_id == repo_id && p.number == index)
             .cloned(),
     )
 }
@@ -111,11 +111,20 @@ pub async fn create_pull(
     }
 
     let mut pulls = state.pulls.write().unwrap_or_else(|e| e.into_inner());
-    let id = (pulls.len() as u64) + 1;
+    let id = pulls.iter().map(|p| p.id).max().unwrap_or(0) + 1;
+    // `number` is scoped to the repository while `id` is global; new pulls must
+    // continue each repository's own sequence so links and route lookups agree.
+    let number = pulls
+        .iter()
+        .filter(|p| p.repo_id == repo_id)
+        .map(|p| p.number)
+        .max()
+        .unwrap_or(0)
+        + 1;
     let pr = PullRequest {
         id,
         repo_id,
-        number: id,
+        number,
         title: payload.title.clone(),
         body: payload.body.clone(),
         state: "open".to_string(),
@@ -136,7 +145,7 @@ pub async fn create_pull(
         user_id: 1,
         user_name: "admin".to_string(),
         op_type: "create_pull_request".to_string(),
-        content: format!("opened pull request #{} in {}/{}", id, owner, repo_name),
+        content: format!("opened pull request #{} in {}/{}", number, owner, repo_name),
         created: "now".to_string(),
     });
 
@@ -167,7 +176,7 @@ pub async fn create_pull(
                             id: nid,
                             subject: format!(
                                 "You were mentioned in PR #{} in {}/{}",
-                                id, owner, repo_name
+                                number, owner, repo_name
                             ),
                             unread: true,
                             updated_at: "now".to_string(),

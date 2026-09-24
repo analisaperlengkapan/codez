@@ -458,11 +458,20 @@ pub async fn migrate_repo(
         drop(issues);
 
         let mut pulls = state.pulls.write().unwrap_or_else(|e| e.into_inner());
-        let pull_id = (pulls.len() as u64) + 1;
+        let pull_id = pulls.iter().map(|p| p.id).max().unwrap_or(0) + 1;
+        // `number` is repository-scoped; a freshly migrated repo starts its own
+        // sequence so the imported pull's number matches the route lookups.
+        let pull_number = pulls
+            .iter()
+            .filter(|p| p.repo_id == repo_id)
+            .map(|p| p.number)
+            .max()
+            .unwrap_or(0)
+            + 1;
         pulls.push(PullRequest {
             id: pull_id,
             repo_id,
-            number: 2,
+            number: pull_number,
             title: "Imported PR 1".to_string(),
             body: Some(format!("This PR was imported from {}.", payload.service)),
             state: "open".to_string(),

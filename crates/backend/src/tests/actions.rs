@@ -28,7 +28,7 @@ async fn trigger_workflow_creates_a_run() {
         .json();
     assert_eq!(run.workflow_id, 1);
     // A triggered run completes synchronously with logs; it must not be left
-    // queued (which would render as permanently active in the Actions UI).
+    // pending (which would render as permanently active in the Actions UI).
     assert_eq!(run.status, "success");
     assert!(!run.step_logs.is_empty());
 

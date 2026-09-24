@@ -218,34 +218,45 @@ pub fn Search() -> impl IntoView {
     let (repo_results, set_repo_results) = create_signal(vec![]);
     let (issue_results, set_issue_results) = create_signal(vec![]);
 
+    // Monotonic request generation. A slow earlier request must not overwrite
+    // the results of a newer one, so each response is applied only if no newer
+    // search has started since it was issued.
+    let generation = create_rw_signal(0u64);
+
     let run_search = move |q: String, t: String| {
+        let current = generation.get_untracked() + 1;
+        generation.set(current);
         spawn_local(async move {
+            // Drop stale responses: a newer search has already been issued.
+            let is_current = move || current == generation.get_untracked();
+
             if t == "repos" {
                 // `/repos/search` filters by `q` server-side; the paginated
                 // `/repos` listing ignores it, which silently dropped matches.
                 let url = format!("/api/v1/repos/search?q={}", encode_query(&q));
-                let res = get::<Vec<Repository>>(&url).await;
-                set_repo_results.set(res);
-                set_issue_results.set(vec![]);
+                let results = get::<Vec<Repository>>(&url).await;
+                if is_current() {
+                    set_repo_results.set(results);
+                    set_issue_results.set(vec![]);
+                }
             } else {
                 let url = format!("/api/v1/search/issues?q={}", encode_query(&q));
-                let res = get::<Vec<Issue>>(&url).await;
-                set_issue_results.set(res);
-                set_repo_results.set(vec![]);
+                let results = get::<Vec<Issue>>(&url).await;
+                if is_current() {
+                    set_issue_results.set(results);
+                    set_repo_results.set(vec![]);
+                }
             }
         });
     };
 
     let on_search = move |_| run_search(query.get(), search_type.get());
 
-    // Run the incoming search immediately so a term submitted from the global
-    // header (which navigates to `/search?q=…`) shows results on arrival.
-    let initial_query = query_map.with(|q| q.get("q").cloned().unwrap_or_default());
-    run_search(initial_query, search_type.get_untracked());
-
-    // Keep the box and results in sync when `q` changes via navigation while
-    // this page stays mounted. An empty `q` (cleared header search) must clear
-    // the box and the previous results rather than leaving them stale.
+    // Keep the box and results in sync when `q` changes, including the initial
+    // load (from the global header navigating to `/search?q=…`) and an empty
+    // `q` (a cleared header search must clear the box and previous results).
+    // This single effect drives every load, so there is no duplicate initial
+    // request racing the mount-time one.
     create_effect(move |_| {
         let q = query_map.with(|q| q.get("q").cloned().unwrap_or_default());
         set_query.set(q.clone());
