@@ -1,12 +1,7 @@
-use leptos::*;
+//! Shared UI building blocks.
 
-#[component]
-pub fn Nav() -> impl IntoView {
-    view! {
-        <nav>
-            <a href="/">"Home"</a>
-            <a href="/explore">"Explore"</a>
-            <a href="/login">"Login"</a>
-        </nav>
-    }
-}
+pub mod nav;
+pub mod repo_nav;
+
+pub use nav::*;
+pub use repo_nav::*;

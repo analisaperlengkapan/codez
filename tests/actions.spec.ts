@@ -4,7 +4,7 @@ test.describe('CI/CD Actions End-to-End', () => {
     test.beforeEach(async ({ page }) => {
         // Navigate to the repository's actions workflow runs list
         // id 1 is the default CI workflow
-        await page.goto('http://127.0.0.1:8080/repos/admin/codeza/actions/workflows/1');
+        await page.goto('/repos/admin/codeza/actions/workflows/1');
     });
 
     test('should trigger, cancel, and delete a workflow run', async ({ page }) => {

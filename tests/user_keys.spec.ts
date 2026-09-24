@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('User Keys Management Feature', () => {
   test('should list, create, and delete SSH and GPG keys', async ({ page }) => {
     // Navigate to user settings page
-    await page.goto('http://127.0.0.1:8080/settings/profile');
+    await page.goto('/settings/profile');
 
     // Verify page loads
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();

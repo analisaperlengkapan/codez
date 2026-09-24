@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Issues Feature', () => {
   test('should list, create issues, and add a comment', async ({ page }) => {
     // Navigate to issues page
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/issues');
+    await page.goto('/repos/admin/codeza/issues');
 
     // Make sure we are on the issues page
     await expect(page.getByRole('heading', { name: 'Issues for admin/codeza' })).toBeVisible();
@@ -42,7 +42,7 @@ test.describe('Issues Feature', () => {
 
     // Now test filtering by milestone
     // Create a milestone first via API
-    const milestoneResponse = await page.request.post('http://127.0.0.1:3000/api/v1/repos/admin/codeza/milestones', {
+    const milestoneResponse = await page.request.post('/api/v1/repos/admin/codeza/milestones', {
       data: {
         title: 'Filter Test Milestone ' + Date.now(),
         state: 'open'
@@ -53,7 +53,7 @@ test.describe('Issues Feature', () => {
 
     // Create an issue assigned to this milestone via API
     const filteredIssueTitle = 'Milestone Filter Issue ' + Date.now();
-    const issueResponse = await page.request.post('http://127.0.0.1:3000/api/v1/repos/admin/codeza/issues', {
+    const issueResponse = await page.request.post('/api/v1/repos/admin/codeza/issues', {
       data: {
         title: filteredIssueTitle,
         body: 'Testing filtering',
@@ -64,7 +64,7 @@ test.describe('Issues Feature', () => {
 
     // Create another issue not assigned to this milestone via API
     const unfilteredIssueTitle = 'Unfiltered Issue ' + Date.now();
-    const unfilteredIssueResponse = await page.request.post('http://127.0.0.1:3000/api/v1/repos/admin/codeza/issues', {
+    const unfilteredIssueResponse = await page.request.post('/api/v1/repos/admin/codeza/issues', {
       data: {
         title: unfilteredIssueTitle,
         body: 'Testing filtering'
@@ -73,7 +73,7 @@ test.describe('Issues Feature', () => {
     expect(unfilteredIssueResponse.ok()).toBeTruthy();
 
     // Navigate back to the issues page, applying the milestone filter
-    await page.goto(`http://127.0.0.1:8080/repos/admin/codeza/issues?milestone_id=${milestone.id}`);
+    await page.goto(`/repos/admin/codeza/issues?milestone_id=${milestone.id}`);
 
     await page.waitForTimeout(2000);
 

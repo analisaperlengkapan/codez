@@ -1,21 +1,19 @@
 {
-  "name": "app",
-  "version": "1.0.0",
-  "description": "Codeza is a lightweight, Gitea-inspired code hosting platform built with Rust. It features a modern, full-stack architecture using **Axum** for the backend and **Leptos** for the frontend.",
-  "main": "index.js",
-  "scripts": {},
+  "name": "codeza",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Gitea-inspired code hosting platform built with Rust (Axum + Leptos).",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/analisaperlengkapan/codez.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/analisaperlengkapan/codez/issues"
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:e2e": "playwright test --project=chromium",
+    "screenshots": "python3 scripts/capture_screenshots.py docs/screenshots"
   },
-  "homepage": "https://github.com/analisaperlengkapan/codez#readme",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "@types/node": "^25.4.0"

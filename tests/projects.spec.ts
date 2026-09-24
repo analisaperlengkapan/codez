@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Projects Feature', () => {
   test('should list and create projects', async ({ page }) => {
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/projects');
+    await page.goto('/repos/admin/codeza/projects');
 
     await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
 

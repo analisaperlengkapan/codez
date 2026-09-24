@@ -1,6 +1,6 @@
-use tokio_postgres::{NoTls, Client};
+use crate::state::AppState;
 use std::env;
-use crate::router::AppState;
+use tokio_postgres::{Client, NoTls};
 
 pub async fn connect_db() -> Result<Client, tokio_postgres::Error> {
     let db_url = env::var("DATABASE_URL")
@@ -20,7 +20,10 @@ pub async fn init_postgres_db(state: &AppState) {
     let client = match connect_db().await {
         Ok(c) => c,
         Err(e) => {
-            println!("PostgreSQL not available or connection failed ({}), skipping DB sync...", e);
+            println!(
+                "PostgreSQL not available or connection failed ({}), skipping DB sync...",
+                e
+            );
             return;
         }
     };
@@ -28,7 +31,9 @@ pub async fn init_postgres_db(state: &AppState) {
     println!("Successfully connected to PostgreSQL database!");
 
     // Create tables
-    let _ = client.batch_execute("
+    let _ = client
+        .batch_execute(
+            "
         CREATE TABLE IF NOT EXISTS users (
             id BIGINT PRIMARY KEY,
             username TEXT NOT NULL UNIQUE,
@@ -82,12 +87,17 @@ pub async fn init_postgres_db(state: &AppState) {
             ip_address TEXT,
             created_at TEXT NOT NULL
         );
-    ").await;
+    ",
+        )
+        .await;
 
     // Load users from DB if existing
-    let rows = client.query("SELECT id, username, email FROM users", &[]).await.unwrap_or_default();
+    let rows = client
+        .query("SELECT id, username, email FROM users", &[])
+        .await
+        .unwrap_or_default();
     if !rows.is_empty() {
-        let mut users_guard = state.users.write().unwrap();
+        let mut users_guard = state.users.write().unwrap_or_else(|e| e.into_inner());
         users_guard.clear();
         for row in rows {
             let id: i64 = row.get(0);
@@ -98,7 +108,7 @@ pub async fn init_postgres_db(state: &AppState) {
     } else {
         // Seed current users into Postgres
         let current_users = {
-            let users_guard = state.users.read().unwrap();
+            let users_guard = state.users.read().unwrap_or_else(|e| e.into_inner());
             users_guard.clone()
         };
         for u in current_users {
@@ -110,9 +120,12 @@ pub async fn init_postgres_db(state: &AppState) {
     }
 
     // Load repos from DB if existing
-    let repo_rows = client.query("SELECT id, name, owner FROM repos", &[]).await.unwrap_or_default();
+    let repo_rows = client
+        .query("SELECT id, name, owner FROM repos", &[])
+        .await
+        .unwrap_or_default();
     if !repo_rows.is_empty() {
-        let mut repos_guard = state.repos.write().unwrap();
+        let mut repos_guard = state.repos.write().unwrap_or_else(|e| e.into_inner());
         repos_guard.clear();
         for row in repo_rows {
             let id: i64 = row.get(0);
@@ -122,7 +135,7 @@ pub async fn init_postgres_db(state: &AppState) {
         }
     } else {
         let current_repos = {
-            let repos_guard = state.repos.read().unwrap();
+            let repos_guard = state.repos.read().unwrap_or_else(|e| e.into_inner());
             repos_guard.clone()
         };
         for r in current_repos {

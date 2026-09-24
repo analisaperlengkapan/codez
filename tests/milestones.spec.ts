@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Milestones Feature', () => {
   test('should list and create milestones', async ({ page }) => {
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/milestones');
+    await page.goto('/repos/admin/codeza/milestones');
 
     await expect(page.getByRole('heading', { name: 'Milestones' })).toBeVisible();
 

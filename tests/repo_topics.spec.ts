@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Repository Topics Feature', () => {
   test('should create a repository and add topics', async ({ page }) => {
     // Navigate to create repo page
-    await page.goto('http://127.0.0.1:8080/repo/create');
+    await page.goto('/repo/create');
 
     // Make sure we are on the new repository page
     await expect(page.getByRole('heading', { name: 'Create New Repository' })).toBeVisible();
@@ -23,7 +23,7 @@ test.describe('Repository Topics Feature', () => {
     // We should wait for the redirect, but since the frontend might not redirect automatically in this mock,
     // we manually navigate after a short wait, but use a more robust check if possible.
     await page.waitForTimeout(500);
-    await page.goto(`http://127.0.0.1:8080/repos/admin/${repoName}`);
+    await page.goto(`/repos/admin/${repoName}`);
 
     // Verify repository page loaded
     await expect(page.getByRole('heading', { name: `Repository: admin / ${repoName}` })).toBeVisible();

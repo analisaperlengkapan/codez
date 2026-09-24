@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Repository Stars and Watches Flow', () => {
   test('should allow user to toggle star and watch status', async ({ page }) => {
     // 1. Navigate to create repo page
-    await page.goto('http://127.0.0.1:8080/repo/create');
+    await page.goto('/repo/create');
     await expect(page.locator('h3')).toContainText('Create New Repository', { timeout: 10000 });
 
     // Create new repo
@@ -20,7 +20,7 @@ test.describe('Repository Stars and Watches Flow', () => {
     await responsePromise;
 
     // 2. Navigate to the repo manually
-    await page.goto(`http://127.0.0.1:8080/repos/admin/${testRepoName}`);
+    await page.goto(`/repos/admin/${testRepoName}`);
     await expect(page.locator('h3')).toContainText(`Repository: admin / ${testRepoName}`, { timeout: 10000 });
 
     // Wait for data load
