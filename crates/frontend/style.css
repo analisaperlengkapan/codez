@@ -848,7 +848,13 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
 .user-links,
 .followers,
 .following { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-.org-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--color-border); }
+.org-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
 .user-links a { color: var(--color-fg-muted); }
 
 /* 6. Utilities ------------------------------------------------------------- */

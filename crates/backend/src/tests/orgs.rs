@@ -1,75 +1,94 @@
-//! Integration tests for the orgs endpoints.
-use crate::routes::api_router;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use tower::ServiceExt; // for `oneshot`
+//! Integration tests for organizations, teams, members and audit logs.
+
+use axum::http::StatusCode;
+use shared::{AuditLog, OrgMember, Organization, Repository, Team};
+
+use super::TestApp;
 
 #[tokio::test]
-async fn test_org_management_flow() {
-    let app = api_router();
+async fn seeded_org_is_served_with_repos_members_and_teams() {
+    let app = TestApp::new();
 
-    // 1. Create Organization
-    let payload = shared::CreateOrgOption {
-        username: "new-org".to_string(),
-        description: Some("New Org".to_string()),
-        website: None,
-        location: None,
-        email: None,
-        visibility: None,
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/orgs")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
+    let org: Option<Organization> = app.get_json("/api/v1/orgs/codeza-org").await;
+    assert_eq!(org.unwrap().username, "codeza-org");
 
-    // 2. Create Team
-    let team_payload = shared::CreateTeamOption {
-        name: "Devs".to_string(),
-        description: None,
-        permission: "write".to_string(),
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/orgs/new-org/teams")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&team_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
+    let repos: Vec<Repository> = app.get_json("/api/v1/orgs/codeza-org/repos").await;
+    assert!(repos.is_empty());
 
-    // 3. List Teams
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/orgs/new-org/teams")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let teams: Vec<shared::Team> = serde_json::from_slice(&body).unwrap();
+    let teams: Vec<Team> = app.get_json("/api/v1/orgs/codeza-org/teams").await;
     assert_eq!(teams.len(), 1);
-    assert_eq!(teams[0].name, "Devs");
+
+    let members: Vec<OrgMember> = app.get_json("/api/v1/orgs/codeza-org/members").await;
+    assert_eq!(members.len(), 2);
+}
+
+#[tokio::test]
+async fn unknown_org_is_null() {
+    let app = TestApp::new();
+    let org: Option<Organization> = app.get_json("/api/v1/orgs/ghost").await;
+    assert!(org.is_none());
+}
+
+#[tokio::test]
+async fn create_org_then_reject_duplicate() {
+    let app = TestApp::new();
+
+    let org: Organization = app
+        .post_created(
+            "/api/v1/orgs",
+            serde_json::json!({ "username": "new-org", "description": "New" }),
+        )
+        .await;
+    assert_eq!(org.username, "new-org");
+
+    app.post_json("/api/v1/orgs", serde_json::json!({ "username": "new-org" }))
+        .await
+        .assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn team_can_be_created_under_org() {
+    let app = TestApp::new();
+
+    let team: Team = app
+        .post_created(
+            "/api/v1/orgs/codeza-org/teams",
+            serde_json::json!({ "name": "Reviewers", "permission": "read" }),
+        )
+        .await;
+    assert_eq!(team.name, "Reviewers");
+
+    let teams: Vec<Team> = app.get_json("/api/v1/orgs/codeza-org/teams").await;
+    assert_eq!(teams.len(), 2);
+}
+
+#[tokio::test]
+async fn member_role_update_writes_an_audit_log() {
+    let app = TestApp::new();
+
+    app.put_json(
+        "/api/v1/orgs/codeza-org/members/user",
+        serde_json::json!({ "role": "maintainer" }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
+
+    let logs: Vec<AuditLog> = app.get_json("/api/v1/orgs/codeza-org/audit-logs").await;
+    assert!(logs.iter().any(|l| l.action == "org.member_role_update"));
+}
+
+#[tokio::test]
+async fn adding_and_removing_members_responds() {
+    let app = TestApp::new();
+
+    app.post_json(
+        "/api/v1/orgs/codeza-org/members/newmember",
+        serde_json::json!({ "role": "developer" }),
+    )
+    .await
+    .assert_status(StatusCode::CREATED);
+
+    app.delete("/api/v1/orgs/codeza-org/members/newmember")
+        .await
+        .assert_status(StatusCode::NO_CONTENT);
 }

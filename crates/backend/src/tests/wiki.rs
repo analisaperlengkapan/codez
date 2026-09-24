@@ -1,50 +1,72 @@
-//! Integration tests for the wiki endpoints.
-use crate::routes::api_router;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use tower::ServiceExt; // for `oneshot`
+//! Integration tests for the repository wiki.
+
+use axum::http::StatusCode;
+use shared::WikiPage;
+
+use super::TestApp;
 
 #[tokio::test]
-async fn test_wiki_flow() {
-    let app = api_router();
+async fn list_and_get_seeded_wiki_pages() {
+    let app = TestApp::new();
 
-    // Create Wiki Page
-    let payload = shared::CreateWikiPageOption {
-        title: "Docs".to_string(),
-        content: "Documentation content".to_string(),
-        message: Some("Init docs".to_string()),
-    };
+    let pages: Vec<WikiPage> = app.get_json("/api/v1/repos/admin/codeza/wiki/pages").await;
+    assert_eq!(pages.len(), 2);
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/wiki/pages")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
+    let page: Option<WikiPage> = app
+        .get_json("/api/v1/repos/admin/codeza/wiki/pages/Home")
+        .await;
+    assert_eq!(page.unwrap().content, "Welcome to the wiki!");
+}
+
+#[tokio::test]
+async fn unknown_wiki_page_is_null() {
+    let app = TestApp::new();
+    let page: Option<WikiPage> = app
+        .get_json("/api/v1/repos/admin/codeza/wiki/pages/DoesNotExist")
+        .await;
+    assert!(page.is_none());
+}
+
+#[tokio::test]
+async fn wiki_page_can_be_created_and_updated() {
+    let app = TestApp::new();
+
+    let page: WikiPage = app
+        .post_created(
+            "/api/v1/repos/admin/codeza/wiki/pages",
+            serde_json::json!({
+                "title": "FAQ",
+                "content": "Q&A",
+                "message": "add faq"
+            }),
         )
-        .await
-        .unwrap();
+        .await;
+    assert_eq!(page.title, "FAQ");
 
-    assert_eq!(response.status(), StatusCode::CREATED);
+    app.put_json(
+        "/api/v1/repos/admin/codeza/wiki/pages/FAQ",
+        serde_json::json!({
+            "title": "FAQ",
+            "content": "Updated Q&A",
+            "message": "edit faq"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
 
-    // List Wiki Pages
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/wiki/pages")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let page: Option<WikiPage> = app
+        .get_json("/api/v1/repos/admin/codeza/wiki/pages/FAQ")
+        .await;
+    assert_eq!(page.unwrap().content, "Updated Q&A");
+}
 
-    assert_eq!(response.status(), StatusCode::OK);
-    // Note: Logic in handler uses mock static list, so we just verify API contract here.
+#[tokio::test]
+async fn update_unknown_wiki_page_is_not_found() {
+    let app = TestApp::new();
+    app.put_json(
+        "/api/v1/repos/admin/codeza/wiki/pages/Ghost",
+        serde_json::json!({ "title": "Ghost", "content": "x" }),
+    )
+    .await
+    .assert_status(StatusCode::NOT_FOUND);
 }

@@ -240,3 +240,90 @@ pub use pulse::*;
 pub use repos::*;
 pub use webhooks::*;
 pub use wiki::*;
+
+#[cfg(test)]
+mod tests {
+    use super::{is_private_ipv4, process_closers, process_mentions};
+    use std::net::Ipv4Addr;
+
+    #[test]
+    fn mentions_are_extracted_and_deduplicated() {
+        let mentions = process_mentions("thanks @alice and @bob, ping @alice again");
+        assert!(mentions.contains(&"alice".to_string()));
+        assert!(mentions.contains(&"bob".to_string()));
+        assert_eq!(mentions.len(), 2);
+    }
+
+    #[test]
+    fn mention_trailing_punctuation_is_stripped() {
+        let mentions = process_mentions("cc @carol, @dave!");
+        assert!(mentions.contains(&"carol".to_string()));
+        assert!(mentions.contains(&"dave".to_string()));
+    }
+
+    #[test]
+    fn bare_at_sign_is_ignored() {
+        assert!(process_mentions("email me @ home").is_empty());
+    }
+
+    #[test]
+    fn a_word_without_at_is_not_a_mention() {
+        assert!(process_mentions("alice bob").is_empty());
+    }
+
+    #[test]
+    fn closing_keywords_capture_issue_numbers() {
+        let closed = process_closers("This fixes #12 and closes #34");
+        assert!(closed.contains(&12));
+        assert!(closed.contains(&34));
+        assert_eq!(closed.len(), 2);
+    }
+
+    #[test]
+    fn closing_keyword_is_case_insensitive_and_punctuation_tolerant() {
+        let closed = process_closers("Fixes: #7\nResolved #9.");
+        assert!(closed.contains(&7));
+        assert!(closed.contains(&9));
+    }
+
+    #[test]
+    fn non_closing_keywords_and_missing_numbers_are_ignored() {
+        assert!(process_closers("related to #5 but not closing it").is_empty());
+        assert!(process_closers("closes the door").is_empty());
+    }
+
+    #[test]
+    fn closes_returns_unique_numbers() {
+        let closed = process_closers("closes #3 fixes #3");
+        assert_eq!(closed, vec![3]);
+    }
+
+    #[test]
+    fn rfc1918_and_link_local_ranges_are_private() {
+        for ip in [
+            "10.0.0.1",
+            "10.255.255.255",
+            "172.16.0.1",
+            "172.31.255.254",
+            "192.168.1.1",
+            "169.254.10.10",
+        ] {
+            let addr: Ipv4Addr = ip.parse().unwrap();
+            assert!(is_private_ipv4(addr), "{ip} should be private");
+        }
+    }
+
+    #[test]
+    fn public_addresses_are_not_private() {
+        for ip in [
+            "8.8.8.8",
+            "1.1.1.1",
+            "172.32.0.1",
+            "172.15.0.1",
+            "192.169.0.1",
+        ] {
+            let addr: Ipv4Addr = ip.parse().unwrap();
+            assert!(!is_private_ipv4(addr), "{ip} should be public");
+        }
+    }
+}

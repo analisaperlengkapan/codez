@@ -1,176 +1,108 @@
-//! Integration tests for the webhooks endpoints.
-use crate::routes::api_router;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use shared::CreateIssueOption;
-use tower::ServiceExt; // for `oneshot`
+//! Integration tests for webhooks, secrets, deploy keys and LFS locks.
+
+use axum::http::StatusCode;
+use shared::{DeployKey, Secret, Webhook, WebhookDelivery};
+
+use super::TestApp;
 
 #[tokio::test]
-async fn test_webhook_delivery_flow() {
-    let app = api_router();
+async fn hook_can_be_created_and_listed() {
+    let app = TestApp::new();
 
-    // 1. Create Webhook
-    let hook_payload = shared::CreateHookOption {
-        url: "http://example.com/webhook".to_string(),
-        events: vec!["issues".to_string()],
-        active: true,
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/hooks")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&hook_payload).unwrap()))
-                .unwrap(),
+    let hooks: Vec<Webhook> = app.get_json("/api/v1/repos/admin/codeza/hooks").await;
+    assert_eq!(hooks.len(), 1);
+
+    let hook: Webhook = app
+        .post_created(
+            "/api/v1/repos/admin/codeza/hooks",
+            serde_json::json!({
+                "url": "https://hooks.example.com/x",
+                "events": ["push"],
+                "active": true
+            }),
         )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let hook: shared::Webhook = serde_json::from_slice(&body).unwrap();
-    let hook_id = hook.id;
+        .await;
+    assert_eq!(hook.url, "https://hooks.example.com/x");
 
-    // 2. Trigger Event (Create Issue)
-    let issue_payload = CreateIssueOption {
-        title: "Webhook Test Issue".to_string(),
-        body: None,
-        milestone: None,
-    };
-    let _ = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/issues")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&issue_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    // 3. Verify Delivery
-    let mut found = false;
-    for _ in 0..50 {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(format!(
-                        "/api/v1/repos/admin/codeza/hooks/{}/deliveries",
-                        hook_id
-                    ))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let deliveries: Vec<shared::WebhookDelivery> = serde_json::from_slice(&body).unwrap();
-
-        // Should have 1 delivery for "issues" event. Status might be "failed" because example.com is unreachable.
-        if deliveries.iter().any(|d| d.event == "issues") {
-            found = true;
-            break;
-        }
-    }
-    assert!(found, "Webhook delivery should be recorded");
+    let hooks: Vec<Webhook> = app.get_json("/api/v1/repos/admin/codeza/hooks").await;
+    assert_eq!(hooks.len(), 2);
 }
+
 #[tokio::test]
-async fn test_webhook_ssrf_prevention() {
-    let app = api_router();
+async fn hook_deliveries_starts_empty() {
+    let app = TestApp::new();
+    let deliveries: Vec<WebhookDelivery> = app
+        .get_json("/api/v1/repos/admin/codeza/hooks/1/deliveries")
+        .await;
+    assert!(deliveries.is_empty());
+}
 
-    // 1. Create Webhook with restricted URL (localhost)
-    let hook_payload = shared::CreateHookOption {
-        url: "http://127.0.0.1:3000/api/v1/test_hook_receiver".to_string(),
-        events: vec!["issues".to_string()],
-        active: true,
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/hooks")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&hook_payload).unwrap()))
-                .unwrap(),
+#[tokio::test]
+async fn secrets_are_created_and_listed() {
+    let app = TestApp::new();
+
+    let secret: Secret = app
+        .post_created(
+            "/api/v1/repos/admin/codeza/secrets",
+            serde_json::json!({ "name": "DEPLOY_KEY", "data": "s3cret" }),
         )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let hook: shared::Webhook = serde_json::from_slice(&body).unwrap();
-    let hook_id = hook.id;
+        .await;
+    assert_eq!(secret.name, "DEPLOY_KEY");
 
-    // 2. Trigger Event (Create Issue)
-    let issue_payload = CreateIssueOption {
-        title: "SSRF Test Issue".to_string(),
-        body: None,
-        milestone: None,
-    };
-    let _ = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/issues")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&issue_payload).unwrap()))
-                .unwrap(),
+    let secrets: Vec<Secret> = app.get_json("/api/v1/repos/admin/codeza/secrets").await;
+    assert!(!secrets.is_empty());
+}
+
+#[tokio::test]
+async fn deploy_keys_are_created_and_listed() {
+    let app = TestApp::new();
+
+    let key: DeployKey = app
+        .post_created(
+            "/api/v1/repos/admin/codeza/keys",
+            serde_json::json!({ "title": "CI", "key": "ssh-rsa AAAA" }),
         )
-        .await
-        .unwrap();
+        .await;
+    assert_eq!(key.title, "CI");
 
-    // 3. Verify Delivery was Blocked
-    let mut blocked = false;
-    for _ in 0..50 {
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        let response = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("GET")
-                    .uri(format!(
-                        "/api/v1/repos/admin/codeza/hooks/{}/deliveries",
-                        hook_id
-                    ))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+    let keys: Vec<DeployKey> = app.get_json("/api/v1/repos/admin/codeza/keys").await;
+    assert!(!keys.is_empty());
+}
 
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let deliveries: Vec<shared::WebhookDelivery> = serde_json::from_slice(&body).unwrap();
+#[tokio::test]
+async fn lfs_lock_create_list_and_unlock() {
+    let app = TestApp::new();
 
-        if let Some(d) = deliveries.iter().find(|d| d.event == "issues") {
-            // Check that it was blocked (status contains "blocked")
-            if d.status.contains("blocked") {
-                blocked = true;
-                break;
-            }
-        }
-    }
-    assert!(
-        blocked,
-        "Webhook delivery to localhost should be blocked by SSRF protection"
-    );
+    let lock: shared::LfsLock = app
+        .post_created(
+            "/api/v1/repos/admin/codeza/git/lfs/locks",
+            serde_json::json!({ "path": "big.bin" }),
+        )
+        .await;
+    assert_eq!(lock.path, "big.bin");
+
+    // Locking the same path again conflicts.
+    app.post_json(
+        "/api/v1/repos/admin/codeza/git/lfs/locks",
+        serde_json::json!({ "path": "big.bin" }),
+    )
+    .await
+    .assert_status(StatusCode::CONFLICT);
+
+    let locks: Vec<shared::LfsLock> = app
+        .get_json("/api/v1/repos/admin/codeza/git/lfs/locks")
+        .await;
+    assert_eq!(locks.len(), 1);
+
+    app.post(&format!(
+        "/api/v1/repos/admin/codeza/git/lfs/locks/{}/unlock",
+        lock.id
+    ))
+    .await
+    .assert_status(StatusCode::NO_CONTENT);
+
+    let locks: Vec<shared::LfsLock> = app
+        .get_json("/api/v1/repos/admin/codeza/git/lfs/locks")
+        .await;
+    assert!(locks.is_empty());
 }

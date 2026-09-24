@@ -20,6 +20,32 @@ pub async fn list_pulls(
     Json(filtered_pulls)
 }
 
+/// Repository-scoped lookup for a single pull request.
+///
+/// Mirrors the issue detail handlers: the `:index` path segment is the pull's
+/// id (which is what the list page links with), and a missing pull is a `200`
+/// with a `null` body rather than a `404`, matching the frontend `get_opt`
+/// helper.
+pub async fn get_pull(
+    State(state): State<AppState>,
+    Path((owner, repo_name, index)): Path<(String, String, u64)>,
+) -> Json<Option<PullRequest>> {
+    let repos = state.repos.read().unwrap_or_else(|e| e.into_inner());
+    let repo_id = repos
+        .iter()
+        .find(|r| r.owner == owner && r.name == repo_name)
+        .map(|r| r.id)
+        .unwrap_or(0);
+
+    let pulls = state.pulls.read().unwrap_or_else(|e| e.into_inner());
+    Json(
+        pulls
+            .iter()
+            .find(|p| p.repo_id == repo_id && p.id == index)
+            .cloned(),
+    )
+}
+
 pub async fn create_pull(
     State(state): State<AppState>,
     Path((owner, repo_name)): Path<(String, String)>,

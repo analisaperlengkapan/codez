@@ -1,68 +1,84 @@
-//! Integration tests for the actions endpoints.
-use crate::routes::api_router;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use tower::ServiceExt; // for `oneshot`
+//! Integration tests for CI action workflows and runs.
+
+use axum::http::StatusCode;
+use shared::{ActionWorkflow, WorkflowRun};
+
+use super::TestApp;
 
 #[tokio::test]
-async fn test_action_flow() {
-    let app = api_router();
+async fn list_seeded_workflow() {
+    let app = TestApp::new();
+    let workflows: Vec<ActionWorkflow> = app
+        .get_json("/api/v1/repos/admin/codeza/actions/workflows")
+        .await;
+    assert_eq!(workflows.len(), 1);
+    assert_eq!(workflows[0].name, "CI");
+}
 
-    // List Workflows (mock)
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/actions/workflows")
-                .body(Body::empty())
-                .unwrap(),
+#[tokio::test]
+async fn trigger_workflow_creates_a_run() {
+    let app = TestApp::new();
+
+    let run: WorkflowRun = app
+        .post_json(
+            "/api/v1/repos/admin/codeza/actions/workflows/1/runs",
+            serde_json::json!({ "workflow_id": 1, "ref_name": "main" }),
         )
         .await
-        .unwrap();
+        .json();
+    assert_eq!(run.workflow_id, 1);
 
-    assert_eq!(response.status(), StatusCode::OK);
+    let runs: Vec<WorkflowRun> = app
+        .get_json("/api/v1/repos/admin/codeza/actions/workflows/1/runs")
+        .await;
+    assert!(runs.iter().any(|r| r.id == run.id));
+}
 
-    // Trigger Workflow
-    let payload = shared::CreateWorkflowRunOption {
-        ref_name: "main".to_string(),
-        workflow_id: 1,
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/actions/workflows/1/runs")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
+#[tokio::test]
+async fn workflow_run_logs_update_and_delete() {
+    let app = TestApp::new();
+
+    let run: WorkflowRun = app
+        .post_json(
+            "/api/v1/repos/admin/codeza/actions/workflows/1/runs",
+            serde_json::json!({ "workflow_id": 1, "ref_name": "main" }),
         )
         .await
-        .unwrap();
+        .json();
 
-    assert_eq!(response.status(), StatusCode::CREATED);
+    let logs = app
+        .get(&format!(
+            "/api/v1/repos/admin/codeza/actions/runs/{}/logs",
+            run.id
+        ))
+        .await;
+    logs.assert_status(StatusCode::OK);
 
-    // List Workflow Runs
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/actions/workflows/1/runs")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    app.patch_json(
+        &format!("/api/v1/repos/admin/codeza/actions/runs/{}", run.id),
+        serde_json::json!({ "status": "success" }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let runs: Vec<shared::WorkflowRun> = serde_json::from_slice(&body).unwrap();
-    assert_eq!(runs.len(), 1);
-    assert_eq!(runs[0].status, "queued");
+    app.post_json(
+        &format!("/api/v1/repos/admin/codeza/actions/runs/{}/rerun", run.id),
+        serde_json::json!({}),
+    )
+    .await
+    .assert_status(StatusCode::OK);
+
+    app.delete(&format!(
+        "/api/v1/repos/admin/codeza/actions/runs/{}",
+        run.id
+    ))
+    .await
+    .assert_status(StatusCode::NO_CONTENT);
+
+    app.delete(&format!(
+        "/api/v1/repos/admin/codeza/actions/runs/{}",
+        run.id
+    ))
+    .await
+    .assert_status(StatusCode::NOT_FOUND);
 }

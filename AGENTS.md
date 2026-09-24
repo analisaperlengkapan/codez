@@ -49,10 +49,20 @@ tests/             Playwright end-to-end specs
 (cd crates/frontend && trunk build)
 
 cargo run -p backend                    # serve API + SPA on :3000
-cargo test --workspace                  # all tests
+cargo test --workspace                  # all tests (backend + shared)
 cargo clippy --workspace --all-targets  # lint (keep this clean)
 cargo fmt --all                         # format
 ```
+
+Test suites:
+
+- **Backend integration** (`crates/backend/src/tests/`, one module per area) drive the real
+  router via `tower::ServiceExt::oneshot` against the seeded in-memory state.
+- **Backend unit** tests are colocated with the pure helpers they cover (e.g.
+  `handlers/repo/mod.rs` tests `process_mentions`, `process_closers`, `is_private_ipv4`).
+- **Shared** DTO/serde tests live in `crates/shared`.
+- **Frontend e2e** (`tests/`) is Playwright: feature specs plus `routes.spec.ts`, which
+  smoke-renders every client route and asserts no uncaught page errors.
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push/PR: `cargo fmt
 --check`, `cargo clippy -- -D warnings`, `cargo test`, a release `trunk build`, and the
@@ -99,10 +109,14 @@ links return `index.html`; unknown `/api/*` paths return `404`.
 
 - Backend integration tests live in `crates/backend/src/tests/`, one module per area plus
   a `mod.rs`, and exercise real handler/router code paths.
+- Pure backend helpers get colocated `#[cfg(test)] mod tests` unit tests in the file that
+  defines them, rather than being tested only through HTTP.
 - Playwright specs live in `tests/` and run with `npx playwright test`. They use the
   `baseURL` from `playwright.config.ts` (`CODEZA_BASE_URL`, default
   `http://127.0.0.1:8080`) — never hardcode absolute URLs in specs; pass relative paths
   to `page.goto()` / `page.request.*()`.
+- `tests/routes.spec.ts` is the route smoke net: keep its `ROUTES` list in sync with
+  `crates/frontend/src/main.rs` so a renamed or removed route fails loudly.
 - Ad-hoc API verification scripts live in `scripts/verify_*.py`.
 
 ## Verifying changes
@@ -126,6 +140,9 @@ seeded org slug is `codeza-org`, not `admin`).
   handler in `main.rs` is intentionally a single `.fallback()` that resolves assets itself.
 - The frontend build output (`crates/frontend/dist/`) is gitignored — build it locally.
 - `node_modules/` is gitignored; run `npm install` for Playwright.
+- The detail endpoints return `200` with a JSON `null` body for a missing entity
+  (`Json<Option<T>>`), *not* `404`. The frontend `get_opt` helper depends on this, so when
+  adding a detail handler follow the same convention instead of returning `404`.
 - At narrow viewports the global header scrolls horizontally (`overflow-x: auto`) rather
   than wrapping; the inner `.nav-links` deliberately overflow their container. Don't
   "fix" this by allowing the header to break out — it is what keeps the document from

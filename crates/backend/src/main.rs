@@ -15,6 +15,7 @@ mod handlers;
 mod routes;
 mod seed;
 mod state;
+#[cfg(test)]
 mod tests;
 
 /// Content type for the static asset extensions the frontend emits.

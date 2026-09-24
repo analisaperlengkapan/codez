@@ -1,54 +1,61 @@
-//! Integration tests for the packages endpoints.
-use crate::routes::api_router;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use tower::ServiceExt; // for `oneshot`
+//! Integration tests for packages.
+
+use axum::http::StatusCode;
+use shared::Package;
+
+use super::TestApp;
 
 #[tokio::test]
-async fn test_package_flow() {
-    let app = api_router();
+async fn list_and_get_seeded_package() {
+    let app = TestApp::new();
 
-    // Upload Package (mock)
-    let payload = shared::CreatePackageOption {
-        name: "test-pkg".to_string(),
-        version: "0.1.0".to_string(),
-        package_type: "npm".to_string(),
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/packages/admin")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
+    let packages: Vec<Package> = app.get_json("/api/v1/packages/admin").await;
+    assert_eq!(packages.len(), 1);
+    assert_eq!(packages[0].name, "my-lib");
+
+    let detail: Option<Package> = app
+        .get_json("/api/v1/packages/admin/cargo/my-lib/1.0.0")
+        .await;
+    assert_eq!(detail.unwrap().version, "1.0.0");
+}
+
+#[tokio::test]
+async fn upload_rejects_duplicate_version() {
+    let app = TestApp::new();
+
+    let package: Package = app
+        .post_created(
+            "/api/v1/packages/admin",
+            serde_json::json!({
+                "name": "new-lib",
+                "version": "0.1.0",
+                "package_type": "cargo"
+            }),
         )
-        .await
-        .unwrap();
+        .await;
+    assert_eq!(package.name, "new-lib");
 
-    assert_eq!(response.status(), StatusCode::CREATED);
+    app.post_json(
+        "/api/v1/packages/admin",
+        serde_json::json!({
+            "name": "new-lib",
+            "version": "0.1.0",
+            "package_type": "cargo"
+        }),
+    )
+    .await
+    .assert_status(StatusCode::CONFLICT);
+}
 
-    // List Packages
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/packages/admin")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+#[tokio::test]
+async fn delete_package_removes_it() {
+    let app = TestApp::new();
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+    app.delete("/api/v1/packages/admin/cargo/my-lib/1.0.0")
         .await
-        .unwrap();
-    let packages: Vec<shared::Package> = serde_json::from_slice(&body).unwrap();
-    // Init state has 1 package. So now 2.
-    assert_eq!(packages.len(), 2);
+        .assert_status(StatusCode::NO_CONTENT);
+
+    app.delete("/api/v1/packages/admin/cargo/my-lib/1.0.0")
+        .await
+        .assert_status(StatusCode::NOT_FOUND);
 }

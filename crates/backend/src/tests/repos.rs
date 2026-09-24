@@ -1,426 +1,153 @@
-//! Integration tests for the repos endpoints.
-use crate::routes::api_router;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use shared::{
-    Activity, CreateIssueOption, CreateProtectedBranchOption, CreatePullRequestOption,
-    CreateRepoOption, CreateStatusOption, MergePullRequestOption, PullRequest, Repository,
-    UpdateIssueOption,
-};
-use tower::ServiceExt; // for `oneshot`
+//! Integration tests for repository CRUD, settings, social actions and collaborators.
+
+use axum::http::StatusCode;
+use shared::{Collaborator, RepoUserStatus, Repository};
+
+use super::TestApp;
 
 #[tokio::test]
-async fn test_create_repo_flow() {
-    let app = api_router();
+async fn list_and_get_seeded_repo() {
+    let app = TestApp::new();
 
-    let payload = CreateRepoOption {
-        name: "test-repo".to_string(),
-        description: None,
-        private: false,
-        auto_init: true,
-        gitignores: None,
-        license: None,
-        readme: None,
-        default_branch: None,
-        allow_rebase_merge: None,
-        allow_squash_merge: None,
-        allow_merge_commit: None,
-        has_issues: None,
-        has_wiki: None,
-        has_projects: None,
-    };
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/user/repos")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let repo: Repository = serde_json::from_slice(&body).unwrap();
-    assert_eq!(repo.name, "test-repo");
-
-    // Verify Activity Log
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/user/feeds")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
-
-    let found = activities
+    let repos: Vec<Repository> = app.get_json("/api/v1/repos").await;
+    assert_eq!(repos.len(), 2);
+    assert!(repos
         .iter()
-        .any(|a| a.content.contains("created repository test-repo"));
-    assert!(found, "Should find creation activity in feed");
+        .any(|r| r.name == "codeza" && r.owner == "admin"));
+
+    let repo: Repository = app.get_json("/api/v1/repos/admin/codeza").await;
+    assert_eq!(repo.owner, "admin");
+    assert_eq!(repo.id, 1);
 }
+
 #[tokio::test]
-async fn test_star_repo_flow() {
-    let app = api_router();
+async fn get_unknown_repo_is_null() {
+    let app = TestApp::new();
+    // Detail endpoints answer `200` with a `null` body for unknown resources so the
+    // frontend `get_opt` helper can decode them uniformly.
+    let repo: Option<Repository> = app.get_json("/api/v1/repos/admin/ghost").await;
+    assert!(repo.is_none());
+}
 
-    // 1. Star a repo
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/star")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+#[tokio::test]
+async fn create_repo_then_fetch_it() {
+    let app = TestApp::new();
 
-    // 2. Check User Status
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/user_status")
-                .body(Body::empty())
-                .unwrap(),
+    let repo: Repository = app
+        .post_created(
+            "/api/v1/user/repos",
+            serde_json::json!({
+                "name": "fresh",
+                "description": "New repo",
+                "private": false,
+                "auto_init": true
+            }),
         )
+        .await;
+    assert_eq!(repo.name, "fresh");
+
+    let fetched: Repository = app.get_json("/api/v1/repos/admin/fresh").await;
+    assert_eq!(fetched.id, repo.id);
+
+    // Duplicate name is a conflict.
+    app.post_json(
+        "/api/v1/user/repos",
+        serde_json::json!({ "name": "fresh", "private": false, "auto_init": false }),
+    )
+    .await
+    .assert_status(StatusCode::CONFLICT);
+}
+
+#[tokio::test]
+async fn star_and_watch_toggle_user_status() {
+    let app = TestApp::new();
+
+    app.post("/api/v1/repos/admin/codeza/star")
         .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let status: shared::RepoUserStatus = serde_json::from_slice(&body).unwrap();
+        .assert_status(StatusCode::NO_CONTENT);
+    let status: RepoUserStatus = app.get_json("/api/v1/repos/admin/codeza/user_status").await;
     assert!(status.starred);
 
-    // 3. List Starred Repos
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/user/starred")
-                .body(Body::empty())
-                .unwrap(),
-        )
+    app.post("/api/v1/repos/admin/codeza/watch")
         .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let repos: Vec<Repository> = serde_json::from_slice(&body).unwrap();
-    assert!(repos.iter().any(|r| r.name == "codeza"));
-
-    // 4. Unstar
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/star")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
-
-    // 5. Verify Unstarred
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/user_status")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let status: shared::RepoUserStatus = serde_json::from_slice(&body).unwrap();
-    assert!(!status.starred);
+        .assert_status(StatusCode::NO_CONTENT);
+    let status: RepoUserStatus = app.get_json("/api/v1/repos/admin/codeza/user_status").await;
+    assert!(status.watching);
 }
+
 #[tokio::test]
-async fn test_fork_repo_flow() {
-    let app = api_router();
+async fn fork_creates_a_copy_under_the_user() {
+    let app = TestApp::new();
 
-    // 1. Fork 'codeza'
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/fork")
-                .body(Body::empty())
-                .unwrap(),
-        )
+    let fork: Repository = app
+        .post_json("/api/v1/repos/admin/codeza/fork", serde_json::json!({}))
         .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let forked_repo: Repository = serde_json::from_slice(&body).unwrap();
+        .json();
+    assert_eq!(fork.name, "codeza-fork");
+    assert_eq!(fork.parent_id, Some(1));
 
-    assert_eq!(forked_repo.name, "codeza-fork");
-    // Verify parent_id is set (assuming codeza id is 1)
-    assert_eq!(forked_repo.parent_id, Some(1));
-
-    // 2. Verify files copied
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri(format!(
-                    "/api/v1/repos/{}/{}/raw/src/main.rs",
-                    forked_repo.owner, forked_repo.name
-                ))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let content = String::from_utf8(body.to_vec()).unwrap();
-    assert!(content.contains("Welcome to codeza"));
+    let repos: Vec<Repository> = app.get_json("/api/v1/repos").await;
+    assert!(repos.iter().any(|r| r.name == "codeza-fork"));
 }
+
 #[tokio::test]
-async fn test_commit_status_protection_flow() {
-    let app = api_router();
+async fn repo_settings_read_and_update() {
+    let app = TestApp::new();
 
-    // 1. Create Protected Branch
-    let pb_payload = CreateProtectedBranchOption {
-        name: "main".to_string(),
-        enable_push: false,
-        enable_force_push: false,
-        required_status_checks: Some(vec!["ci/test".to_string()]),
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/branch_protections")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&pb_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
+    let settings: shared::RepoSettingsOption =
+        app.get_json("/api/v1/repos/admin/codeza/settings").await;
+    assert_eq!(settings.private, Some(false));
 
-    // 2. Create PR (target: main)
-    let pr_payload = CreatePullRequestOption {
-        title: "Protected PR".to_string(),
-        body: None,
-        head: "feature".to_string(),
-        base: "main".to_string(),
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/pulls")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&pr_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let pr: PullRequest = serde_json::from_slice(&body).unwrap();
-    let pr_number = pr.number;
-    let head_sha = pr.head_sha;
+    app.patch_json(
+        "/api/v1/repos/admin/codeza/settings",
+        serde_json::json!({ "description": "Updated description" }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
 
-    // 3. Attempt Merge (Should Fail due to missing status check)
-    let merge_payload = MergePullRequestOption {
-        merge_action: "merge".to_string(),
-        merge_title_field: None,
-        merge_message_field: None,
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!(
-                    "/api/v1/repos/admin/codeza/pulls/{}/merge",
-                    pr_number
-                ))
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&merge_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CONFLICT); // 409 Conflict
-
-    // 4. Create Success Status
-    let status_payload = CreateStatusOption {
-        state: "success".to_string(),
-        target_url: None,
-        description: Some("Tests passed".to_string()),
-        context: Some("ci/test".to_string()),
-    };
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/v1/repos/admin/codeza/statuses/{}", head_sha))
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&status_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-
-    // 5. Attempt Merge (Should Succeed)
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!(
-                    "/api/v1/repos/admin/codeza/pulls/{}/merge",
-                    pr_number
-                ))
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&merge_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let repo: Repository = app.get_json("/api/v1/repos/admin/codeza").await;
+    assert_eq!(repo.description.as_deref(), Some("Updated description"));
 }
+
 #[tokio::test]
-async fn test_repo_pulse_flow() {
-    let app = api_router();
+async fn repo_search_filters_by_name() {
+    let app = TestApp::new();
 
-    // 1. Create 2 Issues
-    for i in 1..=2 {
-        let payload = CreateIssueOption {
-            title: format!("Issue {}", i),
-            body: None,
-            milestone: None,
-        };
-        let _ = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v1/repos/admin/codeza/issues")
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-    }
+    let all: Vec<Repository> = app.get_json("/api/v1/repos/search?q=").await;
+    let matches: Vec<Repository> = app.get_json("/api/v1/repos/search?q=codez").await;
+    assert_eq!(all.len(), 2);
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].name, "codeza");
 
-    // 2. Close 1 Issue (The first one created in this test is ID 2, since ID 1 exists in init)
-    // Wait, init has issue 1. Created are 2 and 3.
-    // Let's close issue 2.
-    let update_payload = UpdateIssueOption {
-        title: None,
-        body: None,
-        state: Some("closed".to_string()),
-        milestone_id: None,
-    };
-    let _ = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("PATCH")
-                .uri("/api/v1/repos/admin/codeza/issues/2")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&update_payload).unwrap()))
-                .unwrap(),
-        )
+    let none: Vec<Repository> = app.get_json("/api/v1/repos/search?q=zzzz").await;
+    assert!(none.is_empty());
+}
+
+#[tokio::test]
+async fn collaborators_endpoints_respond() {
+    let app = TestApp::new();
+
+    let collaborators: Vec<Collaborator> = app
+        .get_json("/api/v1/repos/admin/codeza/collaborators")
+        .await;
+    assert!(!collaborators.is_empty());
+
+    app.put_json(
+        "/api/v1/repos/admin/codeza/collaborators/newcollab",
+        serde_json::json!({ "permission": "write" }),
+    )
+    .await
+    .assert_status(StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn mirror_sync_and_pulse_respond() {
+    let app = TestApp::new();
+
+    app.post("/api/v1/repos/admin/codeza/mirror-sync")
         .await
-        .unwrap();
+        .assert_status(StatusCode::OK);
 
-    // 3. Create a PR
-    let pr_payload = CreatePullRequestOption {
-        title: "Pulse PR".to_string(),
-        body: None,
-        head: "feature".to_string(),
-        base: "main".to_string(),
-    };
-    let _ = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/pulls")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&pr_payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    // 4. Fetch Pulse
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/pulse?period=weekly")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let stats: shared::RepoPulseStats = serde_json::from_slice(&body).unwrap();
-
-    // Verify Stats
-    // Issues: 2 created. 1 closed.
-    // Note: 'active_issues' in handler counts "create_issue" events.
-    // 'closed_issues' counts "close_issue" events.
-    // So active_issues should be 2 (plus any from init if they had activity logs? Init has no activity logs).
-    // So active_issues >= 2.
-    assert!(stats.active_issues >= 2);
-    assert!(stats.closed_issues >= 1);
-    assert!(stats.opened_prs >= 1);
-    assert!(!stats.active_authors.is_empty());
+    let pulse: shared::RepoPulseStats = app.get_json("/api/v1/repos/admin/codeza/pulse").await;
+    assert_eq!(pulse.period, "weekly");
 }

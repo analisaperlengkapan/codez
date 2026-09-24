@@ -19,7 +19,7 @@ typed DTOs across both.
 | Shared | Common DTOs and utilities in `crates/shared` |
 | Storage | In-memory by default; PostgreSQL via `tokio-postgres` |
 | Build | Cargo workspaces + Trunk |
-| Tests | `cargo test` (backend) + Playwright (end-to-end) |
+| Tests | `cargo test` (backend unit + integration) + Playwright (end-to-end) |
 | CI | GitHub Actions — fmt, clippy, tests, frontend build, e2e |
 
 ## Architecture
@@ -223,6 +223,10 @@ The `tests/` directory holds Playwright specs. They target `http://127.0.0.1:808
 (cd crates/frontend && trunk serve)   # UI + API proxy on :8080
 npx playwright test --project=chromium
 ```
+
+Suites include feature flows (issues, pulls, milestones, wiki, …), a per-route smoke spec
+(`tests/routes.spec.ts`) that renders every client route and fails on any uncaught error,
+and a detail-endpoint spec covering the single-pull route.
 
 ## API
 

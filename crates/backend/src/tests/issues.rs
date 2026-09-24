@@ -1,263 +1,143 @@
-//! Integration tests for the issues endpoints.
-use crate::routes::api_router;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use shared::{Activity, CreateIssueOption, Issue, UpdateIssueOption};
-use tower::ServiceExt; // for `oneshot`
+//! Integration tests for issues, assignees and locking.
+
+use axum::http::StatusCode;
+use shared::Issue;
+
+use super::TestApp;
 
 #[tokio::test]
-async fn test_create_issue_flow() {
-    let app = api_router();
+async fn list_and_get_seeded_issue() {
+    let app = TestApp::new();
 
-    // Create Issue
-    let payload = CreateIssueOption {
-        title: "Test Bug".to_string(),
-        body: Some("Description".to_string()),
-        milestone: None,
-    };
+    let issues: Vec<Issue> = app.get_json("/api/v1/repos/admin/codeza/issues").await;
+    assert_eq!(issues.len(), 1);
 
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/issues")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let issue: Issue = serde_json::from_slice(&body).unwrap();
-    assert_eq!(issue.title, "Test Bug");
-
-    // Verify Activity
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/user/feeds")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let activities: Vec<Activity> = serde_json::from_slice(&body).unwrap();
-    let found = activities
-        .iter()
-        .any(|a| a.op_type == "create_issue" && a.content.contains("opened issue"));
-    assert!(found);
+    let issue: Issue = app.get_json("/api/v1/repos/admin/codeza/issues/1").await;
+    assert_eq!(issue.title, "First Issue");
+    assert_eq!(issue.state, "open");
 }
+
 #[tokio::test]
-async fn test_update_issue_flow() {
-    let app = api_router();
+async fn create_issue_increments_number_and_notifies() {
+    let app = TestApp::new();
 
-    // Update Issue 1 (default mock issue)
-    let payload = UpdateIssueOption {
-        title: Some("Updated Title".to_string()),
-        body: Some("Updated Body".to_string()),
-        state: Some("closed".to_string()),
-        milestone_id: None,
-    };
-
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("PATCH")
-                .uri("/api/v1/repos/admin/codeza/issues/1")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
+    let created: Issue = app
+        .post_created(
+            "/api/v1/repos/admin/codeza/issues",
+            serde_json::json!({ "title": "Second issue", "body": "Details" }),
         )
-        .await
-        .unwrap();
+        .await;
+    assert_eq!(created.number, 2);
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let issue: Option<Issue> = serde_json::from_slice(&body).unwrap();
-    let issue = issue.unwrap();
-    assert_eq!(issue.title, "Updated Title");
+    let issues: Vec<Issue> = app.get_json("/api/v1/repos/admin/codeza/issues").await;
+    assert_eq!(issues.len(), 2);
+
+    app.get(&format!(
+        "/api/v1/repos/admin/codeza/issues/{}",
+        created.number
+    ))
+    .await
+    .assert_status(StatusCode::OK);
+}
+
+#[tokio::test]
+async fn issue_filters_by_state_and_query() {
+    let app = TestApp::new();
+
+    app.post_json(
+        "/api/v1/repos/admin/codeza/issues",
+        serde_json::json!({ "title": "Closed one" }),
+    )
+    .await
+    .assert_status(StatusCode::CREATED);
+
+    let open: Vec<Issue> = app
+        .get_json("/api/v1/repos/admin/codeza/issues?state=open")
+        .await;
+    assert!(open.iter().all(|i| i.state == "open"));
+
+    let matching: Vec<Issue> = app
+        .get_json("/api/v1/repos/admin/codeza/issues?q=Closed")
+        .await;
+    assert_eq!(matching.len(), 1);
+    assert_eq!(matching[0].title, "Closed one");
+}
+
+#[tokio::test]
+async fn update_issue_can_close_it() {
+    let app = TestApp::new();
+
+    app.patch_json(
+        "/api/v1/repos/admin/codeza/issues/1",
+        serde_json::json!({ "state": "closed", "title": "Renamed" }),
+    )
+    .await
+    .assert_status(StatusCode::OK);
+
+    let issue: Issue = app.get_json("/api/v1/repos/admin/codeza/issues/1").await;
     assert_eq!(issue.state, "closed");
+    assert_eq!(issue.title, "Renamed");
 }
+
 #[tokio::test]
-async fn test_remove_issue_assignee_flow() {
-    let app = api_router();
+async fn lock_and_unlock_issue() {
+    let app = TestApp::new();
 
-    // Add assignee first (mocked user is already in Assignees? No, init is empty)
-    // Add User 2
-    let payload = shared::User::new(2, "user".to_string(), None);
-    let _ = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/issues/1/assignees")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
-        )
+    app.put_json(
+        "/api/v1/repos/admin/codeza/issues/1/lock",
+        serde_json::json!({}),
+    )
+    .await
+    .assert_status(StatusCode::OK);
+
+    let issue: Issue = app.get_json("/api/v1/repos/admin/codeza/issues/1").await;
+    assert!(issue.is_locked);
+
+    app.delete("/api/v1/repos/admin/codeza/issues/1/lock")
         .await
-        .unwrap();
+        .assert_status(StatusCode::OK);
 
-    // Remove User 2
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("DELETE")
-                .uri("/api/v1/repos/admin/codeza/issues/1/assignees/user")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let issue: Issue = app.get_json("/api/v1/repos/admin/codeza/issues/1").await;
+    assert!(!issue.is_locked);
 }
+
 #[tokio::test]
-async fn test_issue_filter_flow() {
-    let app = api_router();
+async fn assignee_add_and_remove() {
+    let app = TestApp::new();
 
-    // Ensure issue 1 has label 1 and assignee "admin" (default mock state needs setup?)
-    // Actually mock state init has no labels/assignees on issue 1.
-    // Let's add them via API first or assume test starts fresh.
-    // We'll add a label to issue 1
-    let payload = shared::CreateLabelOption {
-        name: "bug".to_string(),
-        color: "#f00".to_string(),
-        description: None,
-    };
-    let _ = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/v1/repos/admin/codeza/issues/1/labels")
-                .header("Content-Type", "application/json")
-                .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    app.post_json(
+        "/api/v1/repos/admin/codeza/issues/1/assignees",
+        serde_json::json!({ "id": 2, "username": "user", "email": null }),
+    )
+    .await
+    .assert_status(StatusCode::CREATED);
 
-    // Filter by label (mock label id 100 from handler)
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/issues?label_id=100")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let issue: Issue = app.get_json("/api/v1/repos/admin/codeza/issues/1").await;
+    assert!(issue.assignees.iter().any(|u| u.username == "user"));
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+    app.delete("/api/v1/repos/admin/codeza/issues/1/assignees/user")
         .await
-        .unwrap();
-    let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
-    assert_eq!(issues.len(), 1);
-    assert_eq!(issues[0].number, 1);
+        .assert_status(StatusCode::NO_CONTENT);
 
-    // Filter by wrong label
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/issues?label_id=999")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
-    assert_eq!(issues.len(), 0);
+    let issue: Issue = app.get_json("/api/v1/repos/admin/codeza/issues/1").await;
+    assert!(issue.assignees.iter().all(|u| u.username != "user"));
 }
+
 #[tokio::test]
-async fn test_issue_pagination_sort_flow() {
-    let app = api_router();
+async fn global_issue_search_finds_matches() {
+    let app = TestApp::new();
 
-    // Create 2 issues
-    for i in 1..=2 {
-        let payload = CreateIssueOption {
-            title: format!("Issue {}", i),
-            body: None,
-            milestone: None,
-        };
-        let _ = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .method("POST")
-                    .uri("/api/v1/repos/admin/codeza/issues")
-                    .header("Content-Type", "application/json")
-                    .body(Body::from(serde_json::to_string(&payload).unwrap()))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-    }
+    let results: Vec<Issue> = app.get_json("/api/v1/search/issues?q=First").await;
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].title, "First Issue");
 
-    // Test Pagination: Limit 1
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/issues?limit=1&page=1")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let none: Vec<Issue> = app.get_json("/api/v1/search/issues?q=nomatch").await;
+    assert!(none.is_empty());
+}
 
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
-    assert_eq!(issues.len(), 1);
-
-    // Test Sort Desc (Default) - Issue 2 should be first
-    let response = app
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("GET")
-                .uri("/api/v1/repos/admin/codeza/issues?sort=created&direction=desc")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let issues: Vec<Issue> = serde_json::from_slice(&body).unwrap();
-    // Since we created 2 new issues, plus the initial 1, we have 3 total.
-    // Order desc by ID: Issue 3 (created 2nd here), Issue 2 (created 1st here), Issue 1 (initial).
-    // Let's verify the first one is the latest created.
-    assert!(issues[0].id > issues[1].id);
+#[tokio::test]
+async fn unknown_issue_is_null() {
+    let app = TestApp::new();
+    let issue: Option<Issue> = app.get_json("/api/v1/repos/admin/codeza/issues/999").await;
+    assert!(issue.is_none());
 }

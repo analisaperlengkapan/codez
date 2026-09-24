@@ -1,7 +1,7 @@
 //! Pull requests, reviews and merges.
 
 use axum::{
-    routing::{get, patch, post},
+    routing::{get, post},
     Router,
 };
 
@@ -16,7 +16,7 @@ pub(super) fn pull_routes() -> Router<AppState> {
         )
         .route(
             "/api/v1/repos/:owner/:repo/pulls/:index",
-            patch(update_pull),
+            get(get_pull).patch(update_pull),
         )
         .route(
             "/api/v1/repos/:owner/:repo/pulls/:index/reviews",

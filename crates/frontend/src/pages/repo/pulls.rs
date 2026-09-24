@@ -1,7 +1,7 @@
 //! Pull request list and detail components.
 
 use super::CommitStatusList;
-use crate::api::{get, patch_json, post_json};
+use crate::api::{get, get_opt, patch_json, post_json};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -67,14 +67,7 @@ pub fn PullRequestDetail() -> impl IntoView {
     let pull_request = create_resource(
         move || (owner(), repo_name(), index(), trigger_refresh.get()),
         |(o, r, i, _)| async move {
-            // Note: list_pulls filters by repo, but we need get_pull. Since get_pull logic is inside list_pulls basically,
-            // we might not have a direct endpoint for get_pull in router yet? No, router has `list_pulls` but no `get_pull`.
-            // Wait, looking at router.rs: `.route("/api/v1/repos/:owner/:repo/pulls", get(list_pulls)...)`
-            // There isn't a `get_pull` route! We should add one or iterate list (inefficient but works for now).
-            // Actually, we can use the `list_pulls` and find the one with the right index client-side or add endpoint.
-            // For now, let's filter client side from list since that endpoint exists.
-            let pulls = get::<Vec<PullRequest>>(&format!("/api/v1/repos/{}/{}/pulls", o, r)).await;
-            pulls.into_iter().find(|p| p.number == i)
+            get_opt::<PullRequest>(&format!("/api/v1/repos/{}/{}/pulls/{}", o, r, i)).await
         },
     );
 
