@@ -29,18 +29,16 @@ test.describe('Static fallback', () => {
     }
   });
 
-  test('missing build assets return 404, not the shell', async ({ request }) => {
-    for (const path of ['/nope-abc123.js', '/nope-abc123.css', '/nope_abc.wasm']) {
-      const res = await request.get(path);
-      expect(res.status(), path).toBe(404);
-    }
-  });
-
   test('unknown API paths stay 404 JSON-free', async ({ request }) => {
     const res = await request.get('/api/v1/does-not-exist');
     expect(res.status()).toBe(404);
     expect(await res.text()).not.toContain('<!DOCTYPE html>');
   });
+
+  // The `404` for missing build assets and the top-level asset classification
+  // are covered by `static_asset_tests` in `crates/backend/src/main.rs`. They
+  // are not asserted here because the e2e suite runs behind `trunk serve`, whose
+  // own SPA fallback answers missing assets before the backend sees them.
 
   test('dotted repository deep links still serve the SPA shell', async ({ page }) => {
     // `library.js` ends in `.js` but is a route segment, not a missing asset.
