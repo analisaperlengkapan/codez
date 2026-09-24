@@ -49,6 +49,11 @@ test.describe('Repository Stars and Watches Flow', () => {
     await page.waitForTimeout(1000);
     await expect(actionsDiv.getByRole('button', { name: /^Unstar \(/ }).first()).toBeVisible({ timeout: 5000 });
 
+    // The overview stats share the star/watch invalidation trigger with the
+    // header, so they must not stay stale beside it.
+    const starsStat = page.locator('.repo-stats span[title="Stars"]');
+    await expect(starsStat).toHaveText(/⭐ 1/, { timeout: 5000 });
+
     // 5. Watch the repository
     await actionsDiv.getByRole('button', { name: /^Watch \(/ }).first().click();
     await page.waitForTimeout(1000);

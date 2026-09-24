@@ -3,6 +3,22 @@ use leptos::*;
 use leptos_router::*;
 use shared::{RepoUserStatus, Repository};
 
+/// Shared invalidation trigger for repository data.
+///
+/// `RepoNav` and the page it heads each fetch the repository independently, so a
+/// star/watch action (which mutates the server-side counts) must refresh both.
+/// The heading page provides this signal; `RepoNav` falls back to a private one
+/// when rendered without a provider (e.g. sub-pages with no overview).
+#[derive(Copy, Clone)]
+pub struct RepoRefresh(pub RwSignal<u32>);
+
+/// Read the shared refresh signal, or create a page-local one when absent.
+pub fn use_repo_refresh() -> RwSignal<u32> {
+    use_context::<RepoRefresh>()
+        .map(|r| r.0)
+        .unwrap_or_else(|| create_rw_signal(0))
+}
+
 /// Shared repository chrome: the repository header (name + star/watch/fork
 /// actions) followed by the section navigation.
 ///
@@ -17,7 +33,7 @@ pub fn RepoNav() -> impl IntoView {
     let owner = move || params.with(|p| p.get("owner").cloned().unwrap_or_default());
     let repo = move || params.with(|p| p.get("repo").cloned().unwrap_or_default());
     let base = move || format!("/repos/{}/{}", owner(), repo());
-    let (refresh, set_refresh) = create_signal(0);
+    let refresh = use_repo_refresh();
 
     let repo_data = create_resource(
         move || (owner(), repo(), refresh.get()),
@@ -40,12 +56,14 @@ pub fn RepoNav() -> impl IntoView {
         },
     );
 
+    let bump = move || refresh.update(|n| *n += 1);
+
     let on_star = move |_| {
         let o = owner();
         let r = repo();
         spawn_local(async move {
             let _ = post(&format!("/api/v1/repos/{}/{}/star", o, r)).await;
-            set_refresh.update(|n| *n += 1);
+            bump();
         });
     };
 
@@ -54,7 +72,7 @@ pub fn RepoNav() -> impl IntoView {
         let r = repo();
         spawn_local(async move {
             let _ = post(&format!("/api/v1/repos/{}/{}/watch", o, r)).await;
-            set_refresh.update(|n| *n += 1);
+            bump();
         });
     };
 
@@ -89,6 +107,7 @@ pub fn RepoNav() -> impl IntoView {
         ("/projects", "Projects"),
         ("/discussions", "Discussions"),
         ("/actions", "Actions"),
+        ("/security", "Security"),
         ("/pulse", "Pulse"),
         ("/settings", "Settings"),
     ];

@@ -5,6 +5,7 @@
 //! directory (defaults to `crates/frontend/dist`).
 
 use std::net::SocketAddr;
+use std::path::{Component, Path, PathBuf};
 
 use axum::http::{header, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
@@ -40,27 +41,31 @@ fn content_type(path: &str) -> &'static str {
 /// frontend is a client-side-routed SPA, so a *navigation* path returns the
 /// shell document with a `200` so the browser can resolve deep links.
 ///
-/// Missing *asset* requests (a path with a file extension) return `404` rather
-/// than the shell: a browser asking for a `.js`/`.css`/`.wasm` that does not
-/// exist must not receive `text/html` with a `200`. Unknown `/api/*` paths also
-/// stay `404` so clients never mistake HTML for JSON.
+/// Missing *asset* requests (paths under the known build-asset namespace, e.g.
+/// `/*.js`, `/*.css`, `/*_bg.wasm`) return `404` rather than the shell: a
+/// browser asking for an asset that does not exist must not receive `text/html`
+/// with a `200`. Unknown `/api/*` paths also stay `404` so clients never mistake
+/// HTML for JSON.
 async fn spa_fallback(static_dir: String, uri: Uri) -> Response {
     if uri.path().starts_with("/api/") {
         return (StatusCode::NOT_FOUND, "Not Found").into_response();
     }
 
-    let relative = uri.path().trim_start_matches('/');
-    if !relative.is_empty() && !relative.split('/').any(|s| s == "..") {
-        let file = format!("{static_dir}/{relative}");
+    let root = PathBuf::from(&static_dir);
+    if let Some(file) = resolve_static_file(&root, uri.path()) {
         if let Ok(bytes) = tokio::fs::read(&file).await {
-            return ([(header::CONTENT_TYPE, content_type(relative))], bytes).into_response();
+            return (
+                [(header::CONTENT_TYPE, content_type(&file.to_string_lossy()))],
+                bytes,
+            )
+                .into_response();
         }
-        if is_asset_request(relative) {
+        if is_asset_request(uri.path()) {
             return (StatusCode::NOT_FOUND, "Not Found").into_response();
         }
     }
 
-    match tokio::fs::read(format!("{static_dir}/index.html")).await {
+    match tokio::fs::read(root.join("index.html")).await {
         Ok(index) => ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], index).into_response(),
         Err(_) => (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -70,14 +75,51 @@ async fn spa_fallback(static_dir: String, uri: Uri) -> Response {
     }
 }
 
-/// Whether a request path looks like a build asset rather than an SPA route.
+/// Resolve a request path to a file under `root`, or `None` if the path escapes
+/// the static root.
 ///
-/// SPA routes are extension-less (`/repos/admin/codeza`) while build assets
-/// carry a known extension (`/foo-abc123.js`). Only the latter should get a
-/// hard `404` when missing.
+/// The path is normalized component-by-component (`..`/`.` are resolved without
+/// touching the filesystem), so a request like `/../Cargo.toml` can never read
+/// outside `root` — CWE-22 (path traversal).
+fn resolve_static_file(root: &Path, request_path: &str) -> Option<PathBuf> {
+    let mut resolved = PathBuf::new();
+    for component in Path::new(request_path.trim_start_matches('/')).components() {
+        match component {
+            Component::Normal(segment) => resolved.push(segment),
+            Component::CurDir => {}
+            // A `..` that would climb above the root is rejected outright; one
+            // that stays inside is harmless but never legitimately requested.
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    if resolved.as_os_str().is_empty() {
+        return None;
+    }
+    Some(root.join(resolved))
+}
+
+/// Whether a request targets a missing build asset rather than an SPA route.
+///
+/// Asset classification keys off the *first* path segment only. Build assets
+/// live at the root (`/frontend-<hash>.js`, `/style-<hash>.css`) whereas SPA
+/// deep links begin with a route segment (`/repos/...`), so a repository named
+/// `library.js` still resolves as a navigation and never gets a spurious `404`.
 fn is_asset_request(path: &str) -> bool {
+    let mut segments = path.trim_start_matches('/').split('/');
+    let Some(first) = segments.next() else {
+        return false;
+    };
+    // Only a bare asset at the root counts; a deeper path is a client route.
+    if segments.next().is_some() {
+        return false;
+    }
+    is_asset_filename(first)
+}
+
+/// Whether a single (top-level) filename carries a known build-asset extension.
+fn is_asset_filename(name: &str) -> bool {
     matches!(
-        path.rsplit('.').next().unwrap_or(""),
+        name.rsplit('.').next().unwrap_or(""),
         "js" | "css" | "wasm" | "map" | "json" | "svg" | "png" | "ico" | "txt"
     )
 }
@@ -105,11 +147,13 @@ async fn main() {
 
 #[cfg(test)]
 mod static_asset_tests {
-    use super::is_asset_request;
+    use super::{is_asset_request, resolve_static_file};
+    use std::path::{Path, PathBuf};
 
     #[test]
-    fn extensions_are_assets() {
+    fn top_level_assets_are_assets() {
         assert!(is_asset_request("frontend-abc123.js"));
+        assert!(is_asset_request("/frontend-abc123.js"));
         assert!(is_asset_request("style-abc.css"));
         assert!(is_asset_request("frontend-abc_bg.wasm"));
         assert!(is_asset_request("favicon.ico"));
@@ -118,7 +162,36 @@ mod static_asset_tests {
     #[test]
     fn spa_routes_are_not_assets() {
         assert!(!is_asset_request("repos/admin/codeza"));
-        assert!(!is_asset_request("repos/admin/codeza/issues/12"));
         assert!(!is_asset_request("search"));
+        // A dotted repository name is a route, not a missing asset (finding 2).
+        assert!(!is_asset_request("repos/admin/library.js"));
+        assert!(!is_asset_request("/repos/admin/library.js"));
+        assert!(!is_asset_request("users/admin.json"));
+    }
+
+    #[test]
+    fn traversal_paths_are_rejected() {
+        let root = PathBuf::from("/srv/dist");
+        assert_eq!(
+            resolve_static_file(&root, "/index.html"),
+            Some(PathBuf::from("/srv/dist/index.html"))
+        );
+        assert_eq!(
+            resolve_static_file(&root, "/sub/./x.js"),
+            Some(PathBuf::from("/srv/dist/sub/x.js"))
+        );
+        for evil in [
+            "/../Cargo.toml",
+            "/sub/../../etc/passwd",
+            "/..",
+            "/a/../../b",
+        ] {
+            assert_eq!(
+                resolve_static_file(&root, evil),
+                None,
+                "{evil} must not resolve outside the static root"
+            );
+        }
+        assert_eq!(resolve_static_file(Path::new("/srv/dist"), "/"), None);
     }
 }

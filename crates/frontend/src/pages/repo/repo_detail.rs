@@ -1,7 +1,7 @@
 //! Repository overview, source browser, commits, branches and tags.
 
 use crate::api::{get, get_or, get_text, post_json_ok, put, put_json};
-use crate::components::RepoNav;
+use crate::components::{RepoNav, RepoRefresh};
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -15,7 +15,11 @@ pub fn RepoDetail() -> impl IntoView {
     let params = use_params_map();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
-    let (trigger_refresh, set_trigger_refresh) = create_signal(0);
+    let trigger_refresh = create_rw_signal(0u32);
+    // Share the invalidation trigger with RepoNav so a star/watch action (which
+    // changes the server-side counts) refreshes both the header and this
+    // overview instead of leaving the overview stats stale.
+    provide_context(RepoRefresh(trigger_refresh));
 
     let repo = create_resource(
         move || (owner(), repo_name(), trigger_refresh.get()),
@@ -65,7 +69,7 @@ pub fn RepoDetail() -> impl IntoView {
         spawn_local(async move {
             let _ = put_json(&format!("/api/v1/repos/{}/{}/topics", o, r), &payload).await;
             set_is_editing_topics.set(false);
-            set_trigger_refresh.update(|n| *n += 1);
+            trigger_refresh.update(|n| *n += 1);
         });
     };
 

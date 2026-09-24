@@ -8,8 +8,10 @@
 //! panicking. Write helpers fire-and-forget; callers only follow them with a
 //! refresh, so the response body is deliberately dropped.
 //!
-//! Paths passed to the write helpers are API-relative (`/repos/owner/name`);
-//! [`api_url`] prefixes the versioned base so callers never hand-write `/api/v1`.
+//! Paths passed to these helpers are absolute API paths (`/api/v1/repos/owner/name`),
+//! not API-relative ones; the helpers do not rewrite the URL. Build paths with
+//! [`api_url`] (or format them explicitly) so the versioned base stays in one
+//! place rather than being hand-written at every call site.
 
 use gloo_net::http::Request;
 use serde::{de::DeserializeOwned, Serialize};
