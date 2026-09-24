@@ -3,8 +3,14 @@ import { test, expect } from '@playwright/test';
 /**
  * The backend falls back to serving the SPA shell for client routes, but must
  * not use that fallback to leak local files (path traversal) or to answer a
- * missing build asset with HTML. These guard the classification in
- * `crates/backend/src/main.rs`.
+ * missing build asset with HTML.
+ *
+ * These HTTP-level checks are defense-in-depth: in CI the suite runs behind
+ * `trunk serve`, which fronts the same routes, so the authoritative
+ * enforcement tests for the fallback are the `static_asset_tests` unit tests in
+ * `crates/backend/src/main.rs`. Keeping an end-to-end assertion here also
+ * covers the `cargo run -p backend` topology where the backend serves assets
+ * directly.
  */
 test.describe('Static fallback', () => {
   test('never discloses files outside the static root', async ({ request }) => {
