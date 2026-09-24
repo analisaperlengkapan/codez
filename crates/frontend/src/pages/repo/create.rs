@@ -1,6 +1,6 @@
 //! Repository creation and migration forms.
 
-use gloo_net::http::Request;
+use crate::api::{get, post_json};
 use leptos::*;
 use shared::{CreateRepoOption, GitignoreTemplate, LicenseTemplate};
 
@@ -14,28 +14,12 @@ pub fn CreateRepo() -> impl IntoView {
 
     let licenses = create_resource(
         || (),
-        |_| async move {
-            Request::get("/api/v1/licenses")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<LicenseTemplate>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<LicenseTemplate>>("/api/v1/licenses").await },
     );
 
     let gitignores = create_resource(
         || (),
-        |_| async move {
-            Request::get("/api/v1/gitignore/templates")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<GitignoreTemplate>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<GitignoreTemplate>>("/api/v1/gitignore/templates").await },
     );
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -69,11 +53,7 @@ pub fn CreateRepo() -> impl IntoView {
             has_projects: None,
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/user/repos")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json("/api/v1/user/repos", &payload).await;
         });
     };
 

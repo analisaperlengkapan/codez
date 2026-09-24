@@ -1,4 +1,4 @@
-use gloo_net::http::Request;
+use crate::api::{delete, get, get_or, patch_json, post_json};
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -18,11 +18,7 @@ pub fn Login() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/users/login")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json("/api/v1/users/login", &payload).await;
             leptos::logging::log!("Logged in");
         });
     };
@@ -53,11 +49,7 @@ pub fn Register() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/users/register")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json("/api/v1/users/register", &payload).await;
             leptos::logging::log!("Registered");
         });
     };
@@ -82,13 +74,7 @@ pub fn UserProfile() -> impl IntoView {
         move || params.with(|params| params.get("username").cloned().unwrap_or_default());
 
     let user = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}", u))
-            .send()
-            .await
-            .unwrap()
-            .json::<Option<User>>()
-            .await
-            .unwrap_or(None)
+        get_or::<Option<User>>(&format!("/api/v1/users/{}", u), None).await
     });
 
     view! {
@@ -118,13 +104,7 @@ pub fn UserHeatmap() -> impl IntoView {
     let username =
         move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let data = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}/heatmap", u))
-            .send()
-            .await
-            .unwrap()
-            .json::<Vec<Contribution>>()
-            .await
-            .unwrap_or_default()
+        get::<Vec<Contribution>>(&format!("/api/v1/users/{}/heatmap", u)).await
     });
 
     view! {
@@ -150,13 +130,7 @@ pub fn UserFollowers() -> impl IntoView {
     let username =
         move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let users = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}/followers", u))
-            .send()
-            .await
-            .unwrap()
-            .json::<Vec<User>>()
-            .await
-            .unwrap_or_default()
+        get::<Vec<User>>(&format!("/api/v1/users/{}/followers", u)).await
     });
 
     view! {
@@ -181,13 +155,7 @@ pub fn UserFollowing() -> impl IntoView {
     let username =
         move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let users = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}/following", u))
-            .send()
-            .await
-            .unwrap()
-            .json::<Vec<User>>()
-            .await
-            .unwrap_or_default()
+        get::<Vec<User>>(&format!("/api/v1/users/{}/following", u)).await
     });
 
     view! {
@@ -211,18 +179,16 @@ pub fn UserSettings() -> impl IntoView {
     let settings = create_resource(
         || (),
         |_| async move {
-            Request::get("/api/v1/user/settings")
-                .send()
-                .await
-                .unwrap()
-                .json::<UserSettingsOption>()
-                .await
-                .unwrap_or(UserSettingsOption {
+            get_or::<UserSettingsOption>(
+                "/api/v1/user/settings",
+                UserSettingsOption {
                     full_name: None,
                     website: None,
                     description: None,
                     location: None,
-                })
+                },
+            )
+            .await
         },
     );
 
@@ -230,28 +196,12 @@ pub fn UserSettings() -> impl IntoView {
 
     let keys = create_resource(
         move || refresh.get(),
-        |_| async move {
-            Request::get("/api/v1/user/keys")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<PublicKey>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<PublicKey>>("/api/v1/user/keys").await },
     );
 
     let gpg_keys = create_resource(
         move || refresh.get(),
-        |_| async move {
-            Request::get("/api/v1/user/gpg_keys")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<GpgKey>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<GpgKey>>("/api/v1/user/gpg_keys").await },
     );
 
     let (full_name, set_full_name) = create_signal("".to_string());
@@ -268,11 +218,7 @@ pub fn UserSettings() -> impl IntoView {
             key: ssh_key.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/user/keys")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json("/api/v1/user/keys", &payload).await;
             set_ssh_title.set("".to_string());
             set_ssh_key.set("".to_string());
             set_refresh.update(|n| *n += 1);
@@ -281,9 +227,7 @@ pub fn UserSettings() -> impl IntoView {
 
     let on_delete_ssh_key = move |id: u64| {
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/user/keys/{}", id))
-                .send()
-                .await;
+            let _ = delete(&format!("/api/v1/user/keys/{}", id)).await;
             set_refresh.update(|n| *n += 1);
         });
     };
@@ -294,11 +238,7 @@ pub fn UserSettings() -> impl IntoView {
             armored_public_key: gpg_key_content.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/user/gpg_keys")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json("/api/v1/user/gpg_keys", &payload).await;
             set_gpg_key_content.set("".to_string());
             set_refresh.update(|n| *n += 1);
         });
@@ -306,9 +246,7 @@ pub fn UserSettings() -> impl IntoView {
 
     let on_delete_gpg_key = move |id: u64| {
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/user/gpg_keys/{}", id))
-                .send()
-                .await;
+            let _ = delete(&format!("/api/v1/user/gpg_keys/{}", id)).await;
             set_refresh.update(|n| *n += 1);
         });
     };
@@ -322,11 +260,7 @@ pub fn UserSettings() -> impl IntoView {
             location: None,
         };
         spawn_local(async move {
-            let _ = Request::patch("/api/v1/user/settings")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = patch_json("/api/v1/user/settings", &payload).await;
         });
     };
 

@@ -1,7 +1,7 @@
 //! Repository overview, source browser, commits, branches and tags.
 
+use crate::api::{get, get_or, get_text, post, post_json_ok, post_json_resp, put, put_json};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -21,55 +21,35 @@ pub fn RepoDetail() -> impl IntoView {
     let repo = create_resource(
         move || (owner(), repo_name(), trigger_refresh.get()),
         |(o, r, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Option<Repository>>()
-                .await
-                .unwrap_or(None)
+            get_or::<Option<Repository>>(&format!("/api/v1/repos/{}/{}", o, r), None).await
         },
     );
 
     let repo_status = create_resource(
         move || (owner(), repo_name(), trigger_refresh.get()),
         |(o, r, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/user_status", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<RepoUserStatus>()
-                .await
-                .unwrap_or(RepoUserStatus {
+            get_or::<RepoUserStatus>(
+                &format!("/api/v1/repos/{}/{}/user_status", o, r),
+                RepoUserStatus {
                     starred: false,
                     watching: false,
-                })
+                },
+            )
+            .await
         },
     );
 
     let languages = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/languages", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<LanguageStat>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<LanguageStat>>(&format!("/api/v1/repos/{}/{}/languages", o, r)).await
         },
     );
 
     let topics = create_resource(
         move || (owner(), repo_name(), trigger_refresh.get()),
         |(o, r, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/topics", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<shared::Topic>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<shared::Topic>>(&format!("/api/v1/repos/{}/{}/topics", o, r)).await
         },
     );
 
@@ -98,11 +78,7 @@ pub fn RepoDetail() -> impl IntoView {
         };
 
         spawn_local(async move {
-            let _ = Request::put(&format!("/api/v1/repos/{}/{}/topics", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = put_json(&format!("/api/v1/repos/{}/{}/topics", o, r), &payload).await;
             set_is_editing_topics.set(false);
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -112,9 +88,7 @@ pub fn RepoDetail() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/star", o, r))
-                .send()
-                .await;
+            let _ = post(&format!("/api/v1/repos/{}/{}/star", o, r)).await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -123,9 +97,7 @@ pub fn RepoDetail() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/watch", o, r))
-                .send()
-                .await;
+            let _ = post(&format!("/api/v1/repos/{}/{}/watch", o, r)).await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -135,16 +107,14 @@ pub fn RepoDetail() -> impl IntoView {
         let r = repo_name();
         let navigate = navigate.clone();
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/repos/{}/{}/fork", o, r))
-                .send()
-                .await;
-            if let Ok(resp) = res {
-                if let Ok(new_repo) = resp.json::<Repository>().await {
-                    navigate(
-                        &format!("/repos/{}/{}", new_repo.owner, new_repo.name),
-                        Default::default(),
-                    );
-                }
+            if let Some(new_repo) =
+                post_json_resp::<_, Repository>(&format!("/api/v1/repos/{}/{}/fork", o, r), &())
+                    .await
+            {
+                navigate(
+                    &format!("/repos/{}/{}", new_repo.owner, new_repo.name),
+                    Default::default(),
+                );
             }
         });
     };
@@ -259,13 +229,9 @@ pub fn RepoPulse() -> impl IntoView {
     let stats = create_resource(
         move || (owner(), repo_name(), period.get()),
         |(o, r, p)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/pulse?period={}", o, r, p))
-                .send()
-                .await
-                .unwrap()
-                .json::<RepoPulseStats>()
-                .await
-                .unwrap_or(RepoPulseStats {
+            get_or::<RepoPulseStats>(
+                &format!("/api/v1/repos/{}/{}/pulse?period={}", o, r, p),
+                RepoPulseStats {
                     period: "weekly".to_string(),
                     active_issues: 0,
                     closed_issues: 0,
@@ -273,7 +239,9 @@ pub fn RepoPulse() -> impl IntoView {
                     merged_prs: 0,
                     new_commits: 0,
                     active_authors: vec![],
-                })
+                },
+            )
+            .await
         },
     );
 
@@ -344,15 +312,7 @@ pub fn RepoCode() -> impl IntoView {
 
     let branches = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/branches", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Branch>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Branch>>(&format!("/api/v1/repos/{}/{}/branches", o, r)).await },
     );
 
     let contents = create_resource(
@@ -366,26 +326,14 @@ pub fn RepoCode() -> impl IntoView {
             if !b.is_empty() {
                 url.push_str(&format!("?ref={}", b));
             }
-            Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<FileEntry>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<FileEntry>>(&url).await
         },
     );
 
     let repo_meta = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Option<Repository>>()
-                .await
-                .unwrap_or(None)
+            get_or::<Option<Repository>>(&format!("/api/v1/repos/{}/{}", o, r), None).await
         },
     );
 
@@ -491,14 +439,7 @@ pub fn FileEdit() -> impl IntoView {
             if !b.is_empty() {
                 url.push_str(&format!("?ref={}", b));
             }
-            let res = Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .text()
-                .await
-                .unwrap_or_default();
-            set_content.set(res);
+            set_content.set(get_text(&url).await);
         },
     );
 
@@ -517,11 +458,11 @@ pub fn FileEdit() -> impl IntoView {
         let r = repo_name();
         let p = path();
         spawn_local(async move {
-            let _ = Request::put(&format!("/api/v1/repos/{}/{}/contents/{}", o, r, p))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = put_json(
+                &format!("/api/v1/repos/{}/{}/contents/{}", o, r, p),
+                &payload,
+            )
+            .await;
         });
     };
 
@@ -549,15 +490,7 @@ pub fn CommitList() -> impl IntoView {
 
     let commits = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/commits", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Commit>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Commit>>(&format!("/api/v1/repos/{}/{}/commits", o, r)).await },
     );
 
     view! {
@@ -598,13 +531,7 @@ pub fn CommitDiff() -> impl IntoView {
     let diffs = create_resource(
         move || (owner(), repo_name(), sha()),
         |(o, r, s)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/commits/{}/diff", o, r, s))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<DiffFile>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<DiffFile>>(&format!("/api/v1/repos/{}/{}/commits/{}/diff", o, r, s)).await
         },
     );
 
@@ -653,15 +580,7 @@ pub fn BranchList() -> impl IntoView {
 
     let branches = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/branches", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Branch>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Branch>>(&format!("/api/v1/repos/{}/{}/branches", o, r)).await },
     );
 
     view! {
@@ -695,15 +614,7 @@ pub fn TagList() -> impl IntoView {
 
     let tags = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/tags", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Tag>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Tag>>(&format!("/api/v1/repos/{}/{}/tags", o, r)).await },
     );
 
     view! {
@@ -738,13 +649,7 @@ pub fn CollaboratorList() -> impl IntoView {
     let collabs = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/collaborators", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Collaborator>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Collaborator>>(&format!("/api/v1/repos/{}/{}/collaborators", o, r)).await
         },
     );
 
@@ -754,9 +659,7 @@ pub fn CollaboratorList() -> impl IntoView {
         let r = repo_name();
         let c = new_collab.get();
         spawn_local(async move {
-            let _ = Request::put(&format!("/api/v1/repos/{}/{}/collaborators/{}", o, r, c))
-                .send()
-                .await;
+            let _ = put(&format!("/api/v1/repos/{}/{}/collaborators/{}", o, r, c)).await;
             set_new_collab.set("".to_string());
         });
     };
@@ -796,13 +699,7 @@ pub fn RepoCodeSearch() -> impl IntoView {
             if q.is_empty() {
                 return vec![];
             }
-            Request::get(&format!("/api/v1/repos/{}/{}/search?q={}", o, r, q))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<CodeSearchResult>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<CodeSearchResult>>(&format!("/api/v1/repos/{}/{}/search?q={}", o, r, q)).await
         },
     );
 
@@ -844,13 +741,8 @@ pub fn CommitStatusList(owner: String, repo: String, sha: String) -> impl IntoVi
     let statuses = create_resource(
         move || (owner.clone(), repo.clone(), sha.clone()),
         |(o, r, s)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/commits/{}/statuses", o, r, s))
-                .send()
+            get::<Vec<CommitStatus>>(&format!("/api/v1/repos/{}/{}/commits/{}/statuses", o, r, s))
                 .await
-                .unwrap()
-                .json::<Vec<CommitStatus>>()
-                .await
-                .unwrap_or_default()
         },
     );
 
@@ -910,18 +802,11 @@ pub fn MigrateRepo() -> impl IntoView {
         let r_name = repo_name.get();
         let navigate = navigate.clone();
         spawn_local(async move {
-            let res = Request::post("/api/v1/repos/migrate")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
-            if let Ok(resp) = res {
-                if resp.ok() {
-                    navigate(
-                        &format!("/repos/admin/{}", r_name),
-                        NavigateOptions::default(),
-                    );
-                }
+            if post_json_ok("/api/v1/repos/migrate", &payload).await {
+                navigate(
+                    &format!("/repos/admin/{}", r_name),
+                    NavigateOptions::default(),
+                );
             }
         });
     };

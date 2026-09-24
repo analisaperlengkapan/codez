@@ -1,4 +1,4 @@
-use gloo_net::http::Request;
+use crate::api::{get, patch};
 use leptos::*;
 use shared::{Activity, Issue, Notification, PullRequest, Repository};
 
@@ -8,41 +8,19 @@ pub fn UserDashboard() -> impl IntoView {
 
     let repos = create_resource(
         || (),
-        |_| async move {
-            Request::get("/api/v1/repos")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Repository>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<Repository>>("/api/v1/repos").await },
     );
 
     let feeds = create_resource(
         || (),
-        |_| async move {
-            Request::get("/api/v1/user/feeds")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Activity>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<Activity>>("/api/v1/user/feeds").await },
     );
 
     let assigned_issues = create_resource(
         move || active_tab.get(),
         |tab| async move {
             if tab == "issues" {
-                Request::get("/api/v1/user/issues?state=open")
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<Issue>>()
-                    .await
-                    .unwrap_or_default()
+                get::<Vec<Issue>>("/api/v1/user/issues?state=open").await
             } else {
                 vec![]
             }
@@ -53,13 +31,7 @@ pub fn UserDashboard() -> impl IntoView {
         move || active_tab.get(),
         |tab| async move {
             if tab == "pulls" {
-                Request::get("/api/v1/user/pulls?state=open")
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<PullRequest>>()
-                    .await
-                    .unwrap_or_default()
+                get::<Vec<PullRequest>>("/api/v1/user/pulls?state=open").await
             } else {
                 vec![]
             }
@@ -199,15 +171,7 @@ pub fn UserDashboard() -> impl IntoView {
 pub fn Explore() -> impl IntoView {
     let repos = create_resource(
         || (),
-        |_| async move {
-            Request::get("/api/v1/repos")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Repository>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<Repository>>("/api/v1/repos").await },
     );
 
     view! {
@@ -263,24 +227,12 @@ pub fn Search() -> impl IntoView {
                     "/api/v1/repos".to_string()
                 };
 
-                let res = Request::get(&url)
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<Repository>>()
-                    .await
-                    .unwrap_or_default();
+                let res = get::<Vec<Repository>>(&url).await;
                 set_repo_results.set(res);
                 set_issue_results.set(vec![]);
             } else {
                 let url = format!("/api/v1/search/issues?q={}", q);
-                let res = Request::get(&url)
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<Issue>>()
-                    .await
-                    .unwrap_or_default();
+                let res = get::<Vec<Issue>>(&url).await;
                 set_issue_results.set(res);
                 set_repo_results.set(vec![]);
             }
@@ -344,22 +296,12 @@ pub fn NotificationList() -> impl IntoView {
     let (refresh, set_refresh) = create_signal(0);
     let notifs = create_resource(
         move || refresh.get(),
-        |_| async move {
-            Request::get("/api/v1/notifications")
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Notification>>()
-                .await
-                .unwrap_or_default()
-        },
+        |_| async move { get::<Vec<Notification>>("/api/v1/notifications").await },
     );
 
     let on_mark_read = move |id: u64| {
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/notifications/threads/{}", id))
-                .send()
-                .await;
+            let _ = patch(&format!("/api/v1/notifications/threads/{}", id)).await;
             set_refresh.update(|n| *n += 1);
         });
     };

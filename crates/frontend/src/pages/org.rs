@@ -1,4 +1,4 @@
-use gloo_net::http::Request;
+use crate::api::{get, get_or, post_json, put_json};
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -15,26 +15,14 @@ pub fn OrgProfile() -> impl IntoView {
     let (refresh, set_refresh) = create_signal(0);
 
     let org = create_resource(org_name, |name| async move {
-        Request::get(&format!("/api/v1/orgs/{}", name))
-            .send()
-            .await
-            .unwrap()
-            .json::<Option<Organization>>()
-            .await
-            .unwrap_or(None)
+        get_or::<Option<Organization>>(&format!("/api/v1/orgs/{}", name), None).await
     });
 
     let repos = create_resource(
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "repos" {
-                Request::get(&format!("/api/v1/orgs/{}/repos", name))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<Repository>>()
-                    .await
-                    .unwrap_or_default()
+                get::<Vec<Repository>>(&format!("/api/v1/orgs/{}/repos", name)).await
             } else {
                 vec![]
             }
@@ -45,13 +33,7 @@ pub fn OrgProfile() -> impl IntoView {
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "teams" {
-                Request::get(&format!("/api/v1/orgs/{}/teams", name))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<Team>>()
-                    .await
-                    .unwrap_or_default()
+                get::<Vec<Team>>(&format!("/api/v1/orgs/{}/teams", name)).await
             } else {
                 vec![]
             }
@@ -62,13 +44,7 @@ pub fn OrgProfile() -> impl IntoView {
         move || (org_name(), active_tab.get(), refresh.get()),
         |(name, tab, _)| async move {
             if tab == "people" {
-                Request::get(&format!("/api/v1/orgs/{}/members", name))
-                    .send()
-                    .await
-                    .unwrap()
-                    .json::<Vec<OrgMember>>()
-                    .await
-                    .unwrap_or_default()
+                get::<Vec<OrgMember>>(&format!("/api/v1/orgs/{}/members", name)).await
             } else {
                 vec![]
             }
@@ -85,11 +61,7 @@ pub fn OrgProfile() -> impl IntoView {
             permission: "read".to_string(),
         };
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/orgs/{}/teams", name))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/orgs/{}/teams", name), &payload).await;
             set_new_team_name.set("".to_string());
             set_refresh.update(|n| *n += 1);
         });
@@ -147,8 +119,7 @@ pub fn OrgProfile() -> impl IntoView {
                                                             let user_n = username.clone();
                                                             let payload = UpdateMemberRoleOption { role: new_role };
                                                             spawn_local(async move {
-                                                                let _ = Request::put(&format!("/api/v1/orgs/{}/members/{}", org_n, user_n))
-                                                                    .json(&payload).unwrap().send().await;
+                                                                let _ = put_json(&format!("/api/v1/orgs/{}/members/{}", org_n, user_n), &payload).await;
                                                                 set_refresh.update(|n| *n += 1);
                                                             });
                                                         };
@@ -205,15 +176,7 @@ pub fn OrgProfile() -> impl IntoView {
 pub fn OrgAuditLogs(org_name: String) -> impl IntoView {
     let logs = create_resource(
         move || org_name.clone(),
-        |name| async move {
-            Request::get(&format!("/api/v1/orgs/{}/audit-logs", name))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<AuditLog>>()
-                .await
-                .unwrap_or_default()
-        },
+        |name| async move { get::<Vec<AuditLog>>(&format!("/api/v1/orgs/{}/audit-logs", name)).await },
     );
 
     view! {
@@ -263,11 +226,7 @@ pub fn CreateOrg() -> impl IntoView {
             visibility: None,
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/orgs")
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json("/api/v1/orgs", &payload).await;
             // Redirect to org profile?
         });
     };

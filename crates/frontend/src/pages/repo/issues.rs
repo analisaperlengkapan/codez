@@ -1,7 +1,7 @@
 //! Issue, label and milestone components.
 
+use crate::api::{delete, get, get_or, patch_json, post_json, put};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -61,27 +61,13 @@ pub fn IssueList() -> impl IntoView {
             if !m.is_empty() {
                 url.push_str(&format!("&milestone_id={}", m));
             }
-            Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Issue>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Issue>>(&url).await
         },
     );
 
     let labels = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/labels", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Label>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Label>>(&format!("/api/v1/repos/{}/{}/labels", o, r)).await },
     );
 
     let users = create_resource(
@@ -98,13 +84,7 @@ pub fn IssueList() -> impl IntoView {
     let milestones = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/milestones", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<shared::Milestone>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<shared::Milestone>>(&format!("/api/v1/repos/{}/{}/milestones", o, r)).await
         },
     );
 
@@ -124,11 +104,7 @@ pub fn IssueList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/issues", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/issues", o, r), &payload).await;
             set_new_issue_title.set("".to_string());
             set_new_issue_body.set("".to_string());
             set_show_new_issue.set(false);
@@ -261,39 +237,21 @@ pub fn IssueDetail() -> impl IntoView {
     let issue = create_resource(
         move || (owner(), repo_name(), index(), trigger_refresh.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/issues/{}", o, r, i))
-                .send()
-                .await
-                .unwrap()
-                .json::<Option<Issue>>()
-                .await
-                .unwrap_or(None)
+            get_or::<Option<Issue>>(&format!("/api/v1/repos/{}/{}/issues/{}", o, r, i), None).await
         },
     );
 
     let comments = create_resource(
         move || (owner(), repo_name(), index(), trigger_refresh.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Comment>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Comment>>(&format!("/api/v1/repos/{}/{}/issues/{}/comments", o, r, i)).await
         },
     );
 
     let available_milestones = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/milestones", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Milestone>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Milestone>>(&format!("/api/v1/repos/{}/{}/milestones", o, r)).await
         },
     );
 
@@ -313,9 +271,7 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            let _ = Request::put(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i))
-                .send()
-                .await;
+            put(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i)).await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -325,9 +281,7 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i))
-                .send()
-                .await;
+            let _ = delete(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i)).await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -342,11 +296,11 @@ pub fn IssueDetail() -> impl IntoView {
         let i = index();
 
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/issues/{}/comments", o, r, i))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(
+                &format!("/api/v1/repos/{}/{}/issues/{}/comments", o, r, i),
+                &payload,
+            )
+            .await;
             set_new_comment.set("".to_string());
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -356,11 +310,10 @@ pub fn IssueDetail() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::delete(&format!(
+            let _ = delete(&format!(
                 "/api/v1/repos/{}/{}/issues/comments/{}",
                 o, r, comment_id
             ))
-            .send()
             .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -371,13 +324,13 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let payload = shared::CreateReactionOption { content };
         spawn_local(async move {
-            let _ = Request::post(&format!(
-                "/api/v1/repos/{}/{}/issues/comments/{}/reactions",
-                o, r, comment_id
-            ))
-            .json(&payload)
-            .unwrap()
-            .send()
+            let _ = post_json(
+                &format!(
+                    "/api/v1/repos/{}/{}/issues/comments/{}/reactions",
+                    o, r, comment_id
+                ),
+                &payload,
+            )
             .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -400,13 +353,10 @@ pub fn IssueDetail() -> impl IntoView {
         let payload = shared::UpdateCommentOption { body };
 
         spawn_local(async move {
-            let _ = Request::patch(&format!(
-                "/api/v1/repos/{}/{}/issues/comments/{}",
-                o, r, comment_id
-            ))
-            .json(&payload)
-            .unwrap()
-            .send()
+            let _ = patch_json(
+                &format!("/api/v1/repos/{}/{}/issues/comments/{}", o, r, comment_id),
+                &payload,
+            )
             .await;
             set_editing_comment_id.set(None);
             set_edit_comment_body.set("".to_string());
@@ -430,11 +380,11 @@ pub fn IssueDetail() -> impl IntoView {
             milestone_id: None,
         };
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = patch_json(
+                &format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx),
+                &payload,
+            )
+            .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -453,11 +403,11 @@ pub fn IssueDetail() -> impl IntoView {
                     color: "#cccccc".to_string(),
                     description: None,
                 };
-                let _ = Request::post(&format!("/api/v1/repos/{}/{}/issues/{}/labels", o, r, i))
-                    .json(&payload)
-                    .unwrap()
-                    .send()
-                    .await;
+                let _ = post_json(
+                    &format!("/api/v1/repos/{}/{}/issues/{}/labels", o, r, i),
+                    &payload,
+                )
+                .await;
                 set_new_label_name.set("".to_string());
                 set_trigger_refresh.update(|n| *n += 1);
             });
@@ -469,11 +419,10 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            let _ = Request::delete(&format!(
+            let _ = delete(&format!(
                 "/api/v1/repos/{}/{}/issues/{}/labels/{}",
                 o, r, i, label_id
             ))
-            .send()
             .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -491,11 +440,11 @@ pub fn IssueDetail() -> impl IntoView {
             // We'll construct a minimal one for the payload
             let payload = shared::User::new(0, username, None);
             spawn_local(async move {
-                let _ = Request::post(&format!("/api/v1/repos/{}/{}/issues/{}/assignees", o, r, i))
-                    .json(&payload)
-                    .unwrap()
-                    .send()
-                    .await;
+                let _ = post_json(
+                    &format!("/api/v1/repos/{}/{}/issues/{}/assignees", o, r, i),
+                    &payload,
+                )
+                .await;
                 set_selected_assignee.set("".to_string());
                 set_trigger_refresh.update(|n| *n += 1);
             });
@@ -507,11 +456,10 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            let _ = Request::delete(&format!(
+            let _ = delete(&format!(
                 "/api/v1/repos/{}/{}/issues/{}/assignees/{}",
                 o, r, i, username
             ))
-            .send()
             .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -531,11 +479,11 @@ pub fn IssueDetail() -> impl IntoView {
             milestone_id: Some(m_id),
         };
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = patch_json(
+                &format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx),
+                &payload,
+            )
+            .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -565,11 +513,11 @@ pub fn IssueDetail() -> impl IntoView {
             milestone_id: None,
         };
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = patch_json(
+                &format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx),
+                &payload,
+            )
+            .await;
             set_is_editing.set(false);
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -798,15 +746,7 @@ pub fn LabelList() -> impl IntoView {
 
     let labels = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/labels", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Label>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Label>>(&format!("/api/v1/repos/{}/{}/labels", o, r)).await },
     );
 
     let on_create = move |ev: leptos::ev::SubmitEvent| {
@@ -819,11 +759,7 @@ pub fn LabelList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/labels", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/labels", o, r), &payload).await;
             set_name.set("".to_string());
         });
     };
@@ -866,13 +802,7 @@ pub fn MilestoneList() -> impl IntoView {
     let milestones = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/milestones", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Milestone>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Milestone>>(&format!("/api/v1/repos/{}/{}/milestones", o, r)).await
         },
     );
 
@@ -886,11 +816,7 @@ pub fn MilestoneList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/milestones", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/milestones", o, r), &payload).await;
             set_title.set("".to_string());
         });
     };
@@ -941,29 +867,25 @@ pub fn MilestoneDetail() -> impl IntoView {
     let milestone = create_resource(
         move || (owner(), repo_name(), index()),
         |(o, r, i)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/milestones/{}", o, r, i))
-                .send()
-                .await
-                .unwrap()
-                .json::<Option<Milestone>>()
-                .await
-                .unwrap_or(None)
+            get_or::<Option<Milestone>>(
+                &format!("/api/v1/repos/{}/{}/milestones/{}", o, r, i),
+                None,
+            )
+            .await
         },
     );
 
     let stats = create_resource(
         move || (owner(), repo_name(), index()),
         |(o, r, i)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/milestones/{}/stats", o, r, i))
-                .send()
-                .await
-                .unwrap()
-                .json::<MilestoneStats>()
-                .await
-                .unwrap_or(MilestoneStats {
+            get_or::<MilestoneStats>(
+                &format!("/api/v1/repos/{}/{}/milestones/{}/stats", o, r, i),
+                MilestoneStats {
                     open_issues: 0,
                     closed_issues: 0,
-                })
+                },
+            )
+            .await
         },
     );
 

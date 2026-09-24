@@ -1,7 +1,7 @@
 //! Repository wiki pages.
 
+use crate::api::{get, get_opt, get_or, post_json, put_json};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{CreateWikiPageOption, WikiPage};
@@ -23,26 +23,15 @@ pub fn Wiki() -> impl IntoView {
     let wiki_page = create_resource(
         move || (owner(), repo_name(), page_name()),
         move |(o, r, p)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p))
-                .send()
+            get_or::<Option<WikiPage>>(&format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p), None)
                 .await
-                .unwrap()
-                .json::<Option<WikiPage>>()
-                .await
-                .unwrap_or(None)
         },
     );
 
     let wiki_pages = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<WikiPage>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<WikiPage>>(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r)).await
         },
     );
 
@@ -119,14 +108,12 @@ pub fn WikiEdit() -> impl IntoView {
     let _ = create_resource(
         move || (owner(), repo_name(), page_name()),
         move |(o, r, p)| async move {
-            if let Ok(resp) = Request::get(&format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p))
-                .send()
-                .await
+            if let Some(Some(page)) =
+                get_opt::<Option<WikiPage>>(&format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p))
+                    .await
             {
-                if let Ok(Some(page)) = resp.json::<Option<WikiPage>>().await {
-                    set_content.set(page.content);
-                    set_is_new.set(false);
-                }
+                set_content.set(page.content);
+                set_is_new.set(false);
             }
         },
     );
@@ -144,17 +131,13 @@ pub fn WikiEdit() -> impl IntoView {
         let is_n = is_new.get();
         spawn_local(async move {
             if is_n {
-                let _ = Request::post(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r))
-                    .json(&payload)
-                    .unwrap()
-                    .send()
-                    .await;
+                let _ = post_json(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r), &payload).await;
             } else {
-                let _ = Request::put(&format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p))
-                    .json(&payload)
-                    .unwrap()
-                    .send()
-                    .await;
+                let _ = put_json(
+                    &format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p),
+                    &payload,
+                )
+                .await;
             }
             // Redirect or notify would happen here
         });

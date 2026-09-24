@@ -1,5 +1,5 @@
+use crate::api::{delete, get, patch_json, post, post_json};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{ActionWorkflow, CreateWorkflowRunOption, UpdateWorkflowRunOption, WorkflowRun};
@@ -13,13 +13,8 @@ pub fn ActionsList() -> impl IntoView {
     let workflows = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/actions/workflows", o, r))
-                .send()
+            get::<Vec<ActionWorkflow>>(&format!("/api/v1/repos/{}/{}/actions/workflows", o, r))
                 .await
-                .unwrap()
-                .json::<Vec<ActionWorkflow>>()
-                .await
-                .unwrap_or_default()
         },
     );
 
@@ -67,16 +62,11 @@ pub fn WorkflowRunsList() -> impl IntoView {
     let runs = create_resource(
         move || (owner(), repo_name(), workflow_id(), refresh.get()),
         |(o, r, id, _)| async move {
-            Request::get(&format!(
+            get::<Vec<WorkflowRun>>(&format!(
                 "/api/v1/repos/{}/{}/actions/workflows/{}/runs",
                 o, r, id
             ))
-            .send()
             .await
-            .unwrap()
-            .json::<Vec<WorkflowRun>>()
-            .await
-            .unwrap_or_default()
         },
     );
 
@@ -89,13 +79,10 @@ pub fn WorkflowRunsList() -> impl IntoView {
             ref_name: "main".to_string(), // hardcoded for MVP
         };
         spawn_local(async move {
-            let _ = Request::post(&format!(
-                "/api/v1/repos/{}/{}/actions/workflows/{}/runs",
-                o, r, id
-            ))
-            .json(&payload)
-            .unwrap()
-            .send()
+            let _ = post_json(
+                &format!("/api/v1/repos/{}/{}/actions/workflows/{}/runs", o, r, id),
+                &payload,
+            )
             .await;
             set_refresh.update(|n| *n += 1);
         });
@@ -105,11 +92,10 @@ pub fn WorkflowRunsList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!(
+            let _ = post(&format!(
                 "/api/v1/repos/{}/{}/actions/runs/{}/rerun",
                 o, r, run_id
             ))
-            .send()
             .await;
             set_refresh.update(|n| *n += 1);
         });
@@ -122,13 +108,10 @@ pub fn WorkflowRunsList() -> impl IntoView {
             status: "cancelled".to_string(),
         };
         spawn_local(async move {
-            let _ = Request::patch(&format!(
-                "/api/v1/repos/{}/{}/actions/runs/{}",
-                o, r, run_id
-            ))
-            .json(&payload)
-            .unwrap()
-            .send()
+            let _ = patch_json(
+                &format!("/api/v1/repos/{}/{}/actions/runs/{}", o, r, run_id),
+                &payload,
+            )
             .await;
             set_refresh.update(|n| *n += 1);
         });
@@ -138,11 +121,10 @@ pub fn WorkflowRunsList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::delete(&format!(
+            let _ = delete(&format!(
                 "/api/v1/repos/{}/{}/actions/runs/{}",
                 o, r, run_id
             ))
-            .send()
             .await;
             set_refresh.update(|n| *n += 1);
         });

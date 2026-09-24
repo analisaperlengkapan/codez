@@ -1,4 +1,4 @@
-use gloo_net::http::Request;
+use crate::api::{get, get_or, post_json_ok};
 use leptos::*;
 use leptos_router::*;
 use shared::{CreatePackageOption, Package};
@@ -14,13 +14,7 @@ pub fn PackageList() -> impl IntoView {
     let packages = create_resource(
         move || (owner(), refresh.get()),
         |(owner_name, _)| async move {
-            Request::get(&format!("/api/v1/packages/{}", owner_name))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Package>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Package>>(&format!("/api/v1/packages/{}", owner_name)).await
         },
     );
 
@@ -77,15 +71,8 @@ where
         let o = owner.clone();
         let on_success_clone = on_success.clone();
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/packages/{}", o))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
-            if let Ok(r) = res {
-                if r.ok() {
-                    on_success_clone();
-                }
+            if post_json_ok(&format!("/api/v1/packages/{}", o), &payload).await {
+                on_success_clone();
             }
         });
     };
@@ -123,13 +110,8 @@ pub fn PackageDetail() -> impl IntoView {
     let package = create_resource(
         move || (owner(), pkg_type(), name(), version()),
         |(o, t, n, v)| async move {
-            Request::get(&format!("/api/v1/packages/{}/{}/{}/{}", o, t, n, v))
-                .send()
+            get_or::<Option<Package>>(&format!("/api/v1/packages/{}/{}/{}/{}", o, t, n, v), None)
                 .await
-                .unwrap()
-                .json::<Option<Package>>()
-                .await
-                .unwrap_or(None)
         },
     );
 

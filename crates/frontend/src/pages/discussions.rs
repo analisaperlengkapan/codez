@@ -1,6 +1,5 @@
-use crate::api::api_url;
+use crate::api::{api_url, get, get_or, post_json, post_json_ok};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -23,13 +22,7 @@ pub fn DiscussionList() -> impl IntoView {
         move || (owner(), repo_name(), refresh.get()),
         |(o, r, _)| async move {
             let url = api_url(&format!("/repos/{}/{}/discussions", o, r));
-            Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Discussion>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Discussion>>(&url).await
         },
     );
 
@@ -44,7 +37,7 @@ pub fn DiscussionList() -> impl IntoView {
         let r = repo_name();
         spawn_local(async move {
             let url = api_url(&format!("/repos/{}/{}/discussions", o, r));
-            let _ = Request::post(&url).json(&payload).unwrap().send().await;
+            let _ = post_json(&url, &payload).await;
             set_new_title.set("".to_string());
             set_new_body.set("".to_string());
             set_show_create.set(false);
@@ -130,13 +123,7 @@ pub fn DiscussionDetail() -> impl IntoView {
         move || (owner(), repo_name(), id()),
         |(o, r, i)| async move {
             let url = api_url(&format!("/repos/{}/{}/discussions/{}", o, r, i));
-            Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Option<Discussion>>()
-                .await
-                .unwrap_or(None)
+            get_or::<Option<Discussion>>(&url, None).await
         },
     );
 
@@ -144,13 +131,7 @@ pub fn DiscussionDetail() -> impl IntoView {
         move || (owner(), repo_name(), id(), refresh_comments.get()),
         |(o, r, i, _)| async move {
             let url = api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i));
-            Request::get(&url)
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<DiscussionComment>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<DiscussionComment>>(&url).await
         },
     );
 
@@ -164,13 +145,14 @@ pub fn DiscussionDetail() -> impl IntoView {
         let i = id();
 
         spawn_local(async move {
-            let url = api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i));
-            let res = Request::post(&url).json(&payload).unwrap().send().await;
-            if let Ok(resp) = res {
-                if resp.ok() {
-                    set_new_comment_body.set("".to_string());
-                    set_refresh_comments.update(|n| *n += 1);
-                }
+            let ok = post_json_ok(
+                &api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i)),
+                &payload,
+            )
+            .await;
+            if ok {
+                set_new_comment_body.set("".to_string());
+                set_refresh_comments.update(|n| *n += 1);
             }
         });
     };

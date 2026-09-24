@@ -25,13 +25,17 @@ typed DTOs across both.
 ## Architecture
 
 The backend is split into one module per domain under `crates/backend/src/handlers/`, with
-domain sub-routers assembled in `routes.rs`. The large repository surface lives in
-`handlers/repo/` (one file per area: repos, issues, pulls, comments, contents, webhooks,
-wiki, pulse). All shared state lives behind `RwLock`s in `state.rs` that
-are poison-safe (`.unwrap_or_else(|e| e.into_inner())`), so a panicking handler never takes
-the whole server down. The frontend is a Leptos SPA with one page module per feature area
-(and a `repo/` directory module for the larger repository surfaces), all sharing a single
-`style.css` design system built on tokens.
+per-area sub-routers assembled in `crates/backend/src/routes/`. The large repository surface
+lives in `handlers/repo/` (one file per area: repos, issues, pulls, comments, contents,
+webhooks, wiki, pulse). All shared state lives behind `RwLock`s in `state.rs` that are
+poison-safe (`.unwrap_or_else(|e| e.into_inner())`), so a panicking handler never takes the
+whole server down. DTOs live in `crates/shared`, one module per domain, re-exported from its
+root so both crates keep a flat `shared::<Type>` import path.
+
+The frontend is a Leptos SPA with one page module per feature area (and a `repo/` directory
+module for the larger repository surfaces), all sharing a single `style.css` design system
+built on tokens. Every request goes through the typed client in `crates/frontend/src/api.rs`,
+which centralises URL building and error handling so pages never hand-roll fetch chains.
 
 Repository pages share a common header and section navigation via the `RepoNav` component,
 which highlights the active section and appears on every repository sub-page.
@@ -185,14 +189,22 @@ cargo test --workspace                 # run all tests
 
 ```
 crates/
-  backend/    Axum API server, routing, in-memory state, DB glue
-  frontend/   Leptos SPA (pages/, components/) + style.css design system
-  shared/     DTOs and helpers shared by both crates
+  backend/    Axum API server — routes/ (sub-routers), handlers/ (one per
+              domain), state.rs, seed.rs, tests/
+  frontend/   Leptos SPA (pages/, components/) + api.rs client + style.css
+  shared/     DTOs and helpers, one module per domain, re-exported from lib.rs
 docs/
   screenshots/  UI reference images used in this README
 scripts/        Verification and screenshot tooling
 tests/          Playwright end-to-end specs
 ```
+
+### Responsive design
+
+The layout is audited at 390 px, 768 px, and 1440 px. The global header scrolls
+horizontally on narrow screens instead of wrapping, so the document never overflows.
+`scripts/capture_screenshots.py` drives the screenshot gallery; `python scripts/audit_responsive.py`
+sweeps every route at three widths and reports any element that escapes the viewport.
 
 ### Verification & screenshots
 
@@ -215,3 +227,14 @@ npx playwright test --project=chromium
 ## API
 
 API endpoints are prefixed with `/api/v1` and follow GitHub-style REST conventions.
+
+## Contributing
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, the
+conventions we follow, and the checks CI runs. Security issues should be reported
+privately per [`SECURITY.md`](SECURITY.md), not in a public issue.
+
+## License
+
+Released under the [MIT License](LICENSE).
+

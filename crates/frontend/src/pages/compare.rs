@@ -1,5 +1,5 @@
+use crate::api::{get, post_json_resp};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{Branch, CreatePullRequestOption, PullRequest};
@@ -19,15 +19,7 @@ pub fn CompareView() -> impl IntoView {
 
     let branches = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/branches", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Branch>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Branch>>(&format!("/api/v1/repos/{}/{}/branches", o, r)).await },
     );
 
     // Set default compare branch when branches load
@@ -64,30 +56,19 @@ pub fn CompareView() -> impl IntoView {
         let r = repo_name();
         let navigate = navigate.clone();
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/repos/{}/{}/pulls", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
-
-            match res {
-                Ok(resp) => {
-                    if resp.ok() {
-                        if let Ok(pr) = resp.json::<PullRequest>().await {
-                            navigate(
-                                &format!("/repos/{}/{}/pulls/{}", o, r, pr.number),
-                                Default::default(),
-                            );
-                        }
-                    } else {
-                        set_error_msg.set(Some(
-                            "Failed to create Pull Request. Ensure branches exist.".to_string(),
-                        ));
-                    }
-                }
-                Err(_) => {
-                    set_error_msg.set(Some("Network error.".to_string()));
-                }
+            match post_json_resp::<_, PullRequest>(
+                &format!("/api/v1/repos/{}/{}/pulls", o, r),
+                &payload,
+            )
+            .await
+            {
+                Some(pr) => navigate(
+                    &format!("/repos/{}/{}/pulls/{}", o, r, pr.number),
+                    Default::default(),
+                ),
+                None => set_error_msg.set(Some(
+                    "Failed to create Pull Request. Ensure branches exist.".to_string(),
+                )),
             }
         });
     };

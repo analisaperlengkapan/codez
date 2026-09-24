@@ -1,5 +1,5 @@
+use crate::api::{get, get_or, post, post_json};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -20,13 +20,7 @@ pub fn ProjectList() -> impl IntoView {
     let projects = create_resource(
         move || (owner(), repo_name(), show_create.get()), // refresh on create toggle/submit
         |(o, r, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/projects", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Project>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Project>>(&format!("/api/v1/repos/{}/{}/projects", o, r)).await
         },
     );
 
@@ -43,11 +37,7 @@ pub fn ProjectList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/projects", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/projects", o, r), &payload).await;
             set_new_title.set("".to_string());
             set_new_desc.set("".to_string());
             set_show_create.set(false);
@@ -122,26 +112,16 @@ pub fn ProjectDetail() -> impl IntoView {
     let project = create_resource(
         move || (owner(), repo_name(), id()),
         |(o, r, i)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/projects/{}", o, r, i))
-                .send()
+            get_or::<Option<Project>>(&format!("/api/v1/repos/{}/{}/projects/{}", o, r, i), None)
                 .await
-                .unwrap()
-                .json::<Option<Project>>()
-                .await
-                .unwrap_or(None)
         },
     );
 
     let columns = create_resource(
         move || (owner(), repo_name(), id(), refresh.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/projects/{}/columns", o, r, i))
-                .send()
+            get::<Vec<ProjectColumn>>(&format!("/api/v1/repos/{}/{}/projects/{}/columns", o, r, i))
                 .await
-                .unwrap()
-                .json::<Vec<ProjectColumn>>()
-                .await
-                .unwrap_or_default()
         },
     );
 
@@ -156,11 +136,11 @@ pub fn ProjectDetail() -> impl IntoView {
         };
         if !payload.title.is_empty() {
             spawn_local(async move {
-                let _ = Request::post(&format!("/api/v1/repos/{}/{}/projects/{}/columns", o, r, i))
-                    .json(&payload)
-                    .unwrap()
-                    .send()
-                    .await;
+                let _ = post_json(
+                    &format!("/api/v1/repos/{}/{}/projects/{}/columns", o, r, i),
+                    &payload,
+                )
+                .await;
                 set_new_col_title.set("".to_string());
                 set_refresh.update(|n| *n += 1);
             });
@@ -173,11 +153,10 @@ pub fn ProjectDetail() -> impl IntoView {
         let i = id();
         let action = if is_closed { "reopen" } else { "close" };
         spawn_local(async move {
-            let _ = Request::post(&format!(
+            let _ = post(&format!(
                 "/api/v1/repos/{}/{}/projects/{}/{}",
                 o, r, i, action
             ))
-            .send()
             .await;
             set_refresh.update(|n| *n += 1); // Trigger resource reload
         });
@@ -252,16 +231,11 @@ fn ProjectColumnView(
             )
         }, // also depends on global refresh? No, local is enough unless moved
         move |(o, r, c, _)| async move {
-            Request::get(&format!(
+            get::<Vec<ProjectCard>>(&format!(
                 "/api/v1/repos/{}/{}/projects/columns/{}/cards",
                 o, r, c
             ))
-            .send()
             .await
-            .unwrap()
-            .json::<Vec<ProjectCard>>()
-            .await
-            .unwrap_or_default()
         },
     );
 
@@ -270,13 +244,7 @@ fn ProjectColumnView(
     let issues = create_resource(
         move || (o_issues.clone(), r_issues.clone()),
         move |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/issues?state=open", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Issue>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Issue>>(&format!("/api/v1/repos/{}/{}/issues?state=open", o, r)).await
         },
     );
 
@@ -300,13 +268,10 @@ fn ProjectColumnView(
 
         if payload.content.is_some() || payload.issue_id.is_some() {
             spawn_local(async move {
-                let _ = Request::post(&format!(
-                    "/api/v1/repos/{}/{}/projects/columns/{}/cards",
-                    o, r, c
-                ))
-                .json(&payload)
-                .unwrap()
-                .send()
+                let _ = post_json(
+                    &format!("/api/v1/repos/{}/{}/projects/columns/{}/cards", o, r, c),
+                    &payload,
+                )
                 .await;
                 set_new_card_content.set("".to_string());
                 set_issue_id_input.set("".to_string());

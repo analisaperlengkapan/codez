@@ -43,7 +43,7 @@ ROUTES = [
     ("26_admin", "/admin"),
     ("27_admin_users", "/admin/users"),
     ("28_user_profile", "/users/admin"),
-    ("29_org_profile", "/orgs/admin"),
+    ("29_org_profile", "/orgs/codeza-org"),
     ("30_settings", "/settings/profile"),
     ("31_login", "/login"),
     ("32_register", "/register"),

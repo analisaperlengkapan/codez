@@ -1,5 +1,5 @@
+use crate::api::{delete, get, get_or, post, post_json_ok};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{CreateReleaseOption, Release};
@@ -13,13 +13,7 @@ pub fn ReleaseList() -> impl IntoView {
     let releases = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/releases", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Release>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Release>>(&format!("/api/v1/repos/{}/{}/releases", o, r)).await
         },
     );
 
@@ -81,13 +75,8 @@ pub fn ReleaseDetail() -> impl IntoView {
     let release = create_resource(
         move || (owner(), repo_name(), id(), trigger.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
-                .send()
+            get_or::<Option<Release>>(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i), None)
                 .await
-                .unwrap()
-                .json::<Option<Release>>()
-                .await
-                .unwrap_or(None)
         },
     );
 
@@ -96,9 +85,7 @@ pub fn ReleaseDetail() -> impl IntoView {
         let r = repo_name();
         let i = id();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i))
-                .send()
-                .await;
+            let _ = post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i)).await;
             set_trigger.update(|n| *n += 1);
         });
     };
@@ -108,9 +95,7 @@ pub fn ReleaseDetail() -> impl IntoView {
         let r = repo_name();
         let i = id();
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
-                .send()
-                .await;
+            let _ = delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i)).await;
             // Redirect to list would be good here, simplistic mock for now
             let window = web_sys::window().unwrap();
             let _ = window
@@ -187,13 +172,9 @@ pub fn ReleaseCreate() -> impl IntoView {
         let r = repo_name();
 
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/repos/{}/{}/releases", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let res = post_json_ok(&format!("/api/v1/repos/{}/{}/releases", o, r), &payload).await;
 
-            if res.is_ok() {
+            if res {
                 // Redirect
                 let window = web_sys::window().unwrap();
                 let _ = window

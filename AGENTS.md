@@ -15,23 +15,28 @@ crates/backend     Axum API server
   src/
     main.rs        Entry point + SPA/static fallback
     config.rs      Env-var configuration
-    routes.rs      HTTP route registration (grouped sub-routers)
+    routes/        HTTP route registration, one sub-router per area
+                   (repos, issues, pulls, orgs, users, admin, actions,
+                   packages, projects, releases, misc) + mod.rs
     state.rs       Shared AppState (in-memory stores)
     handlers/      Feature handlers, one module per domain
       repo/        Repository handlers split by area (repos, issues, pulls,
                    comments, contents, webhooks, wiki, pulse) + shared helpers
+      org/         Organization handlers (admin.rs, meta.rs) + shared helpers
     db.rs          Optional PostgreSQL layer
     seed.rs        Demo in-memory state
-    tests.rs       Integration tests
+    tests/         Integration tests, one module per area + mod.rs
 crates/frontend    Leptos SPA
   src/
     main.rs        Router definitions
-    api.rs         HTTP client helpers
+    api.rs         Typed HTTP client helpers (fetch + write wrappers)
     components/    Reusable UI (nav.rs, repo_nav.rs)
     pages/         One module per feature area
   style.css        Design system (tokens + components + utilities)
   index.html       Trunk entry (pulls in style.css)
 crates/shared      DTOs and helpers shared by both crates
+  src/             One module per domain (repos, issues, pulls, users, …)
+                   re-exported from lib.rs so `shared::<Type>` keeps working
 docs/screenshots   README gallery images
 scripts/           Verification + screenshot tooling
 tests/             Playwright end-to-end specs
@@ -62,10 +67,19 @@ links return `index.html`; unknown `/api/*` paths return `404`.
 
 - Keep `cargo clippy --workspace --all-targets` warning-free.
 - One handler module per domain under `crates/backend/src/handlers/`. Large domains use a
-  directory module (e.g. `handlers/repo/`) with a `mod.rs` that holds shared imports and
-  helpers, and re-exports each submodule so callers keep using `handlers::<name>`.
+  directory module (e.g. `handlers/repo/`, `handlers/org/`) with a `mod.rs` that holds
+  shared imports and helpers, and re-exports each submodule so callers keep using
+  `handlers::<name>`.
+- Routing lives in `crates/backend/src/routes/`, one sub-router per area, assembled in
+  `routes/mod.rs`. Handlers never register routes themselves.
+- Shared DTOs live in `crates/shared/src/`, one module per domain, all re-exported from
+  `lib.rs` so downstream code keeps the flat `shared::<Type>` path. Do not glob-import
+  `shared::*` in the backend; the re-exports are the public surface.
 - Frontend pages: one file per feature area under `crates/frontend/src/pages/`; large
   features (e.g. `repo`) use a directory module with a re-exporting `mod.rs`.
+- All frontend HTTP goes through `crates/frontend/src/api.rs`. Pages must not call
+  `gloo_net::http::Request` directly — use `api_url()` plus the `get*`/`post*`/`patch*`/
+  `put*`/`delete` helpers so error handling stays uniform.
 - Avoid glob-import ambiguity between `leptos_router::*` and shared types in page modules —
   import concrete items.
 - Run `cargo fmt --all` before committing.
@@ -83,8 +97,8 @@ links return `index.html`; unknown `/api/*` paths return `404`.
 
 ### Tests
 
-- Backend integration tests live in `crates/backend/src/tests.rs` and exercise real
-  handler/router code paths.
+- Backend integration tests live in `crates/backend/src/tests/`, one module per area plus
+  a `mod.rs`, and exercise real handler/router code paths.
 - Playwright specs live in `tests/` and run with `npx playwright test`. They use the
   `baseURL` from `playwright.config.ts` (`CODEZA_BASE_URL`, default
   `http://127.0.0.1:8080`) — never hardcode absolute URLs in specs; pass relative paths
@@ -98,10 +112,13 @@ cargo test --workspace
 (cd crates/frontend && trunk build)
 cargo run -p backend &                       # then:
 python scripts/capture_screenshots.py docs/screenshots
+python scripts/audit_responsive.py           # 390/768/1440 overflow sweep
 ```
 
 Screenshot filenames are referenced by `README.md`; if you renumber routes in
-`scripts/capture_screenshots.py`, update the README image links to match.
+`scripts/capture_screenshots.py`, update the README image links to match. Keep the route
+list there pointing at resources that actually exist in the demo seed (for example the
+seeded org slug is `codeza-org`, not `admin`).
 
 ## Gotchas
 
@@ -109,3 +126,7 @@ Screenshot filenames are referenced by `README.md`; if you renumber routes in
   handler in `main.rs` is intentionally a single `.fallback()` that resolves assets itself.
 - The frontend build output (`crates/frontend/dist/`) is gitignored — build it locally.
 - `node_modules/` is gitignored; run `npm install` for Playwright.
+- At narrow viewports the global header scrolls horizontally (`overflow-x: auto`) rather
+  than wrapping; the inner `.nav-links` deliberately overflow their container. Don't
+  "fix" this by allowing the header to break out — it is what keeps the document from
+  overflowing at 390px.

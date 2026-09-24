@@ -1,5 +1,5 @@
+use crate::api::{get_opt, post};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::SecurityScanReport;
@@ -16,13 +16,7 @@ pub fn SecurityDashboard() -> impl IntoView {
     let report = create_resource(
         move || (owner(), repo_name(), refresh.get()),
         |(o, r, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/security/scan", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<SecurityScanReport>()
-                .await
-                .ok()
+            get_opt::<SecurityScanReport>(&format!("/api/v1/repos/{}/{}/security/scan", o, r)).await
         },
     );
 
@@ -31,9 +25,7 @@ pub fn SecurityDashboard() -> impl IntoView {
         let r = repo_name();
         set_scanning.set(true);
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/security/scan", o, r))
-                .send()
-                .await;
+            let _ = post(&format!("/api/v1/repos/{}/{}/security/scan", o, r)).await;
             set_scanning.set(false);
             set_refresh.update(|n| *n += 1);
         });

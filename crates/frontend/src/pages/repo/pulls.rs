@@ -1,8 +1,8 @@
 //! Pull request list and detail components.
 
 use super::CommitStatusList;
+use crate::api::{get, patch_json, post_json};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -19,13 +19,7 @@ pub fn PullRequestList() -> impl IntoView {
     let pulls = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/pulls", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<PullRequest>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<PullRequest>>(&format!("/api/v1/repos/{}/{}/pulls", o, r)).await
         },
     );
 
@@ -79,13 +73,7 @@ pub fn PullRequestDetail() -> impl IntoView {
             // There isn't a `get_pull` route! We should add one or iterate list (inefficient but works for now).
             // Actually, we can use the `list_pulls` and find the one with the right index client-side or add endpoint.
             // For now, let's filter client side from list since that endpoint exists.
-            let pulls = Request::get(&format!("/api/v1/repos/{}/{}/pulls", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<PullRequest>>()
-                .await
-                .unwrap_or_default();
+            let pulls = get::<Vec<PullRequest>>(&format!("/api/v1/repos/{}/{}/pulls", o, r)).await;
             pulls.into_iter().find(|p| p.number == i)
         },
     );
@@ -93,13 +81,7 @@ pub fn PullRequestDetail() -> impl IntoView {
     let pr_files = create_resource(
         move || (owner(), repo_name(), index()),
         |(o, r, i)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/pulls/{}/files", o, r, i))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<DiffFile>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<DiffFile>>(&format!("/api/v1/repos/{}/{}/pulls/{}/files", o, r, i)).await
         },
     );
 
@@ -114,11 +96,11 @@ pub fn PullRequestDetail() -> impl IntoView {
                 merge_title_field: None,
                 merge_message_field: None,
             };
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/pulls/{}/merge", o, r, i))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(
+                &format!("/api/v1/repos/{}/{}/pulls/{}/merge", o, r, i),
+                &payload,
+            )
+            .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -138,11 +120,11 @@ pub fn PullRequestDetail() -> impl IntoView {
             state: Some(new_state.to_string()),
         };
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/repos/{}/{}/pulls/{}", o, r, idx))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = patch_json(
+                &format!("/api/v1/repos/{}/{}/pulls/{}", o, r, idx),
+                &payload,
+            )
+            .await;
             set_trigger_refresh.update(|n| *n += 1);
         });
     };
@@ -171,11 +153,11 @@ pub fn PullRequestDetail() -> impl IntoView {
             state: None,
         };
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/repos/{}/{}/pulls/{}", o, r, idx))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = patch_json(
+                &format!("/api/v1/repos/{}/{}/pulls/{}", o, r, idx),
+                &payload,
+            )
+            .await;
             set_is_editing.set(false);
             set_trigger_refresh.update(|n| *n += 1);
         });
@@ -184,13 +166,7 @@ pub fn PullRequestDetail() -> impl IntoView {
     let reviews = create_resource(
         move || (owner(), repo_name(), index(), trigger_refresh.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Review>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<Review>>(&format!("/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i)).await
         },
     );
 
@@ -205,11 +181,11 @@ pub fn PullRequestDetail() -> impl IntoView {
             event,
         };
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(
+                &format!("/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i),
+                &payload,
+            )
+            .await;
             set_review_body.set("".to_string());
             set_trigger_refresh.update(|n| *n += 1);
         });

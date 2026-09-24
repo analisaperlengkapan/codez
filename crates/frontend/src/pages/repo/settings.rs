@@ -1,7 +1,7 @@
 //! Repository settings, branches, webhooks, secrets and deploy keys.
 
+use crate::api::{get, get_then, patch_json, post, post_json, post_json_ok, put_json};
 use crate::components::RepoNav;
-use gloo_net::http::Request;
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -34,11 +34,9 @@ pub fn RepoSettings() -> impl IntoView {
     let _ = create_resource(
         move || (owner(), repo_name()),
         move |(o, r)| async move {
-            if let Ok(resp) = Request::get(&format!("/api/v1/repos/{}/{}/settings", o, r))
-                .send()
-                .await
-            {
-                if let Ok(settings) = resp.json::<RepoSettingsOption>().await {
+            get_then::<RepoSettingsOption, _>(
+                &format!("/api/v1/repos/{}/{}/settings", o, r),
+                |settings| {
                     set_desc.set(settings.description.unwrap_or_default());
                     set_website.set(settings.website.unwrap_or_default());
                     set_default_branch.set(settings.default_branch.unwrap_or("main".to_string()));
@@ -49,8 +47,9 @@ pub fn RepoSettings() -> impl IntoView {
                     set_issues.set(settings.has_issues.unwrap_or(true));
                     set_wiki.set(settings.has_wiki.unwrap_or(true));
                     set_projects.set(settings.has_projects.unwrap_or(true));
-                }
-            }
+                },
+            )
+            .await;
         },
     );
 
@@ -71,11 +70,7 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/repos/{}/{}/settings", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = patch_json(&format!("/api/v1/repos/{}/{}/settings", o, r), &payload).await;
         });
     };
 
@@ -87,11 +82,7 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/transfer", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/transfer", o, r), &payload).await;
         });
     };
 
@@ -106,11 +97,7 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::put(&format!("/api/v1/repos/{}/{}/topics", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = put_json(&format!("/api/v1/repos/{}/{}/topics", o, r), &payload).await;
         });
     };
 
@@ -118,9 +105,7 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/mirror-sync", o, r))
-                .send()
-                .await;
+            let _ = post(&format!("/api/v1/repos/{}/{}/mirror-sync", o, r)).await;
         });
     };
 
@@ -227,14 +212,13 @@ pub fn CreateProtectedBranch(
         let on_success_clone = on_success;
 
         async move {
-            let res = Request::post(&format!("/api/v1/repos/{}/{}/branch_protections", o, r))
-                .json(&opt)
-                .unwrap()
-                .send()
-                .await
-                .unwrap();
+            let ok = post_json_ok(
+                &format!("/api/v1/repos/{}/{}/branch_protections", o, r),
+                &opt,
+            )
+            .await;
 
-            if res.ok() {
+            if ok {
                 on_success_clone.dispatch(());
                 set_name.set(String::new());
                 set_enable_push.set(false);
@@ -294,13 +278,8 @@ pub fn ProtectedBranchList() -> impl IntoView {
     let branches = create_resource(
         move || (owner(), repo_name(), refetch_trigger.get()),
         |(o, r, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/branch_protections", o, r))
-                .send()
+            get::<Vec<ProtectedBranch>>(&format!("/api/v1/repos/{}/{}/branch_protections", o, r))
                 .await
-                .unwrap()
-                .json::<Vec<ProtectedBranch>>()
-                .await
-                .unwrap_or_default()
         },
     );
 
@@ -350,13 +329,7 @@ pub fn LfsLockList() -> impl IntoView {
     let locks = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/git/lfs/locks", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<LfsLock>>()
-                .await
-                .unwrap_or_default()
+            get::<Vec<LfsLock>>(&format!("/api/v1/repos/{}/{}/git/lfs/locks", o, r)).await
         },
     );
 
@@ -387,15 +360,7 @@ pub fn WebhookList() -> impl IntoView {
 
     let hooks = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/hooks", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Webhook>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Webhook>>(&format!("/api/v1/repos/{}/{}/hooks", o, r)).await },
     );
 
     let on_create = move |ev: leptos::ev::SubmitEvent| {
@@ -408,11 +373,7 @@ pub fn WebhookList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/hooks", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/hooks", o, r), &payload).await;
             set_url.set("".to_string());
         });
     };
@@ -431,8 +392,7 @@ pub fn WebhookList() -> impl IntoView {
                             let deliveries = create_resource(
                                 move || (o.clone(), r.clone(), hook_id),
                                 |(o, r, id)| async move {
-                                    Request::get(&format!("/api/v1/repos/{}/{}/hooks/{}/deliveries", o, r, id))
-                                        .send().await.unwrap().json::<Vec<WebhookDelivery>>().await.unwrap_or_default()
+                                    get::<Vec<WebhookDelivery>>(&format!("/api/v1/repos/{}/{}/hooks/{}/deliveries", o, r, id)).await
                                 }
                             );
 
@@ -485,15 +445,7 @@ pub fn SecretList() -> impl IntoView {
 
     let secrets = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/secrets", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<Secret>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<Secret>>(&format!("/api/v1/repos/{}/{}/secrets", o, r)).await },
     );
 
     let on_create = move |ev: leptos::ev::SubmitEvent| {
@@ -505,11 +457,7 @@ pub fn SecretList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/secrets", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/secrets", o, r), &payload).await;
             set_name.set("".to_string());
             set_data.set("".to_string());
         });
@@ -549,15 +497,7 @@ pub fn DeployKeyList() -> impl IntoView {
 
     let keys = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/keys", o, r))
-                .send()
-                .await
-                .unwrap()
-                .json::<Vec<DeployKey>>()
-                .await
-                .unwrap_or_default()
-        },
+        |(o, r)| async move { get::<Vec<DeployKey>>(&format!("/api/v1/repos/{}/{}/keys", o, r)).await },
     );
 
     let on_create = move |ev: leptos::ev::SubmitEvent| {
@@ -569,11 +509,7 @@ pub fn DeployKeyList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/keys", o, r))
-                .json(&payload)
-                .unwrap()
-                .send()
-                .await;
+            let _ = post_json(&format!("/api/v1/repos/{}/{}/keys", o, r), &payload).await;
             set_title.set("".to_string());
             set_key.set("".to_string());
         });
