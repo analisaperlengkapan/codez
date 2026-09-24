@@ -485,6 +485,8 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
 .flash-error { padding: 10px 16px; color: var(--color-danger); background: var(--color-danger-subtle); border-radius: var(--radius); }
 
 /* -- Layout helpers used across pages -- */
+.repo-chrome { margin-bottom: 16px; }
+
 .repo-header {
   display: flex;
   justify-content: space-between;

@@ -1,5 +1,6 @@
-use crate::api::{get, patch};
+use crate::api::{encode_query, get, patch};
 use leptos::*;
+use leptos_router::use_query_map;
 use shared::{Activity, Issue, Notification, PullRequest, Repository};
 
 #[component]
@@ -209,20 +210,19 @@ pub fn Explore() -> impl IntoView {
 
 #[component]
 pub fn Search() -> impl IntoView {
-    let (query, set_query) = create_signal("".to_string());
+    let query_map = use_query_map();
+    let initial = query_map.with(|q| q.get("q").cloned().unwrap_or_default());
+    let (query, set_query) = create_signal(initial);
     let (search_type, set_search_type) = create_signal("repos".to_string()); // repos | issues
 
     let (repo_results, set_repo_results) = create_signal(vec![]);
     let (issue_results, set_issue_results) = create_signal(vec![]);
 
-    let on_search = move |_| {
-        let q = query.get();
-        let t = search_type.get();
-
+    let run_search = move |q: String, t: String| {
         spawn_local(async move {
             if t == "repos" {
                 let url = if !q.is_empty() {
-                    format!("/api/v1/repos?q={}", q)
+                    format!("/api/v1/repos?q={}", encode_query(&q))
                 } else {
                     "/api/v1/repos".to_string()
                 };
@@ -231,13 +231,32 @@ pub fn Search() -> impl IntoView {
                 set_repo_results.set(res);
                 set_issue_results.set(vec![]);
             } else {
-                let url = format!("/api/v1/search/issues?q={}", q);
+                let url = format!("/api/v1/search/issues?q={}", encode_query(&q));
                 let res = get::<Vec<Issue>>(&url).await;
                 set_issue_results.set(res);
                 set_repo_results.set(vec![]);
             }
         });
     };
+
+    let on_search = move |_| run_search(query.get(), search_type.get());
+
+    // Run the incoming search immediately so a term submitted from the global
+    // header (which navigates to `/search?q=…`) shows results on arrival.
+    let initial_query = query_map.with(|q| q.get("q").cloned().unwrap_or_default());
+    if !initial_query.is_empty() {
+        run_search(initial_query, search_type.get_untracked());
+    }
+
+    // Keep the box in sync when the `q` parameter changes via navigation while
+    // this page stays mounted.
+    create_effect(move |_| {
+        let q = query_map.with(|q| q.get("q").cloned().unwrap_or_default());
+        if !q.is_empty() {
+            set_query.set(q.clone());
+            run_search(q, search_type.get_untracked());
+        }
+    });
 
     view! {
         <div class="search-page">

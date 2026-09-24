@@ -37,9 +37,13 @@ fn content_type(path: &str) -> &'static str {
 /// Fallback for paths not matched by the API.
 ///
 /// Serves the requested file from the static directory when it exists. The
-/// frontend is a client-side-routed SPA, so any other path returns the shell
-/// document with a `200` so the browser can resolve deep links. Unknown
-/// `/api/*` paths stay `404` so clients never mistake HTML for JSON.
+/// frontend is a client-side-routed SPA, so a *navigation* path returns the
+/// shell document with a `200` so the browser can resolve deep links.
+///
+/// Missing *asset* requests (a path with a file extension) return `404` rather
+/// than the shell: a browser asking for a `.js`/`.css`/`.wasm` that does not
+/// exist must not receive `text/html` with a `200`. Unknown `/api/*` paths also
+/// stay `404` so clients never mistake HTML for JSON.
 async fn spa_fallback(static_dir: String, uri: Uri) -> Response {
     if uri.path().starts_with("/api/") {
         return (StatusCode::NOT_FOUND, "Not Found").into_response();
@@ -51,6 +55,9 @@ async fn spa_fallback(static_dir: String, uri: Uri) -> Response {
         if let Ok(bytes) = tokio::fs::read(&file).await {
             return ([(header::CONTENT_TYPE, content_type(relative))], bytes).into_response();
         }
+        if is_asset_request(relative) {
+            return (StatusCode::NOT_FOUND, "Not Found").into_response();
+        }
     }
 
     match tokio::fs::read(format!("{static_dir}/index.html")).await {
@@ -61,6 +68,18 @@ async fn spa_fallback(static_dir: String, uri: Uri) -> Response {
         )
             .into_response(),
     }
+}
+
+/// Whether a request path looks like a build asset rather than an SPA route.
+///
+/// SPA routes are extension-less (`/repos/admin/codeza`) while build assets
+/// carry a known extension (`/foo-abc123.js`). Only the latter should get a
+/// hard `404` when missing.
+fn is_asset_request(path: &str) -> bool {
+    matches!(
+        path.rsplit('.').next().unwrap_or(""),
+        "js" | "css" | "wasm" | "map" | "json" | "svg" | "png" | "ico" | "txt"
+    )
 }
 
 #[tokio::main]
@@ -82,4 +101,24 @@ async fn main() {
     println!("Codeza listening on http://{addr}");
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+#[cfg(test)]
+mod static_asset_tests {
+    use super::is_asset_request;
+
+    #[test]
+    fn extensions_are_assets() {
+        assert!(is_asset_request("frontend-abc123.js"));
+        assert!(is_asset_request("style-abc.css"));
+        assert!(is_asset_request("frontend-abc_bg.wasm"));
+        assert!(is_asset_request("favicon.ico"));
+    }
+
+    #[test]
+    fn spa_routes_are_not_assets() {
+        assert!(!is_asset_request("repos/admin/codeza"));
+        assert!(!is_asset_request("repos/admin/codeza/issues/12"));
+        assert!(!is_asset_request("search"));
+    }
 }

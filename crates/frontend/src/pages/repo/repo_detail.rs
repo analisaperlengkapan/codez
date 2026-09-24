@@ -1,19 +1,18 @@
 //! Repository overview, source browser, commits, branches and tags.
 
-use crate::api::{get, get_or, get_text, post, post_json_ok, post_json_resp, put, put_json};
+use crate::api::{get, get_or, get_text, post_json_ok, put, put_json};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
 use shared::{
     Branch, CodeSearchResult, Collaborator, Commit, CommitStatus, DiffFile, FileEntry,
-    LanguageStat, MigrateRepoOption, RepoPulseStats, RepoTopicOptions, RepoUserStatus, Repository,
-    Tag, UpdateFileOption,
+    LanguageStat, MigrateRepoOption, RepoPulseStats, RepoTopicOptions, Repository, Tag,
+    UpdateFileOption,
 };
 
 #[component]
 pub fn RepoDetail() -> impl IntoView {
     let params = use_params_map();
-    let navigate = use_navigate();
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
     let (trigger_refresh, set_trigger_refresh) = create_signal(0);
@@ -22,20 +21,6 @@ pub fn RepoDetail() -> impl IntoView {
         move || (owner(), repo_name(), trigger_refresh.get()),
         |(o, r, _)| async move {
             get_or::<Option<Repository>>(&format!("/api/v1/repos/{}/{}", o, r), None).await
-        },
-    );
-
-    let repo_status = create_resource(
-        move || (owner(), repo_name(), trigger_refresh.get()),
-        |(o, r, _)| async move {
-            get_or::<RepoUserStatus>(
-                &format!("/api/v1/repos/{}/{}/user_status", o, r),
-                RepoUserStatus {
-                    starred: false,
-                    watching: false,
-                },
-            )
-            .await
         },
     );
 
@@ -84,62 +69,8 @@ pub fn RepoDetail() -> impl IntoView {
         });
     };
 
-    let on_star = move |_| {
-        let o = owner();
-        let r = repo_name();
-        spawn_local(async move {
-            let _ = post(&format!("/api/v1/repos/{}/{}/star", o, r)).await;
-            set_trigger_refresh.update(|n| *n += 1);
-        });
-    };
-
-    let on_watch = move |_| {
-        let o = owner();
-        let r = repo_name();
-        spawn_local(async move {
-            let _ = post(&format!("/api/v1/repos/{}/{}/watch", o, r)).await;
-            set_trigger_refresh.update(|n| *n += 1);
-        });
-    };
-
-    let on_fork = move |_| {
-        let o = owner();
-        let r = repo_name();
-        let navigate = navigate.clone();
-        spawn_local(async move {
-            if let Some(new_repo) =
-                post_json_resp::<_, Repository>(&format!("/api/v1/repos/{}/{}/fork", o, r), &())
-                    .await
-            {
-                navigate(
-                    &format!("/repos/{}/{}", new_repo.owner, new_repo.name),
-                    Default::default(),
-                );
-            }
-        });
-    };
-
     view! {
             <div class="repo-detail">
-                <div class="repo-header">
-                    <h3 class="mb-0">"Repository: " {owner} " / " {repo_name}</h3>
-                    <div class="repo-actions">
-                        <Transition fallback=move || view! { <span class="text-muted">"Loading…"</span> }>
-                            {move || {
-                                let status = repo_status.get()?;
-                                let repo_data = repo.get()??;
-                                let star_label = if status.starred { "Unstar" } else { "Star" };
-                                let watch_label = if status.watching { "Unwatch" } else { "Watch" };
-                                Some(view! {
-                                    <button class="btn-primary" on:click=on_star>{star_label} " (" {repo_data.stars_count} ")"</button>
-                                    <button on:click=on_watch>{watch_label} " (" {repo_data.watchers_count} ")"</button>
-                                })
-                            }}
-                        </Transition>
-                        <button on:click=on_fork>"Fork"</button>
-                    </div>
-                </div>
-
                 <RepoNav/>
 
                 <div class="repo-languages mb-2">

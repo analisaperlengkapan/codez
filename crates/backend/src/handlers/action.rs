@@ -67,12 +67,34 @@ pub async fn trigger_workflow(
         .write()
         .unwrap_or_else(|e| e.into_inner());
     let run_id = runs.iter().map(|r| r.id).max().unwrap_or(0) + 1;
+    // There is no background executor in the in-memory demo, so a triggered run
+    // completes synchronously with canned step logs. Without this it would stay
+    // "queued" forever and the Actions page would treat it as permanently active.
     let run = WorkflowRun {
         id: run_id,
         workflow_id: id,
-        status: "queued".to_string(),
+        status: "success".to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
-        step_logs: vec![],
+        step_logs: vec![
+            WorkflowStepLog {
+                name: "Set up job".to_string(),
+                status: "success".to_string(),
+                logs: vec!["Runner ready.".to_string()],
+            },
+            WorkflowStepLog {
+                name: "Checkout".to_string(),
+                status: "success".to_string(),
+                logs: vec!["Checked out repository.".to_string()],
+            },
+            WorkflowStepLog {
+                name: "Execute build & test".to_string(),
+                status: "success".to_string(),
+                logs: vec![
+                    "Building workspace...".to_string(),
+                    "Cargo test completed without errors.".to_string(),
+                ],
+            },
+        ],
     };
     runs.push(run.clone());
 

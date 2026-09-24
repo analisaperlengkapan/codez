@@ -27,11 +27,25 @@ async fn trigger_workflow_creates_a_run() {
         .await
         .json();
     assert_eq!(run.workflow_id, 1);
+    // A triggered run completes synchronously with logs; it must not be left
+    // queued (which would render as permanently active in the Actions UI).
+    assert_eq!(run.status, "success");
+    assert!(!run.step_logs.is_empty());
 
     let runs: Vec<WorkflowRun> = app
         .get_json("/api/v1/repos/admin/codeza/actions/workflows/1/runs")
         .await;
-    assert!(runs.iter().any(|r| r.id == run.id));
+    let stored = runs.iter().find(|r| r.id == run.id).expect("run persisted");
+    assert_eq!(stored.status, "success");
+    assert!(!stored.step_logs.is_empty());
+
+    let logs: Vec<shared::WorkflowStepLog> = app
+        .get_json(&format!(
+            "/api/v1/repos/admin/codeza/actions/runs/{}/logs",
+            run.id
+        ))
+        .await;
+    assert!(!logs.is_empty());
 }
 
 #[tokio::test]

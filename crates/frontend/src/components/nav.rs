@@ -31,7 +31,10 @@ pub fn Nav() -> impl IntoView {
                 .and_then(|el| el.dyn_into::<web_sys::HtmlInputElement>().ok())
                 .map(|i| i.value())
                 .unwrap_or_default();
-            navigate(&format!("/search?q={input}"), Default::default());
+            navigate(
+                &format!("/search?q={}", crate::api::encode_query(&input)),
+                Default::default(),
+            );
         }
     };
 

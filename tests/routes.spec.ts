@@ -96,4 +96,23 @@ test.describe('Repository chrome', () => {
       await expect(active).toHaveAttribute('aria-current', 'page');
     }
   });
+
+  test('the shared repository header renders on every sub-page', async ({ page }) => {
+    const paths = [
+      '/repos/admin/codeza',
+      '/repos/admin/codeza/issues',
+      '/repos/admin/codeza/pulls',
+      '/repos/admin/codeza/actions',
+      '/repos/admin/codeza/wiki',
+      '/repos/admin/codeza/settings',
+    ];
+    for (const path of paths) {
+      await page.goto(path);
+      const header = page.locator('.repo-header');
+      await expect(header).toBeVisible();
+      await expect(header.locator('h3')).toContainText('Repository: admin / codeza');
+      await expect(header.getByRole('button', { name: 'Fork' })).toBeVisible();
+      await expect(page.locator('nav.repo-nav')).toBeVisible();
+    }
+  });
 });
