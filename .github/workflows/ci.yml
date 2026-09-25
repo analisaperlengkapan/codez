@@ -64,7 +64,11 @@ jobs:
     name: Playwright e2e
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    needs: [rust, frontend]
+    # No `needs: [rust, frontend]`: this job runs in a fresh workspace and
+    # produces its own build, so it does not consume the frontend job's
+    # artifact. The dependency was a false signal, not a build reuse. The
+    # `rust` and `frontend` jobs still gate merges; they just are not
+    # prerequisites for running e2e.
     steps:
       - uses: actions/checkout@v4
 
@@ -90,10 +94,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Build frontend
-        working-directory: crates/frontend
-        run: trunk build
-
+      # `trunk serve` below builds the bundle itself, so a separate
+      # `trunk build` step here only duplicated work.
       - name: Start servers
         run: |
           nohup cargo run -p backend > backend.log 2>&1 &

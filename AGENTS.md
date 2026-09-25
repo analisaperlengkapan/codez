@@ -66,7 +66,9 @@ Test suites:
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push/PR: `cargo fmt
 --check`, `cargo clippy -- -D warnings`, `cargo test`, a release `trunk build`, and the
-Playwright e2e suite against a locally started backend + `trunk serve`.
+Playwright e2e suite against a locally started backend + `trunk serve`. The `rust`,
+`frontend`, and `e2e` jobs are independent (each in its own checkout), so the e2e job
+builds the bundle it needs via `trunk serve` rather than consuming another job's output.
 
 The backend serves the SPA from `CODEZA_STATIC_DIR` (default `crates/frontend/dist`). Deep
 links return `index.html`; unknown `/api/*` paths return `404`.
@@ -98,7 +100,10 @@ links return `index.html`; unknown `/api/*` paths return `404`.
 
 - `crates/frontend/style.css` is the single design system. Sections in order:
   tokens, reset/base, layout, components, feature sections, utilities, responsive.
-- Use design tokens (`var(--color-*)`, `var(--radius*)`) rather than raw hex/px.
+- Use design tokens (`var(--color-*)`, `var(--radius*)`) rather than raw hex/px. Component
+  rules should contain no literal colors; if one is needed, add a token first. Inverted
+  surfaces have their own scales (`--color-header-*`, `--color-log-*`, `--color-on-emphasis`)
+  because they do not follow the light-canvas palette.
 - Prefer existing utility and component classes over inline `style=` attributes.
 - When adding markup with a new class, add its rule to `style.css` (there is no CSS
   framework — unstyled classes are a bug).

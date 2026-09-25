@@ -271,7 +271,16 @@ pub fn Search() -> impl IntoView {
                         prop:value=query
                         on:input=move |ev| set_query.set(event_target_value(&ev))
                         class="search-input-flex" />
-                    <select on:change=move |ev| set_search_type.set(event_target_value(&ev)) class="w-auto">
+                    <select on:change=move |ev| {
+                        // Changing the type must start a fresh search for the
+                        // current query. Otherwise the panel keeps the previous
+                        // type's results (or stays empty) until Search is
+                        // clicked. `run_search` bumps the generation, so a slow
+                        // response for the old type is discarded.
+                        let t = event_target_value(&ev);
+                        set_search_type.set(t.clone());
+                        run_search(query.get(), t);
+                    } class="w-auto">
                         <option value="repos">"Repositories"</option>
                         <option value="issues">"Issues"</option>
                     </select>

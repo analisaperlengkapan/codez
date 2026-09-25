@@ -28,6 +28,31 @@
   --color-done: #8250df;
   --color-done-subtle: #fbefff;
 
+  /* Text/foreground that sits on a filled (emphasis) surface. */
+  --color-on-emphasis: #ffffff;
+  --color-danger-emphasis: #a40e26;
+  --color-success-hover: #1a7f37cc;
+  --color-focus-ring: rgba(9, 105, 218, 0.25);
+  --color-border-translucent: rgba(27, 31, 35, 0.15);
+  --color-tab-active-border: #fd8c73;
+
+  /* App header: an inverted (dark) surface with its own translucent scale. */
+  --color-header-bg: #24292f;
+  --color-header-fg: #ffffff;
+  --color-header-fg-muted: #d0d7de;
+  --color-header-fg-subtle: #b1bac4;
+  --color-header-hover: rgba(255, 255, 255, 0.12);
+  --color-header-field: rgba(255, 255, 255, 0.1);
+  --color-header-field-focus: rgba(255, 255, 255, 0.18);
+  --color-header-field-border: rgba(255, 255, 255, 0.25);
+  --color-header-field-border-focus: rgba(255, 255, 255, 0.5);
+
+  /* Workflow log viewer: a fixed dark terminal surface. */
+  --color-log-bg: #0d1117;
+  --color-log-fg: #c9d1d9;
+  --color-log-fg-muted: #8b949e;
+  --color-log-accent: #58a6ff;
+
   --shadow-small: 0 1px 0 rgba(31, 35, 40, 0.04);
   --shadow-medium: 0 3px 6px rgba(140, 149, 159, 0.15);
   --radius: 6px;
@@ -119,8 +144,8 @@ img { max-width: 100%; }
   gap: 16px;
   height: var(--header-height);
   padding: 0 24px;
-  color: #fff;
-  background: #24292f;
+  color: var(--color-on-emphasis);
+  background: var(--color-header-bg);
 }
 
 .app-header .brand {
@@ -129,7 +154,7 @@ img { max-width: 100%; }
   gap: 8px;
   font-size: 1.15em;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-on-emphasis);
 }
 .app-header .brand:hover { text-decoration: none; }
 .app-header .brand .logo { font-size: 1.4em; }
@@ -145,14 +170,14 @@ img { max-width: 100%; }
 .app-header .nav-links a {
   display: inline-block;
   padding: 6px 10px;
-  color: #d0d7de;
+  color: var(--color-header-fg-muted);
   border-radius: var(--radius);
   font-weight: 500;
 }
 .app-header .nav-links a:hover,
 .app-header .nav-links a.active {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--color-on-emphasis);
+  background: var(--color-header-hover);
   text-decoration: none;
 }
 
@@ -165,16 +190,16 @@ img { max-width: 100%; }
 .app-header .global-search {
   width: 280px;
   padding: 6px 12px;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: var(--color-on-emphasis);
+  background: var(--color-header-field);
+  border: 1px solid var(--color-header-field-border);
   border-radius: var(--radius);
 }
-.app-header .global-search::placeholder { color: #b1bac4; }
+.app-header .global-search::placeholder { color: var(--color-header-fg-subtle); }
 .app-header .global-search:focus {
   outline: none;
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: var(--color-header-field-focus);
+  border-color: var(--color-header-field-border-focus);
 }
 
 .page {
@@ -245,24 +270,24 @@ button:disabled, .btn:disabled {
   background: var(--color-canvas-subtle);
 }
 button.active, .btn.active {
-  color: #fff;
+  color: var(--color-on-emphasis);
   background: var(--color-accent-emphasis);
   border-color: var(--color-accent-emphasis);
 }
 
 .btn-primary, button.btn-primary {
-  color: #fff;
+  color: var(--color-on-emphasis);
   background: var(--color-success);
-  border-color: rgba(27, 31, 35, 0.15);
+  border-color: var(--color-border-translucent);
 }
-.btn-primary:hover, button.btn-primary:hover { background: #1a7f37cc; }
+.btn-primary:hover, button.btn-primary:hover { background: var(--color-success-hover); }
 
 .btn-danger, button.btn-danger {
   color: var(--color-danger);
   background: var(--color-canvas-subtle);
   border-color: var(--color-border);
 }
-.btn-danger:hover { color: #fff; background: var(--color-danger); }
+.btn-danger:hover { color: var(--color-on-emphasis); background: var(--color-danger); }
 
 .btn-sm { padding: 3px 10px; font-size: 12px; }
 
@@ -288,7 +313,7 @@ textarea {
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.25);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 textarea { min-height: 80px; resize: vertical; }
 label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; }
@@ -393,7 +418,7 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
   color: var(--color-fg-muted);
 }
 .tabs button:hover { background: var(--color-canvas-subtle); border-color: transparent; }
-.tabs button.active { color: var(--color-fg); border-bottom-color: #fd8c73; font-weight: 600; }
+.tabs button.active { color: var(--color-fg); border-bottom-color: var(--color-tab-active-border); font-weight: 600; }
 
 .repo-nav { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 16px; }
 .repo-nav a {
@@ -706,16 +731,16 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
 /* -- Workflow log viewer -- */
 .log-viewer {
   padding: 12px;
-  color: #c9d1d9;
+  color: var(--color-log-fg);
   font-family: var(--font-mono);
   font-size: 12px;
-  background: #0d1117;
+  background: var(--color-log-bg);
   border-radius: var(--radius-sm);
 }
 .log-step { margin-bottom: 8px; }
 .log-step:last-child { margin-bottom: 0; }
-.log-step-title { color: #58a6ff; font-weight: 700; }
-.log-line { padding-left: 15px; color: #8b949e; }
+.log-step-title { color: var(--color-log-accent); font-weight: 700; }
+.log-line { padding-left: 15px; color: var(--color-log-fg-muted); }
 
 /* -- Audit log entries -- */
 .audit-log {
@@ -786,7 +811,7 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
   display: inline-block;
   padding: 2px 5px;
   font-size: 0.8em;
-  color: #fff;
+  color: var(--color-on-emphasis);
   border-radius: 3px;
 }
 .badge-neutral { color: var(--color-fg); background: var(--color-canvas-inset); }
@@ -794,9 +819,9 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
 .badge-warning { background: var(--color-attention); }
 
 /* -- Solid action buttons -- */
-.btn-danger-solid { color: #fff; background-color: var(--color-danger); border-color: var(--color-danger); }
-.btn-danger-solid:hover { background-color: #a40e26; border-color: #a40e26; }
-.btn-success-solid { color: #fff; background-color: var(--color-success); border-color: var(--color-success); padding: 10px 20px; }
+.btn-danger-solid { color: var(--color-on-emphasis); background-color: var(--color-danger); border-color: var(--color-danger); }
+.btn-danger-solid:hover { background-color: var(--color-danger-emphasis); border-color: var(--color-danger-emphasis); }
+.btn-success-solid { color: var(--color-on-emphasis); background-color: var(--color-success); border-color: var(--color-success); padding: 10px 20px; }
 .btn-success-solid:hover { background-color: var(--color-success-emphasis); }
 
 /* -- Misc form/utility helpers -- */

@@ -77,4 +77,24 @@ test.describe('Global search', () => {
     await expect(page).toHaveURL(/\/search\?q=$/);
     await expect(page.locator('.search-input-flex')).toHaveValue('');
   });
+
+  test('changing the result type searches the newly selected type', async ({ page }) => {
+    // `bug` matches a seeded issue body (issue #1) but no repository, so the
+    // repository panel is empty on mount.
+    await page.goto('/search?q=bug');
+    await expect(page.locator('.search-results .item-list li')).toHaveCount(0);
+
+    // Selecting Issues must run the issue search itself. Before the fix the
+    // panel stayed empty until the Search button was clicked.
+    await page.locator('.search-page select').selectOption('issues');
+    await expect(page.locator('.search-results')).toContainText('First Issue');
+    await expect(page.locator('.search-results')).toContainText('#1');
+
+    // A repository query's results must be replaced, not left stale, when the
+    // type changes.
+    await page.goto('/search?q=codeza');
+    await expect(page.locator('.search-results')).toContainText('⭐');
+    await page.locator('.search-page select').selectOption('issues');
+    await expect(page.locator('.search-results')).not.toContainText('⭐');
+  });
 });

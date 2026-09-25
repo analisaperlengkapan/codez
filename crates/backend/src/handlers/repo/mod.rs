@@ -50,40 +50,8 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(
 
     tokio::spawn(async move {
         for hook in relevant_hooks {
-            // SSRF Protection with DNS Pinning via reqwest::resolve
-            let validated_target = validate_and_resolve_webhook_url(&hook.url).await;
-
-            let (status_str, status_code) = if let Some((host, _port, safe_addr)) = validated_target
-            {
-                // We must build a new client for each hook to apply the specific DNS resolution override
-                // while keeping the original URL for correct TLS validation (SNI).
-                let client = reqwest::Client::builder()
-                    .timeout(std::time::Duration::from_secs(10))
-                    .resolve(&host, safe_addr)
-                    .build()
-                    .unwrap_or_default();
-
-                let response = client
-                    .post(&hook.url)
-                    .header("X-Codeza-Event", &event_string)
-                    .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
-                    .json(&payload)
-                    .send()
-                    .await;
-
-                match response {
-                    Ok(resp) => {
-                        let s = resp.status();
-                        (
-                            if s.is_success() { "success" } else { "failed" }.to_string(),
-                            s.as_u16(),
-                        )
-                    }
-                    Err(_) => ("failed".to_string(), 0),
-                }
-            } else {
-                ("failed (blocked)".to_string(), 0)
-            };
+            let (status_str, status_code) =
+                deliver_webhook(&hook.url, &event_string, &payload).await;
 
             let mut deliveries = state_clone
                 .webhook_deliveries
@@ -101,6 +69,54 @@ fn dispatch_hooks<T: Serialize + Send + Sync + 'static + Clone>(
             });
         }
     });
+}
+
+/// Build the SSRF-pinned HTTP client for a validated webhook destination.
+///
+/// Redirects are disabled: only the first destination is validated and pinned,
+/// so following a redirect would let a public endpoint bounce the request to an
+/// internal address (CWE-918). The URL stays intact so TLS validation (SNI)
+/// still targets the real host.
+fn pinned_client(host: &str, safe_addr: std::net::SocketAddr) -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve(host, safe_addr)
+        .build()
+}
+
+/// Perform one webhook request, returning `(status_label, response_status)`.
+///
+/// The destination host is resolved and validated, then pinned so the
+/// connection cannot be re-pointed by a rebinding DNS answer. A blocked or
+/// unbuildable client fails closed as `failed (blocked)`.
+async fn deliver_webhook<T: Serialize>(url: &str, event: &str, payload: &T) -> (String, u16) {
+    let Some((host, _port, safe_addr)) = validate_and_resolve_webhook_url(url).await else {
+        return ("failed (blocked)".to_string(), 0);
+    };
+
+    // Fail closed: never fall back to an unpinned default client.
+    let Ok(client) = pinned_client(&host, safe_addr) else {
+        return ("failed (blocked)".to_string(), 0);
+    };
+
+    match client
+        .post(url)
+        .header("X-Codeza-Event", event)
+        .header("X-Codeza-Delivery", uuid::Uuid::new_v4().to_string())
+        .json(payload)
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            let s = resp.status();
+            (
+                if s.is_success() { "success" } else { "failed" }.to_string(),
+                s.as_u16(),
+            )
+        }
+        Err(_) => ("failed".to_string(), 0),
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -243,8 +259,8 @@ pub use wiki::*;
 
 #[cfg(test)]
 mod tests {
-    use super::{is_private_ipv4, process_closers, process_mentions};
-    use std::net::Ipv4Addr;
+    use super::{is_private_ipv4, pinned_client, process_closers, process_mentions};
+    use std::net::{Ipv4Addr, SocketAddr};
 
     #[test]
     fn mentions_are_extracted_and_deduplicated() {
@@ -325,5 +341,40 @@ mod tests {
             let addr: Ipv4Addr = ip.parse().unwrap();
             assert!(!is_private_ipv4(addr), "{ip} should be public");
         }
+    }
+
+    /// A `3xx` from a validated endpoint must not be chased: only the first
+    /// (validated + pinned) destination is trusted, so a redirect could bounce
+    /// the request to a blocked address (CWE-918).
+    #[tokio::test]
+    async fn pinned_client_does_not_follow_redirects() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        // Reply to any request with a redirect to a private address. If the
+        // client chased it, the request would land on 127.0.0.1 (blocked by the
+        // validator) instead of surfacing the raw 302.
+        tokio::spawn(async move {
+            if let Ok((mut sock, _)) = listener.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = sock.read(&mut buf).await;
+                let response = "HTTP/1.1 302 Found\r\n\
+                     Location: http://127.0.0.1:1/internal\r\n\
+                     Content-Length: 0\r\n\r\n";
+                let _ = sock.write_all(response.as_bytes()).await;
+            }
+        });
+
+        let addr: SocketAddr = format!("127.0.0.1:{port}").parse().unwrap();
+        let client = pinned_client("redirect.test", addr).unwrap();
+        let resp = client
+            .get(format!("http://redirect.test:{port}/start"))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(resp.status().as_u16(), 302);
     }
 }
