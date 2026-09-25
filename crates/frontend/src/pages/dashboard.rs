@@ -1,133 +1,111 @@
+use crate::api::{encode_query, get, patch};
 use leptos::*;
-use gloo_net::http::Request;
-use shared::{Repository, Notification, Activity, Issue, PullRequest};
+use leptos_router::use_query_map;
+use shared::{Activity, Issue, Notification, PullRequest, Repository};
 
 #[component]
 pub fn UserDashboard() -> impl IntoView {
     let (active_tab, set_active_tab) = create_signal("feed".to_string());
 
-    let repos = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/repos").send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
-    });
+    let repos = create_resource(
+        || (),
+        |_| async move { get::<Vec<Repository>>("/api/v1/repos").await },
+    );
 
-    let feeds = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/user/feeds").send().await.unwrap().json::<Vec<Activity>>().await.unwrap_or_default()
-    });
+    let feeds = create_resource(
+        || (),
+        |_| async move { get::<Vec<Activity>>("/api/v1/user/feeds").await },
+    );
 
     let assigned_issues = create_resource(
         move || active_tab.get(),
         |tab| async move {
             if tab == "issues" {
-                Request::get("/api/v1/user/issues?state=open")
-                    .send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default()
+                get::<Vec<Issue>>("/api/v1/user/issues?state=open").await
             } else {
                 vec![]
             }
-        }
+        },
     );
 
     let my_pulls = create_resource(
         move || active_tab.get(),
         |tab| async move {
             if tab == "pulls" {
-                Request::get("/api/v1/user/pulls?state=open")
-                    .send().await.unwrap().json::<Vec<PullRequest>>().await.unwrap_or_default()
+                get::<Vec<PullRequest>>("/api/v1/user/pulls?state=open").await
             } else {
                 vec![]
             }
-        }
+        },
     );
 
     view! {
-        <div class="dashboard-container" style="display: flex;">
-            <div class="dashboard-sidebar" style="width: 250px; padding-right: 20px;">
-                <h3>"Repositories"</h3>
-                <ul>
-                    <Suspense fallback=move || view! { <li>"Loading repos..."</li> }>
-                        {move || repos.get().map(|list| view! {
-                            <For each=move || list.clone() key=|r| r.id children=move |r| {
-                                let href = format!("/repos/{}/{}", r.owner, r.name);
-                                view! { <li><a href=href>{r.owner} "/" {r.name}</a></li> }
-                            }/>
-                        })}
-                    </Suspense>
-                </ul>
+        <div class="dashboard">
+            <div class="page-header">
+                <h2>"Dashboard"</h2>
+                <div class="flex gap-sm">
+                    <a class="btn" href="/repo/create">"New repository"</a>
+                    <a class="btn" href="/org/create">"New organization"</a>
+                </div>
             </div>
-            <div class="dashboard-main" style="flex: 1;">
-                <div class="dashboard-notifications">
+
+            <div class="repo-shell">
+                <aside class="repo-sidebar">
+                    <div class="panel">
+                        <h3>"Your repositories"</h3>
+                        <ul class="item-list">
+                            <Suspense fallback=move || view! { <li class="text-muted">"Loading repositories…"</li> }>
+                                {move || repos.get().map(|list| view! {
+                                    <For each=move || list.clone() key=|r| r.id children=move |r| {
+                                        let href = format!("/repos/{}/{}", r.owner, r.name);
+                                        view! {
+                                            <li>
+                                                <a href=href><strong>{r.owner} "/" {r.name}</strong></a>
+                                                <div class="text-small text-muted">{r.description.clone().unwrap_or_default()}</div>
+                                            </li>
+                                        }
+                                    }/>
+                                })}
+                            </Suspense>
+                        </ul>
+                    </div>
+                </aside>
+
+                <div class="repo-main">
                     <NotificationList/>
-                </div>
 
-                <div class="dashboard-tabs" style="margin-top: 20px; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
-                    <button
-                        on:click=move |_| set_active_tab.set("feed".to_string())
-                        style=move || if active_tab.get() == "feed" { "font-weight: bold; margin-right: 10px;" } else { "margin-right: 10px;" }
-                    >
-                        "Activity Feed"
-                    </button>
-                    <button
-                        on:click=move |_| set_active_tab.set("issues".to_string())
-                        style=move || if active_tab.get() == "issues" { "font-weight: bold; margin-right: 10px;" } else { "margin-right: 10px;" }
-                    >
-                        "My Issues"
-                    </button>
-                    <button
-                        on:click=move |_| set_active_tab.set("pulls".to_string())
-                        style=move || if active_tab.get() == "pulls" { "font-weight: bold;" } else { "" }
-                    >
-                        "My Pull Requests"
-                    </button>
-                </div>
+                    <div class="tabs mt-2">
+                        <button on:click=move |_| set_active_tab.set("feed".to_string()) class:active=move || active_tab.get() == "feed">"Activity feed"</button>
+                        <button on:click=move |_| set_active_tab.set("issues".to_string()) class:active=move || active_tab.get() == "issues">"My issues"</button>
+                        <button on:click=move |_| set_active_tab.set("pulls".to_string()) class:active=move || active_tab.get() == "pulls">"My pull requests"</button>
+                    </div>
 
-                <div class="dashboard-content" style="margin-top: 20px;">
-                    {move || match active_tab.get().as_str() {
-                        "feed" => view! {
-                            <div class="dashboard-feed">
-                                <ul>
-                                    <Suspense fallback=move || view! { <li>"Loading feed..."</li> }>
-                                        {move || feeds.get().map(|list| view! {
-                                            <For each=move || list.clone() key=|a| a.id children=move |a| {
-                                                view! {
-                                                    <li style="margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 5px; display: flex; align-items: start;">
-                                                        <div style="margin-right: 10px; font-size: 1.2em;">
-                                                            {match a.op_type.as_str() {
-                                                                "create_repo" => "📁",
-                                                                "create_issue" => "🐛",
-                                                                "create_pull_request" => "🔀",
-                                                                _ => "📝"
-                                                            }}
-                                                        </div>
-                                                        <div>
-                                                            <div><strong>{a.user_name}</strong> " " {a.op_type}</div>
-                                                            <div style="color: #666;">{a.content}</div>
-                                                            <div style="font-size: 0.8em; color: #999;">{a.created}</div>
-                                                        </div>
-                                                    </li>
-                                                }
-                                            }/>
-                                        })}
-                                    </Suspense>
-                                </ul>
-                            </div>
-                        }.into_view(),
-                        "issues" => view! {
-                            <div class="dashboard-issues">
-                                <ul>
-                                    <Suspense fallback=move || view! { <li>"Loading issues..."</li> }>
-                                        {move || assigned_issues.get().map(|list| {
+                    <div class="dashboard-content">
+                        {move || match active_tab.get().as_str() {
+                            "feed" => view! {
+                                <ul class="item-list">
+                                    <Suspense fallback=move || view! { <li class="text-muted">"Loading feed…"</li> }>
+                                        {move || feeds.get().map(|list| {
                                             if list.is_empty() {
-                                                view! { <li>"No assigned issues found."</li> }.into_view()
+                                                view! { <li class="text-muted">"No recent activity."</li> }.into_view()
                                             } else {
                                                 view! {
-                                                    <For each=move || list.clone() key=|i| i.id children=move |i| {
-                                                        // Note: We need repo details to link correctly. For now assuming global lookups work or simple display.
-                                                        // Since we don't have repo name in Issue struct, we can't easily link to /repos/:owner/:repo/issues/:id
-                                                        // without fetching repo info.
-                                                        // For this MVP, we'll display ID and Title.
+                                                    <For each=move || list.clone() key=|a| a.id children=move |a| {
                                                         view! {
-                                                            <li>
-                                                                <span>"Issue #" {i.number} ": " {i.title}</span>
-                                                                <span style="margin-left: 10px; font-size: 0.8em; color: #666;">" (" {i.state} ")"</span>
+                                                            <li class="flex-center">
+                                                                <span class="text-2xl">
+                                                                    {match a.op_type.as_str() {
+                                                                        "create_repo" => "📁",
+                                                                        "create_issue" => "🐛",
+                                                                        "create_pull_request" => "🔀",
+                                                                        _ => "📝"
+                                                                    }}
+                                                                </span>
+                                                                <div>
+                                                                    <div><strong>{a.user_name}</strong> " " {a.op_type.replace('_', " ")}</div>
+                                                                    <div class="text-muted">{a.content}</div>
+                                                                    <div class="text-small text-muted">{a.created}</div>
+                                                                </div>
                                                             </li>
                                                         }
                                                     }/>
@@ -136,22 +114,42 @@ pub fn UserDashboard() -> impl IntoView {
                                         })}
                                     </Suspense>
                                 </ul>
-                            </div>
-                        }.into_view(),
-                        "pulls" => view! {
-                            <div class="dashboard-pulls">
-                                <ul>
-                                    <Suspense fallback=move || view! { <li>"Loading pull requests..."</li> }>
+                            }.into_view(),
+                            "issues" => view! {
+                                <ul class="item-list">
+                                    <Suspense fallback=move || view! { <li class="text-muted">"Loading issues…"</li> }>
+                                        {move || assigned_issues.get().map(|list| {
+                                            if list.is_empty() {
+                                                view! { <li class="text-muted">"No assigned issues."</li> }.into_view()
+                                            } else {
+                                                view! {
+                                                    <For each=move || list.clone() key=|i| i.id children=move |i| {
+                                                        view! {
+                                                            <li>
+                                                                <span>"Issue #" {i.number} ": " {i.title}</span>
+                                                                <span class="label">{i.state.clone()}</span>
+                                                            </li>
+                                                        }
+                                                    }/>
+                                                }.into_view()
+                                            }
+                                        })}
+                                    </Suspense>
+                                </ul>
+                            }.into_view(),
+                            "pulls" => view! {
+                                <ul class="item-list">
+                                    <Suspense fallback=move || view! { <li class="text-muted">"Loading pull requests…"</li> }>
                                         {move || my_pulls.get().map(|list| {
                                             if list.is_empty() {
-                                                view! { <li>"No pull requests found."</li> }.into_view()
+                                                view! { <li class="text-muted">"No pull requests."</li> }.into_view()
                                             } else {
                                                 view! {
                                                     <For each=move || list.clone() key=|p| p.id children=move |p| {
                                                         view! {
                                                             <li>
                                                                 <span>"PR #" {p.number} ": " {p.title}</span>
-                                                                <span style="margin-left: 10px; font-size: 0.8em; color: #666;">" (" {p.state} ")"</span>
+                                                                <span class="label">{p.state.clone()}</span>
                                                             </li>
                                                         }
                                                     }/>
@@ -160,10 +158,10 @@ pub fn UserDashboard() -> impl IntoView {
                                         })}
                                     </Suspense>
                                 </ul>
-                            </div>
-                        }.into_view(),
-                        _ => view! { <div></div> }.into_view()
-                    }}
+                            }.into_view(),
+                            _ => view! { <div></div> }.into_view()
+                        }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -172,28 +170,37 @@ pub fn UserDashboard() -> impl IntoView {
 
 #[component]
 pub fn Explore() -> impl IntoView {
-    let repos = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/repos").send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default()
-    });
+    let repos = create_resource(
+        || (),
+        |_| async move { get::<Vec<Repository>>("/api/v1/repos").await },
+    );
 
     view! {
         <div class="explore">
-            <h2>"Explore Codeza"</h2>
+            <div class="page-header">
+                <h2>"Explore Codeza"</h2>
+            </div>
             <Search/>
-            <h3>"Recent Repositories"</h3>
+            <h3 class="mt-3">"Recent repositories"</h3>
             <div class="explore-list">
-                <Suspense fallback=move || view! { <p>"Loading..."</p> }>
-                    {move || repos.get().map(|list| view! {
-                        <For each=move || list.clone() key=|r| r.id children=move |r| {
-                            let href = format!("/repos/{}/{}", r.owner, r.name);
+                <Suspense fallback=move || view! { <p class="text-muted">"Loading…"</p> }>
+                    {move || repos.get().map(|list| {
+                        if list.is_empty() {
+                            view! { <div class="empty-state">"No repositories yet."</div> }.into_view()
+                        } else {
                             view! {
-                                <div class="explore-item">
-                                    <a href=href><strong>{r.owner} "/" {r.name}</strong></a>
-                                    <p>{r.description.unwrap_or_default()}</p>
-                                    <span>"⭐ " {r.stars_count}</span>
-                                </div>
-                            }
-                        }/>
+                                <For each=move || list.clone() key=|r| r.id children=move |r| {
+                                    let href = format!("/repos/{}/{}", r.owner, r.name);
+                                    view! {
+                                        <div class="card">
+                                            <a href=href><strong>{r.owner} "/" {r.name}</strong></a>
+                                            <p class="text-muted mb-0">{r.description.clone().unwrap_or_else(|| "No description".to_string())}</p>
+                                            <span class="text-small text-muted">"⭐ " {r.stars_count} " · 🍴 " {r.forks_count}</span>
+                                        </div>
+                                    }
+                                }/>
+                            }.into_view()
+                        }
                     })}
                 </Suspense>
             </div>
@@ -203,63 +210,95 @@ pub fn Explore() -> impl IntoView {
 
 #[component]
 pub fn Search() -> impl IntoView {
-    let (query, set_query) = create_signal("".to_string());
+    let query_map = use_query_map();
+    let initial = query_map.with(|q| q.get("q").cloned().unwrap_or_default());
+    let (query, set_query) = create_signal(initial);
     let (search_type, set_search_type) = create_signal("repos".to_string()); // repos | issues
 
     let (repo_results, set_repo_results) = create_signal(vec![]);
     let (issue_results, set_issue_results) = create_signal(vec![]);
 
-    let on_search = move |_| {
-        let q = query.get();
-        let t = search_type.get();
+    // Monotonic request generation. A slow earlier request must not overwrite
+    // the results of a newer one, so each response is applied only if no newer
+    // search has started since it was issued.
+    let generation = create_rw_signal(0u64);
 
+    let run_search = move |q: String, t: String| {
+        let current = generation.get_untracked() + 1;
+        generation.set(current);
         spawn_local(async move {
-            if t == "repos" {
-                let url = if !q.is_empty() {
-                    format!("/api/v1/repos?q={}", q)
-                } else {
-                    "/api/v1/repos".to_string()
-                };
+            // Drop stale responses: a newer search has already been issued.
+            let is_current = move || current == generation.get_untracked();
 
-                let res = Request::get(&url).send().await.unwrap().json::<Vec<Repository>>().await.unwrap_or_default();
-                set_repo_results.set(res);
-                set_issue_results.set(vec![]);
+            if t == "repos" {
+                // `/repos/search` filters by `q` server-side; the paginated
+                // `/repos` listing ignores it, which silently dropped matches.
+                let url = format!("/api/v1/repos/search?q={}", encode_query(&q));
+                let results = get::<Vec<Repository>>(&url).await;
+                if is_current() {
+                    set_repo_results.set(results);
+                    set_issue_results.set(vec![]);
+                }
             } else {
-                let url = format!("/api/v1/search/issues?q={}", q);
-                let res = Request::get(&url).send().await.unwrap().json::<Vec<Issue>>().await.unwrap_or_default();
-                set_issue_results.set(res);
-                set_repo_results.set(vec![]);
+                let url = format!("/api/v1/search/issues?q={}", encode_query(&q));
+                let results = get::<Vec<Issue>>(&url).await;
+                if is_current() {
+                    set_issue_results.set(results);
+                    set_repo_results.set(vec![]);
+                }
             }
         });
     };
 
+    let on_search = move |_| run_search(query.get(), search_type.get());
+
+    // Keep the box and results in sync when `q` changes, including the initial
+    // load (from the global header navigating to `/search?q=…`) and an empty
+    // `q` (a cleared header search must clear the box and previous results).
+    // This single effect drives every load, so there is no duplicate initial
+    // request racing the mount-time one.
+    create_effect(move |_| {
+        let q = query_map.with(|q| q.get("q").cloned().unwrap_or_default());
+        set_query.set(q.clone());
+        run_search(q, search_type.get_untracked());
+    });
+
     view! {
         <div class="search-page">
-            <h2>"Global Search"</h2>
-            <div class="search-controls" style="margin-bottom: 20px;">
-                <input type="text" placeholder="Search..."
-                    prop:value=query
-                    on:input=move |ev| set_query.set(event_target_value(&ev))
-                    style="padding: 5px; width: 300px;"
-                />
-                <select on:change=move |ev| set_search_type.set(event_target_value(&ev)) style="margin-left: 10px; padding: 5px;">
-                    <option value="repos">"Repositories"</option>
-                    <option value="issues">"Issues"</option>
-                </select>
-                <button on:click=on_search style="margin-left: 10px; padding: 5px 10px;">"Search"</button>
+            <div class="panel">
+                <div class="flex-center flex-wrap">
+                    <input type="text" placeholder="Search…"
+                        prop:value=query
+                        on:input=move |ev| set_query.set(event_target_value(&ev))
+                        class="search-input-flex" />
+                    <select on:change=move |ev| {
+                        // Changing the type must start a fresh search for the
+                        // current query. Otherwise the panel keeps the previous
+                        // type's results (or stays empty) until Search is
+                        // clicked. `run_search` bumps the generation, so a slow
+                        // response for the old type is discarded.
+                        let t = event_target_value(&ev);
+                        set_search_type.set(t.clone());
+                        run_search(query.get(), t);
+                    } class="w-auto">
+                        <option value="repos">"Repositories"</option>
+                        <option value="issues">"Issues"</option>
+                    </select>
+                    <button class="btn-primary" on:click=on_search>"Search"</button>
+                </div>
             </div>
 
-            <div class="search-results">
+            <div class="search-results mt-2">
                 {move || if search_type.get() == "repos" {
                     view! {
-                        <ul>
+                        <ul class="item-list panel">
                             <For each=move || repo_results.get() key=|r| r.id children=move |r| {
                                 let href = format!("/repos/{}/{}", r.owner, r.name);
                                 view! {
-                                    <li style="margin-bottom: 10px;">
-                                        <a href=href style="font-weight: bold;">{r.owner} "/" {r.name}</a>
-                                        <p style="margin: 0; color: #666;">{r.description.clone().unwrap_or_default()}</p>
-                                        <small>"⭐ " {r.stars_count}</small>
+                                    <li>
+                                        <a href=href><strong>{r.owner} "/" {r.name}</strong></a>
+                                        <p class="mb-0 text-muted">{r.description.clone().unwrap_or_default()}</p>
+                                        <small class="text-muted">"⭐ " {r.stars_count}</small>
                                     </li>
                                 }
                             }/>
@@ -267,15 +306,13 @@ pub fn Search() -> impl IntoView {
                     }.into_view()
                 } else {
                     view! {
-                         <ul>
+                        <ul class="item-list panel">
                             <For each=move || issue_results.get() key=|i| i.id children=move |i| {
-                                // Since issue doesn't have repo info, we can't link correctly easily.
-                                // We'll just display info for now.
                                 view! {
-                                    <li style="margin-bottom: 10px;">
-                                        <span style="font-weight: bold;">"#" {i.number} " " {i.title}</span>
-                                        <span style="color: #666; margin-left: 10px;">" (" {i.state} ")"</span>
-                                        <p style="margin: 0;">{i.body.clone().unwrap_or_default().chars().take(100).collect::<String>()} "..."</p>
+                                    <li>
+                                        <span><strong>"#" {i.number}</strong> " " {i.title}</span>
+                                        <span class="label">{i.state.clone()}</span>
+                                        <p class="mb-0 text-muted">{i.body.clone().unwrap_or_default().chars().take(120).collect::<String>()}</p>
                                     </li>
                                 }
                             }/>
@@ -289,34 +326,53 @@ pub fn Search() -> impl IntoView {
 
 #[component]
 pub fn NotificationList() -> impl IntoView {
-    let notifs = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/notifications").send().await.unwrap().json::<Vec<Notification>>().await.unwrap_or_default()
-    });
+    let (refresh, set_refresh) = create_signal(0);
+    let notifs = create_resource(
+        move || refresh.get(),
+        |_| async move { get::<Vec<Notification>>("/api/v1/notifications").await },
+    );
 
     let on_mark_read = move |id: u64| {
         spawn_local(async move {
-            let _ = Request::patch(&format!("/api/v1/notifications/threads/{}", id)).send().await;
+            let _ = patch(&format!("/api/v1/notifications/threads/{}", id)).await;
+            set_refresh.update(|n| *n += 1);
         });
     };
 
     view! {
-        <div class="notifications">
-            <h2>"Notifications"</h2>
-            <ul>
-                <Suspense fallback=move || view! { <li>"Loading..."</li> }>
-                    {move || notifs.get().map(|list| view! {
-                        <For each=move || list.clone() key=|n| n.id children=move |n| {
+        <div class="notifications panel">
+            <div class="page-header">
+                <h3 class="mb-0">"Notifications"</h3>
+            </div>
+            <ul class="item-list">
+                <Suspense fallback=move || view! { <li class="text-muted">"Loading…"</li> }>
+                    {move || notifs.get().map(|list| {
+                        if list.is_empty() {
+                            view! { <li class="text-muted">"You have no notifications."</li> }.into_view()
+                        } else {
                             view! {
-                                <li>
-                                    <strong>{n.subject}</strong> " (" {if n.unread { "Unread" } else { "Read" }} ")"
-                                    {if n.unread {
-                                        view! { <button on:click=move |_| on_mark_read(n.id)>"Mark Read"</button> }.into_view()
-                                    } else {
-                                        view! { <span></span> }.into_view()
-                                    }}
-                                </li>
-                            }
-                        }/>
+                                <For each=move || list.clone() key=|n| n.id children=move |n| {
+                                    let unread = n.unread;
+                                    view! {
+                                        <li class="flex-between">
+                                            <span>
+                                                <strong>{n.subject.clone()}</strong>
+                                                {if unread {
+                                                    view! { <span class="label label-accent">" (Unread)"</span> }.into_view()
+                                                } else {
+                                                    view! { <span class="text-small text-muted">" (Read)"</span> }.into_view()
+                                                }}
+                                            </span>
+                                            {if unread {
+                                                view! { <button class="btn-sm" on:click=move |_| on_mark_read(n.id)>"Mark Read"</button> }.into_view()
+                                            } else {
+                                                view! { <span class="text-small text-muted">"Read"</span> }.into_view()
+                                            }}
+                                        </li>
+                                    }
+                                }/>
+                            }.into_view()
+                        }
                     })}
                 </Suspense>
             </ul>

@@ -8,7 +8,7 @@ test.describe('Pull Requests Feature', () => {
     const prTitle = 'Automated PR ' + Date.now();
 
     // Create PR
-    const prResponse = await request.post(`http://127.0.0.1:3000/api/v1/repos/admin/codeza/pulls`, {
+    const prResponse = await request.post(`/api/v1/repos/admin/codeza/pulls`, {
       data: {
         title: prTitle,
         head: 'feature',
@@ -25,7 +25,7 @@ test.describe('Pull Requests Feature', () => {
 
     // Now navigate to the pull requests page
     // Wait for navigation instead of relying on it directly right after API call in case of delays
-    await page.goto(`http://127.0.0.1:8080/repos/admin/codeza/pulls`, { waitUntil: 'networkidle' });
+    await page.goto(`/repos/admin/codeza/pulls`, { waitUntil: 'networkidle' });
 
     // Make sure we are on the pull requests page
     await expect(page.getByRole('heading', { name: `Pull Requests for admin/codeza` })).toBeVisible({ timeout: 10000 });

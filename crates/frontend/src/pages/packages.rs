@@ -1,7 +1,7 @@
+use crate::api::{get, get_or, post_json_ok};
 use leptos::*;
-use gloo_net::http::Request;
 use leptos_router::*;
-use shared::{Package, CreatePackageOption};
+use shared::{CreatePackageOption, Package};
 
 #[component]
 pub fn PackageList() -> impl IntoView {
@@ -14,13 +14,13 @@ pub fn PackageList() -> impl IntoView {
     let packages = create_resource(
         move || (owner(), refresh.get()),
         |(owner_name, _)| async move {
-            Request::get(&format!("/api/v1/packages/{}", owner_name)).send().await.unwrap().json::<Vec<Package>>().await.unwrap_or_default()
-        }
+            get::<Vec<Package>>(&format!("/api/v1/packages/{}", owner_name)).await
+        },
     );
 
     view! {
         <div class="package-list">
-            <div class="header" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="header flex-between">
                 <h3>"Packages for " {owner}</h3>
                 <button on:click=move |_| set_show_upload.set(!show_upload.get())>
                     {move || if show_upload.get() { "Cancel" } else { "Upload Package" }}
@@ -39,9 +39,9 @@ pub fn PackageList() -> impl IntoView {
                         <For each=move || list.clone() key=|p| p.id children=move |p| {
                             let href = format!("/packages/{}/{}/{}/{}", owner(), p.package_type, p.name, p.version);
                             view! {
-                                <li style="border: 1px solid #eee; padding: 10px; margin-bottom: 5px;">
-                                    <a href=href style="font-weight: bold;">{p.name}</a>
-                                    <span style="margin-left: 10px; color: #666;">"v" {p.version} " (" {p.package_type} ")"</span>
+                                <li class="boxed">
+                                    <a href=href class="bold">{p.name}</a>
+                                    <span class="ml-2 text-muted">"v" {p.version} " (" {p.package_type} ")"</span>
                                 </li>
                             }
                         }/>
@@ -54,7 +54,8 @@ pub fn PackageList() -> impl IntoView {
 
 #[component]
 fn UploadPackageForm<F>(owner: String, on_success: F) -> impl IntoView
-where F: Fn() + Clone + 'static
+where
+    F: Fn() + Clone + 'static,
 {
     let (name, set_name) = create_signal("".to_string());
     let (version, set_version) = create_signal("".to_string());
@@ -70,25 +71,21 @@ where F: Fn() + Clone + 'static
         let o = owner.clone();
         let on_success_clone = on_success.clone();
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/packages/{}", o))
-                .json(&payload).unwrap().send().await;
-            if let Ok(r) = res {
-                if r.ok() {
-                    on_success_clone();
-                }
+            if post_json_ok(&format!("/api/v1/packages/{}", o), &payload).await {
+                on_success_clone();
             }
         });
     };
 
     view! {
-        <form on:submit=on_submit style="background: #f9f9f9; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd;">
-            <div style="margin-bottom: 5px;">
+        <form on:submit=on_submit class="panel">
+            <div>
                 <input type="text" placeholder="Package Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) required />
             </div>
-            <div style="margin-bottom: 5px;">
+            <div>
                 <input type="text" placeholder="Version (e.g. 1.0.0)" prop:value=version on:input=move |ev| set_version.set(event_target_value(&ev)) required />
             </div>
-            <div style="margin-bottom: 5px;">
+            <div>
                 <select on:change=move |ev| set_pkg_type.set(event_target_value(&ev))>
                     <option value="npm">"npm"</option>
                     <option value="maven">"Maven"</option>
@@ -113,9 +110,9 @@ pub fn PackageDetail() -> impl IntoView {
     let package = create_resource(
         move || (owner(), pkg_type(), name(), version()),
         |(o, t, n, v)| async move {
-            Request::get(&format!("/api/v1/packages/{}/{}/{}/{}", o, t, n, v))
-                .send().await.unwrap().json::<Option<Package>>().await.unwrap_or(None)
-        }
+            get_or::<Option<Package>>(&format!("/api/v1/packages/{}/{}/{}/{}", o, t, n, v), None)
+                .await
+        },
     );
 
     view! {
@@ -140,7 +137,7 @@ pub fn PackageDetail() -> impl IntoView {
                                 <p><strong>"Version:"</strong> " " {version}</p>
                                 <p><strong>"Type:"</strong> " " {pkg_type}</p>
                             </div>
-                            <div class="install-instructions" style="background: #eee; padding: 10px; margin-top: 20px;">
+                            <div class="install-instructions">
                                 <h4>"Installation"</h4>
                                 <pre>{install_cmd}</pre>
                             </div>

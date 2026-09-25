@@ -1,12 +1,13 @@
+use crate::api::{delete, get, get_opt};
 use leptos::*;
-use gloo_net::http::Request;
-use shared::{AdminStats, User, SystemNotice};
+use shared::{AdminStats, SystemNotice, User};
 
 #[component]
 pub fn AdminDashboard() -> impl IntoView {
-    let stats = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/admin/stats").send().await.unwrap().json::<AdminStats>().await.ok()
-    });
+    let stats = create_resource(
+        || (),
+        |_| async move { get_opt::<AdminStats>("/api/v1/admin/stats").await },
+    );
 
     view! {
         <div class="admin-dashboard">
@@ -32,13 +33,14 @@ pub fn AdminDashboard() -> impl IntoView {
 
 #[component]
 pub fn AdminUsers() -> impl IntoView {
-    let users = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/admin/users").send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
-    });
+    let users = create_resource(
+        || (),
+        |_| async move { get::<Vec<User>>("/api/v1/admin/users").await },
+    );
 
     let on_delete = move |username: String| {
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/admin/users/{}", username)).send().await;
+            let _ = delete(&format!("/api/v1/admin/users/{}", username)).await;
             // ideally refetch users here
         });
     };
@@ -77,9 +79,10 @@ pub fn AdminUsers() -> impl IntoView {
 
 #[component]
 pub fn AdminNotices() -> impl IntoView {
-    let notices = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/admin/notices").send().await.unwrap().json::<Vec<SystemNotice>>().await.unwrap_or_default()
-    });
+    let notices = create_resource(
+        || (),
+        |_| async move { get::<Vec<SystemNotice>>("/api/v1/admin/notices").await },
+    );
 
     view! {
         <div class="admin-notices">
@@ -88,7 +91,7 @@ pub fn AdminNotices() -> impl IntoView {
                 <Suspense fallback=move || view! { <li>"Loading..."</li> }>
                     {move || notices.get().map(|list| view! {
                         <For each=move || list.clone() key=|n| n.id children=move |n| {
-                            view! { <li>[{n.type_}] {n.description}</li> }
+                            view! { <li>[{n.type_.clone()}] " " {n.description.clone()}</li> }
                         }/>
                     })}
                 </Suspense>

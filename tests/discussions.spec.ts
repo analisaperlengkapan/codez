@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Discussions Feature', () => {
   test('should list discussions and create a new discussion', async ({ page }) => {
     // Go to the repository discussions page (using mock owner 'admin' and repo 'codeza')
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/discussions');
+    await page.goto('/repos/admin/codeza/discussions');
 
     await page.waitForTimeout(1000);
 

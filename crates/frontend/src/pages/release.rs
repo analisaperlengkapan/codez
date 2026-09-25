@@ -1,7 +1,8 @@
+use crate::api::{delete, get, get_or, post, post_json_ok};
+use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
-use gloo_net::http::Request;
-use shared::{Release, CreateReleaseOption};
+use shared::{CreateReleaseOption, Release};
 
 #[component]
 pub fn ReleaseList() -> impl IntoView {
@@ -12,14 +13,14 @@ pub fn ReleaseList() -> impl IntoView {
     let releases = create_resource(
         move || (owner(), repo_name()),
         |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/releases", o, r))
-                .send().await.unwrap().json::<Vec<Release>>().await.unwrap_or_default()
-        }
+            get::<Vec<Release>>(&format!("/api/v1/repos/{}/{}/releases", o, r)).await
+        },
     );
 
     view! {
         <div class="release-list">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+        <RepoNav/>
+            <div class="flex-between">
                 <h3>"Releases for " {owner} "/" {repo_name}</h3>
                 <a href=format!("/repos/{}/{}/releases/new", owner(), repo_name()) class="btn">"Draft a new release"</a>
             </div>
@@ -29,23 +30,23 @@ pub fn ReleaseList() -> impl IntoView {
                         <For each=move || list.clone() key=|r| r.id children=move |r| {
                             let href = format!("/repos/{}/{}/releases/{}", owner(), repo_name(), r.id);
                             view! {
-                                <li style="border-bottom: 1px solid #eee; padding: 10px 0;">
-                                    <div style="display: flex; justify-content: space-between;">
+                                <li class="list-row">
+                                    <div class="flex-between">
                                         <div>
                                             <h4><a href=href>{r.name}</a></h4>
-                                            <span style="background: #2cbe4e; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em;">{r.tag_name}</span>
-                                            {if r.draft { view! { <span style="background: #6a737d; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em; margin-left: 5px;">"Draft"</span> }.into_view() } else { view! { <span></span> }.into_view() }}
-                                            {if r.prerelease { view! { <span style="background: #dbab09; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em; margin-left: 5px;">"Pre-release"</span> }.into_view() } else { view! { <span></span> }.into_view() }}
+                                            <span class="badge badge-success">{r.tag_name}</span>
+                                            {if r.draft { view! { <span class="badge badge-neutral ml-1">"Draft"</span> }.into_view() } else { view! { <span></span> }.into_view() }}
+                                            {if r.prerelease { view! { <span class="badge badge-warning ml-1">"Pre-release"</span> }.into_view() } else { view! { <span></span> }.into_view() }}
                                         </div>
-                                        <div style="color: #666; font-size: 0.9em;">
+                                        <div class="text-small text-muted">
                                             {r.created_at}
                                         </div>
                                     </div>
-                                    <p style="margin-top: 5px;">{r.body.unwrap_or_default()}</p>
-                                    <div class="assets" style="margin-top: 10px;">
+                                    <p>{r.body.unwrap_or_default()}</p>
+                                    <div class="assets mt-1">
                                          <For each=move || r.assets.clone() key=|a| a.id children=move |a| {
                                             view! {
-                                                <div style="font-size: 0.9em;">
+                                                <div class="text-small">
                                                     <a href=a.download_url>"📦 " {a.name}</a> " (" {a.size} " bytes)"
                                                 </div>
                                             }
@@ -74,53 +75,54 @@ pub fn ReleaseDetail() -> impl IntoView {
     let release = create_resource(
         move || (owner(), repo_name(), id(), trigger.get()),
         |(o, r, i, _)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
-                .send().await.unwrap().json::<Option<Release>>().await.unwrap_or(None)
-        }
+            get_or::<Option<Release>>(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i), None)
+                .await
+        },
     );
 
     let on_upload_asset = move |_| {
-         let o = owner();
-         let r = repo_name();
-         let i = id();
-         spawn_local(async move {
-            let _ = Request::post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i))
-                .send().await;
+        let o = owner();
+        let r = repo_name();
+        let i = id();
+        spawn_local(async move {
+            let _ = post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i)).await;
             set_trigger.update(|n| *n += 1);
-         });
+        });
     };
 
     let on_delete = move |_| {
-         let o = owner();
-         let r = repo_name();
-         let i = id();
-         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i))
-                .send().await;
+        let o = owner();
+        let r = repo_name();
+        let i = id();
+        spawn_local(async move {
+            let _ = delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i)).await;
             // Redirect to list would be good here, simplistic mock for now
             let window = web_sys::window().unwrap();
-            let _ = window.location().set_href(&format!("/repos/{}/{}/releases", o, r));
-         });
+            let _ = window
+                .location()
+                .set_href(&format!("/repos/{}/{}/releases", o, r));
+        });
     };
 
     view! {
         <div class="release-detail">
+        <RepoNav/>
             <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                 {move || match release.get() {
                     Some(Some(r)) => view! {
                         <div>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div class="flex-between">
                                 <h2>{r.name}</h2>
                                 <div>
-                                    <button on:click=on_delete style="background-color: #cb2431; color: white;">"Delete Release"</button>
+                                    <button on:click=on_delete class="btn btn-danger-solid">"Delete Release"</button>
                                 </div>
                             </div>
-                            <div class="meta" style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                                <span style="font-weight: bold;">{r.tag_name}</span>
+                            <div class="meta">
+                                <span class="bold">{r.tag_name}</span>
                                 " | " {r.created_at} " | "
                                 {if r.draft { "Draft" } else { "Published" }}
                             </div>
-                            <div class="body" style="white-space: pre-wrap; margin-bottom: 20px;">
+                            <div class="body">
                                 {r.body.unwrap_or_default()}
                             </div>
                             <div class="assets-section">
@@ -170,46 +172,48 @@ pub fn ReleaseCreate() -> impl IntoView {
         let r = repo_name();
 
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/repos/{}/{}/releases", o, r))
-                .json(&payload).unwrap().send().await;
+            let res = post_json_ok(&format!("/api/v1/repos/{}/{}/releases", o, r), &payload).await;
 
-            if res.is_ok() {
+            if res {
                 // Redirect
                 let window = web_sys::window().unwrap();
-                let _ = window.location().set_href(&format!("/repos/{}/{}/releases", o, r));
+                let _ = window
+                    .location()
+                    .set_href(&format!("/repos/{}/{}/releases", o, r));
             }
         });
     };
 
     view! {
         <div class="release-create">
+        <RepoNav/>
             <h3>"Create a new release"</h3>
             <form on:submit=on_submit>
-                <div style="margin-bottom: 10px;">
-                    <label style="display: block;">"Tag version"</label>
-                    <input type="text" prop:value=tag on:input=move |ev| set_tag.set(event_target_value(&ev)) placeholder="v1.0.0" required style="width: 100%;"/>
+                <div class="mb-1">
+                    <label>"Tag version"</label>
+                    <input type="text" prop:value=tag on:input=move |ev| set_tag.set(event_target_value(&ev)) placeholder="v1.0.0" required class="w-100"/>
                 </div>
-                <div style="margin-bottom: 10px;">
-                    <label style="display: block;">"Release title"</label>
-                    <input type="text" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) placeholder="Release title" required style="width: 100%;"/>
+                <div class="mb-1">
+                    <label>"Release title"</label>
+                    <input type="text" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) placeholder="Release title" required class="w-100"/>
                 </div>
-                <div style="margin-bottom: 10px;">
-                    <label style="display: block;">"Description"</label>
-                    <textarea prop:value=body on:input=move |ev| set_body.set(event_target_value(&ev)) rows="10" style="width: 100%;"></textarea>
+                <div class="mb-1">
+                    <label>"Description"</label>
+                    <textarea prop:value=body on:input=move |ev| set_body.set(event_target_value(&ev)) rows="10" class="w-100"></textarea>
                 </div>
-                <div style="margin-bottom: 10px;">
+                <div class="mb-1">
                     <label>
                         <input type="checkbox" prop:checked=draft on:change=move |ev| set_draft.set(event_target_checked(&ev)) />
                         " This is a draft"
                     </label>
                 </div>
-                <div style="margin-bottom: 10px;">
+                <div class="mb-1">
                     <label>
                         <input type="checkbox" prop:checked=prerelease on:change=move |ev| set_prerelease.set(event_target_checked(&ev)) />
                         " This is a pre-release"
                     </label>
                 </div>
-                <button type="submit" style="background-color: #2cbe4e; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">"Publish Release"</button>
+                <button type="submit" class="btn btn-success-solid">"Publish Release"</button>
             </form>
         </div>
     }

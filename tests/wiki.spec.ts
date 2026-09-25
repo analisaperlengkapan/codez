@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Wiki Feature', () => {
   test('should list, create, and edit a wiki page', async ({ page }) => {
     // Navigate to the repository wiki page
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/wiki');
+    await page.goto('/repos/admin/codeza/wiki');
 
     // Make sure we are on the wiki page
     await expect(page.getByRole('heading', { name: 'Pages' })).toBeVisible();
@@ -16,7 +16,7 @@ test.describe('Wiki Feature', () => {
     await expect(page.locator('.wiki-header h3')).toHaveText('Home');
 
     // Navigate to create a new page
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/wiki/pages/NewPage/edit');
+    await page.goto('/repos/admin/codeza/wiki/pages/NewPage/edit');
     await expect(page.getByRole('heading', { name: 'Editing NewPage' })).toBeVisible();
 
     // Fill in the new wiki page details
@@ -29,7 +29,7 @@ test.describe('Wiki Feature', () => {
 
     // The frontend does not redirect automatically in the mock, so we wait briefly and navigate manually
     await page.waitForTimeout(1000);
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/wiki/pages/NewPage');
+    await page.goto('/repos/admin/codeza/wiki/pages/NewPage');
 
     // Wait for network idle to ensure data is fetched
     await page.waitForLoadState('networkidle');
@@ -54,7 +54,7 @@ test.describe('Wiki Feature', () => {
 
     // The frontend doesn't redirect so we wait and navigate
     await page.waitForTimeout(2000);
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/wiki/pages/NewPage');
+    await page.goto('/repos/admin/codeza/wiki/pages/NewPage');
     await page.waitForLoadState('networkidle');
 
     // Wait and retry verify the page was updated

@@ -1,6 +1,7 @@
+use crate::api::{get, post_json_resp};
+use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
-use gloo_net::http::Request;
 use shared::{Branch, CreatePullRequestOption, PullRequest};
 
 #[component]
@@ -18,10 +19,7 @@ pub fn CompareView() -> impl IntoView {
 
     let branches = create_resource(
         move || (owner(), repo_name()),
-        |(o, r)| async move {
-            Request::get(&format!("/api/v1/repos/{}/{}/branches", o, r))
-                .send().await.unwrap().json::<Vec<Branch>>().await.unwrap_or_default()
-        }
+        |(o, r)| async move { get::<Vec<Branch>>(&format!("/api/v1/repos/{}/{}/branches", o, r)).await },
     );
 
     // Set default compare branch when branches load
@@ -48,47 +46,47 @@ pub fn CompareView() -> impl IntoView {
         };
 
         if payload.head == payload.base {
-             set_error_msg.set(Some("Base and Compare branches must be different.".to_string()));
-             return;
+            set_error_msg.set(Some(
+                "Base and Compare branches must be different.".to_string(),
+            ));
+            return;
         }
 
         let o = owner();
         let r = repo_name();
         let navigate = navigate.clone();
         spawn_local(async move {
-            let res = Request::post(&format!("/api/v1/repos/{}/{}/pulls", o, r))
-                .json(&payload).unwrap().send().await;
-
-            match res {
-                Ok(resp) => {
-                    if resp.ok() {
-                        if let Ok(pr) = resp.json::<PullRequest>().await {
-                            navigate(&format!("/repos/{}/{}/pulls/{}", o, r, pr.number), Default::default());
-                        }
-                    } else {
-                        set_error_msg.set(Some("Failed to create Pull Request. Ensure branches exist.".to_string()));
-                    }
-                },
-                Err(_) => {
-                    set_error_msg.set(Some("Network error.".to_string()));
-                }
+            match post_json_resp::<_, PullRequest>(
+                &format!("/api/v1/repos/{}/{}/pulls", o, r),
+                &payload,
+            )
+            .await
+            {
+                Some(pr) => navigate(
+                    &format!("/repos/{}/{}/pulls/{}", o, r, pr.number),
+                    Default::default(),
+                ),
+                None => set_error_msg.set(Some(
+                    "Failed to create Pull Request. Ensure branches exist.".to_string(),
+                )),
             }
         });
     };
 
     view! {
         <div class="compare-view">
+        <RepoNav/>
             <h3>"Compare changes"</h3>
             <p>"Choose two branches to see what’s changed or to start a new pull request."</p>
 
-            <div class="branch-selector" style="margin-bottom: 20px; padding: 10px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px;">
+            <div class="branch-selector">
                  <Suspense fallback=move || view! { <span>"Loading branches..."</span> }>
                     {move || branches.get().map(|list| {
                         let list2 = list.clone();
                         view! {
-                        <div style="display: flex; gap: 20px; align-items: center;">
+                        <div class="flex-center gap-lg">
                             <div>
-                                <label style="margin-right: 5px;">"Base: "</label>
+                                <label class="mr-1">"Base: "</label>
                                 <select on:change=move |ev| set_base_branch.set(event_target_value(&ev))>
                                     <For each=move || list.clone() key=|b| b.name.clone() children=move |b| {
                                         let selected = b.name == base_branch.get();
@@ -98,7 +96,7 @@ pub fn CompareView() -> impl IntoView {
                             </div>
                             <div>"←"</div>
                             <div>
-                                <label style="margin-right: 5px;">"Compare: "</label>
+                                <label class="mr-1">"Compare: "</label>
                                 <select on:change=move |ev| set_compare_branch.set(event_target_value(&ev))>
                                     <For each=move || list2.clone() key=|b| b.name.clone() children=move |b| {
                                         let selected = b.name == compare_branch.get();
@@ -112,19 +110,19 @@ pub fn CompareView() -> impl IntoView {
             </div>
 
             {move || if let Some(msg) = error_msg.get() {
-                view! { <div class="error-msg" style="color: red; margin-bottom: 10px;">{msg}</div> }.into_view()
+                view! { <div class="error-msg">{msg}</div> }.into_view()
             } else {
                 view! { <span></span> }.into_view()
             }}
 
-            <form on:submit=on_submit class="pr-form" style="border: 1px solid #d0d7de; padding: 20px; border-radius: 6px;">
-                <div style="margin-bottom: 10px;">
-                    <input type="text" placeholder="Title" prop:value=title on:input=move |ev| set_title.set(event_target_value(&ev)) style="width: 100%; font-size: 1.2em; padding: 5px;" required />
+            <form on:submit=on_submit class="pr-form">
+                <div class="mb-1">
+                    <input type="text" placeholder="Title" prop:value=title on:input=move |ev| set_title.set(event_target_value(&ev)) class="input-lg" required />
                 </div>
-                <div style="margin-bottom: 10px;">
-                    <textarea placeholder="Leave a comment" prop:value=body on:input=move |ev| set_body.set(event_target_value(&ev)) rows="10" style="width: 100%; padding: 5px;"></textarea>
+                <div class="mb-1">
+                    <textarea placeholder="Leave a comment" prop:value=body on:input=move |ev| set_body.set(event_target_value(&ev)) rows="10" class="p-1"></textarea>
                 </div>
-                <button type="submit" class="btn-primary" style="background-color: #2da44e; color: white; padding: 5px 15px; border: none; border-radius: 6px; cursor: pointer;">
+                <button type="submit" class="btn-primary">
                     "Create Pull Request"
                 </button>
             </form>
