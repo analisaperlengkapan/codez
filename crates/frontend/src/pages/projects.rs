@@ -119,8 +119,8 @@ pub fn ProjectDetail() -> impl IntoView {
     let (board_error, set_board_error) = create_signal(Option::<String>::None);
 
     let project = create_resource(
-        move || (owner(), repo_name(), id()),
-        |(o, r, i)| async move {
+        move || (owner(), repo_name(), id(), refresh.get()),
+        |(o, r, i, _)| async move {
             get_or::<Option<Project>>(&format!("/api/v1/repos/{}/{}/projects/{}", o, r, i), None)
                 .await
         },

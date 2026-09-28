@@ -23,4 +23,24 @@ test.describe('Projects Feature', () => {
 
     await expect(page.getByRole('heading', { name: 'To Do' }).first()).toBeVisible();
   });
+
+  test('closing a project flips the status and button without a reload', async ({ page }) => {
+    await page.goto('/repos/admin/codeza/projects');
+
+    await page.getByRole('button', { name: 'New Project' }).click();
+    const title = 'Board ' + Date.now();
+    await page.getByPlaceholder('Project Title').fill(title);
+    await page.getByRole('button', { name: 'Create Project' }).click();
+    await page.getByRole('link', { name: title }).first().click();
+
+    await expect(page.getByRole('heading', { name: title })).toBeVisible();
+    await page.getByRole('button', { name: 'Close Project' }).click();
+
+    // The resource must re-fetch, otherwise the old title/button stay on screen.
+    await expect(page.getByRole('button', { name: 'Reopen Project' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: `${title} (Closed)` })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Reopen Project' }).click();
+    await expect(page.getByRole('button', { name: 'Close Project' })).toBeVisible();
+  });
 });

@@ -96,6 +96,10 @@ links return `index.html`; unknown `/api/*` paths return `404`.
   replied `2xx`. Clear a form, navigate, or refresh only on `true`; on `false` keep the
   user's input and render `WRITE_ERROR` in a `.form-error` element with `role="alert"`.
   Never discard the result of a write.
+- Any `create_resource` whose data a write can change must list the component's `refresh`
+  signal in its source tuple, and the success branch must bump that signal. A resource
+  that omits it silently keeps stale data — the classic symptom is a toggle whose label
+  never flips or a create form that clears while the list stays unchanged.
 - Avoid glob-import ambiguity between `leptos_router::*` and shared types in page modules —
   import concrete items.
 - Run `cargo fmt --all` before committing.
@@ -126,6 +130,12 @@ links return `index.html`; unknown `/api/*` paths return `404`.
   to `page.goto()` / `page.request.*()`.
 - `tests/routes.spec.ts` is the route smoke net: keep its `ROUTES` list in sync with
   `crates/frontend/src/main.rs` so a renamed or removed route fails loudly.
+- A spec for a write must assert the *observable* follow-up, not just that the request
+  succeeded: a create appears in the list without a reload, a close/reopen toggle flips
+  its label, and a rejected write (`page.route` forced non-2xx, see
+  `tests/rejected_writes.spec.ts`) keeps the typed value and shows
+  `.form-error[role="alert"]`. Never `page.reload()` to make a list assertion pass — that
+  hides a missing resource refresh.
 - Ad-hoc API verification scripts live in `scripts/verify_*.py`.
 
 ## Verifying changes

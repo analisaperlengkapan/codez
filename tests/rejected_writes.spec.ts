@@ -65,6 +65,36 @@ test.describe('Rejected writes', () => {
     await page.unroute('**/comments');
   });
 
+  test('a rejected pull request keeps the typed title and shows an error', async ({ page }) => {
+    await page.goto('/repos/admin/codeza/compare');
+    await expect(page.getByRole('heading', { name: 'Compare changes' })).toBeVisible();
+
+    const title = 'Rejected PR ' + Date.now();
+    await page.getByPlaceholder('Title').fill(title);
+    await page.getByPlaceholder('Leave a comment').fill('Body that must survive.');
+
+    await page.route('**/api/v1/repos/admin/codeza/pulls', async (route) => {
+      if (route.request().method() === 'POST') {
+        await route.fulfill({ status: 422, contentType: 'application/json', body: '{}' });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.getByRole('button', { name: 'Create Pull Request' }).click();
+
+    const error = page.locator('.form-error[role="alert"]');
+    await expect(error).toBeVisible();
+    await expect(error).toHaveText('Could not save your changes. Please try again.');
+    // The write is rejected, so the form must keep what the user typed.
+    await expect(page.getByPlaceholder('Title')).toHaveValue(title);
+    await expect(page.getByPlaceholder('Leave a comment')).toHaveValue(
+      'Body that must survive.',
+    );
+
+    await page.unroute('**/api/v1/repos/admin/codeza/pulls');
+  });
+
   test('a rejected wiki save keeps the page body and shows an error', async ({ page }) => {
     await page.goto('/repos/admin/codeza/wiki/pages/RejectedSave/edit');
 

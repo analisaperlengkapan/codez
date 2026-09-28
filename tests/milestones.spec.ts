@@ -9,9 +9,7 @@ test.describe('Milestones Feature', () => {
     await page.getByPlaceholder('Title').fill('v2.0 Beta');
     await page.getByRole('button', { name: 'Create' }).click();
 
-    // The component doesn't automatically refresh on create, so we can verify the API or reload
-    await page.reload();
-
+    // The list refetches on success, so the new milestone shows without a reload.
     await expect(page.getByRole('link', { name: 'v2.0 Beta' }).first()).toBeVisible();
   });
 });

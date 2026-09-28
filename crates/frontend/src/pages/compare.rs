@@ -1,4 +1,4 @@
-use crate::api::{get, post_json_resp};
+use crate::api::{get, post_json_resp, WRITE_ERROR};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -66,9 +66,7 @@ pub fn CompareView() -> impl IntoView {
                     &format!("/repos/{}/{}/pulls/{}", o, r, pr.number),
                     Default::default(),
                 ),
-                None => set_error_msg.set(Some(
-                    "Failed to create Pull Request. Ensure branches exist.".to_string(),
-                )),
+                None => set_error_msg.set(Some(WRITE_ERROR.to_string())),
             }
         });
     };
@@ -109,11 +107,9 @@ pub fn CompareView() -> impl IntoView {
                 </Suspense>
             </div>
 
-            {move || if let Some(msg) = error_msg.get() {
-                view! { <div class="error-msg">{msg}</div> }.into_view()
-            } else {
-                view! { <span></span> }.into_view()
-            }}
+            {move || error_msg.get().map(|msg| view! {
+                <p class="form-error" role="alert">{msg}</p>
+            })}
 
             <form on:submit=on_submit class="pr-form">
                 <div class="mb-1">

@@ -224,10 +224,13 @@ The `tests/` directory holds Playwright specs. They target `http://127.0.0.1:808
 npx playwright test --project=chromium
 ```
 
-Suites include feature flows (issues, pulls, milestones, wiki, …), a per-route smoke spec
-(`tests/routes.spec.ts`) that renders every client route and fails on any uncaught error,
-a detail-endpoint spec covering the single-pull route, and `tests/rejected_writes.spec.ts`,
-which forces a non-2xx response and asserts the user's input survives with a visible error.
+Suites include feature flows (issues, pulls, labels, milestones, projects, wiki, …), a
+per-route smoke spec (`tests/routes.spec.ts`) that renders every client route and fails on
+any uncaught error, a detail-endpoint spec covering the single-pull route, and
+`tests/rejected_writes.spec.ts`, which forces a non-2xx response and asserts the user's
+input survives with a visible error. Specs that cover a write also assert the observable
+follow-up — a created label/milestone appearing without a reload, or a closed project's
+button flipping to "Reopen Project".
 
 ## API
 

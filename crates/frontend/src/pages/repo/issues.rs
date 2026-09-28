@@ -824,10 +824,11 @@ pub fn LabelList() -> impl IntoView {
     let (name, set_name) = create_signal("".to_string());
     let (form_error, set_form_error) = create_signal(Option::<String>::None);
     let (color, set_color) = create_signal("#000000".to_string());
+    let (refresh, set_refresh) = create_signal(0u32);
 
     let labels = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move { get::<Vec<Label>>(&format!("/api/v1/repos/{}/{}/labels", o, r)).await },
+        move || (owner(), repo_name(), refresh.get()),
+        |(o, r, _)| async move { get::<Vec<Label>>(&format!("/api/v1/repos/{}/{}/labels", o, r)).await },
     );
 
     let on_create = move |ev: leptos::ev::SubmitEvent| {
@@ -843,6 +844,7 @@ pub fn LabelList() -> impl IntoView {
             if post_json(&format!("/api/v1/repos/{}/{}/labels", o, r), &payload).await {
                 set_name.set("".to_string());
                 set_form_error.set(None);
+                set_refresh.update(|n| *n += 1);
             } else {
                 set_form_error.set(Some(crate::api::WRITE_ERROR.to_string()));
             }
@@ -887,10 +889,11 @@ pub fn MilestoneList() -> impl IntoView {
 
     let (title, set_title) = create_signal("".to_string());
     let (form_error, set_form_error) = create_signal(Option::<String>::None);
+    let (refresh, set_refresh) = create_signal(0u32);
 
     let milestones = create_resource(
-        move || (owner(), repo_name()),
-        |(o, r)| async move {
+        move || (owner(), repo_name(), refresh.get()),
+        |(o, r, _)| async move {
             get::<Vec<Milestone>>(&format!("/api/v1/repos/{}/{}/milestones", o, r)).await
         },
     );
@@ -908,6 +911,7 @@ pub fn MilestoneList() -> impl IntoView {
             if post_json(&format!("/api/v1/repos/{}/{}/milestones", o, r), &payload).await {
                 set_title.set("".to_string());
                 set_form_error.set(None);
+                set_refresh.update(|n| *n += 1);
             } else {
                 set_form_error.set(Some(crate::api::WRITE_ERROR.to_string()));
             }
