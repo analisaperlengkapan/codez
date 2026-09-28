@@ -136,6 +136,10 @@ links return `index.html`; unknown `/api/*` paths return `404`.
   `tests/rejected_writes.spec.ts`) keeps the typed value and shows
   `.form-error[role="alert"]`. Never `page.reload()` to make a list assertion pass — that
   hides a missing resource refresh.
+- Use a unique value (e.g. `'Label ' + Date.now()`) for anything a create spec then
+  asserts on. The backend keeps in-memory state across runs, so a fixed title such as
+  `v2.0 Beta` can already exist and the assertion passes even when the write, or the
+  refresh it triggers, is broken.
 - Ad-hoc API verification scripts live in `scripts/verify_*.py`.
 
 ## Verifying changes

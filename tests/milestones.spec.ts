@@ -6,10 +6,14 @@ test.describe('Milestones Feature', () => {
 
     await expect(page.getByRole('heading', { name: 'Milestones' })).toBeVisible();
 
-    await page.getByPlaceholder('Title').fill('v2.0 Beta');
+    // A unique title, so a milestone left over from an earlier run on a reused
+    // server cannot satisfy the assertion on its own.
+    const title = 'Milestone ' + Date.now();
+    await page.getByPlaceholder('Title').fill(title);
     await page.getByRole('button', { name: 'Create' }).click();
 
     // The list refetches on success, so the new milestone shows without a reload.
-    await expect(page.getByRole('link', { name: 'v2.0 Beta' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: title })).toBeVisible();
+    await expect(page.getByPlaceholder('Title')).toHaveValue('');
   });
 });

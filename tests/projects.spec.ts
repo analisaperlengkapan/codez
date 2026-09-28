@@ -8,20 +8,24 @@ test.describe('Projects Feature', () => {
 
     await page.getByRole('button', { name: 'New Project' }).click();
 
-    await page.getByPlaceholder('Project Title').fill('Roadmap');
+    // Unique values: on a reused server a leftover "Roadmap" would let the
+    // assertions below pass without the create having worked at all.
+    const project = 'Project ' + Date.now();
+    const column = 'Column ' + Date.now();
+    await page.getByPlaceholder('Project Title').fill(project);
     await page.getByPlaceholder('Description').fill('Feature roadmap');
     await page.getByRole('button', { name: 'Create Project' }).click();
 
-    await expect(page.getByRole('link', { name: 'Roadmap' }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: project })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Roadmap' }).first().click();
-    await expect(page.getByRole('heading', { name: 'Roadmap' })).toBeVisible();
+    await page.getByRole('link', { name: project }).click();
+    await expect(page.getByRole('heading', { name: project })).toBeVisible();
 
     // Add a column
-    await page.getByPlaceholder('New Column').fill('To Do');
+    await page.getByPlaceholder('New Column').fill(column);
     await page.getByRole('button', { name: 'Add Column' }).click();
 
-    await expect(page.getByRole('heading', { name: 'To Do' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: column })).toBeVisible();
   });
 
   test('closing a project flips the status and button without a reload', async ({ page }) => {
