@@ -1,6 +1,6 @@
 //! Repository creation and migration forms.
 
-use crate::api::{get, post_json};
+use crate::api::{get, post_json, WRITE_ERROR};
 use leptos::*;
 use shared::{CreateRepoOption, GitignoreTemplate, LicenseTemplate};
 
@@ -11,6 +11,7 @@ pub fn CreateRepo() -> impl IntoView {
     let (gitignore, set_gitignore) = create_signal("".to_string());
     let (license, set_license) = create_signal("".to_string());
     let (private, set_private) = create_signal(false);
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let licenses = create_resource(
         || (),
@@ -53,7 +54,13 @@ pub fn CreateRepo() -> impl IntoView {
             has_projects: None,
         };
         spawn_local(async move {
-            let _ = post_json("/api/v1/user/repos", &payload).await;
+            // Keep the form filled in when creation is rejected so the user does
+            // not lose the name, description and template choices.
+            if post_json("/api/v1/user/repos", &payload).await {
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -94,6 +101,9 @@ pub fn CreateRepo() -> impl IntoView {
                 </Suspense>
 
                 <button type="submit">"Create"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
             <p><a href="/repo/migrate">"Or Migrate Repository"</a></p>
         </div>

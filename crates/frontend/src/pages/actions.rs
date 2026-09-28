@@ -1,4 +1,4 @@
-use crate::api::{delete, get, patch_json, post, post_json};
+use crate::api::{delete, get, patch_json, post, post_json, WRITE_ERROR};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -58,6 +58,7 @@ pub fn WorkflowRunsList() -> impl IntoView {
     };
 
     let (refresh, set_refresh) = create_signal(0);
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
 
     let runs = create_resource(
         move || (owner(), repo_name(), workflow_id(), refresh.get()),
@@ -79,12 +80,17 @@ pub fn WorkflowRunsList() -> impl IntoView {
             ref_name: "main".to_string(), // hardcoded for MVP
         };
         spawn_local(async move {
-            let _ = post_json(
+            if post_json(
                 &format!("/api/v1/repos/{}/{}/actions/workflows/{}/runs", o, r, id),
                 &payload,
             )
-            .await;
-            set_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -92,12 +98,17 @@ pub fn WorkflowRunsList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post(&format!(
+            if post(&format!(
                 "/api/v1/repos/{}/{}/actions/runs/{}/rerun",
                 o, r, run_id
             ))
-            .await;
-            set_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -108,12 +119,17 @@ pub fn WorkflowRunsList() -> impl IntoView {
             status: "cancelled".to_string(),
         };
         spawn_local(async move {
-            let _ = patch_json(
+            if patch_json(
                 &format!("/api/v1/repos/{}/{}/actions/runs/{}", o, r, run_id),
                 &payload,
             )
-            .await;
-            set_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -121,12 +137,17 @@ pub fn WorkflowRunsList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = delete(&format!(
+            if delete(&format!(
                 "/api/v1/repos/{}/{}/actions/runs/{}",
                 o, r, run_id
             ))
-            .await;
-            set_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -136,6 +157,9 @@ pub fn WorkflowRunsList() -> impl IntoView {
             <div class="header">
                 <h3>"Workflow Runs"</h3>
                 <button class="run-workflow-btn" on:click=on_run_workflow>"Run Workflow"</button>
+                {move || action_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </div>
             <ul class="runs-list">
                 <Suspense fallback=move || view! { <li>"Loading runs..."</li> }>

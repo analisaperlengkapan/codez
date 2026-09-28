@@ -1,6 +1,6 @@
 //! Repository wiki pages.
 
-use crate::api::{get, get_opt, get_or, post_json, put_json};
+use crate::api::{get, get_opt, get_or, post_json, put_json, WRITE_ERROR};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -103,6 +103,7 @@ pub fn WikiEdit() -> impl IntoView {
     let (content, set_content) = create_signal("".to_string());
     let (message, set_message) = create_signal("".to_string());
     let (is_new, set_is_new) = create_signal(true);
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     // Load existing content if available
     let _ = create_resource(
@@ -130,16 +131,23 @@ pub fn WikiEdit() -> impl IntoView {
         let p = page_name();
         let is_n = is_new.get();
         spawn_local(async move {
-            if is_n {
-                let _ = post_json(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r), &payload).await;
+            // The page body is the user's only copy of their edit, so it stays put
+            // unless the server confirms the save.
+            let saved = if is_n {
+                post_json(&format!("/api/v1/repos/{}/{}/wiki/pages", o, r), &payload).await
             } else {
-                let _ = put_json(
+                put_json(
                     &format!("/api/v1/repos/{}/{}/wiki/pages/{}", o, r, p),
                     &payload,
                 )
-                .await;
+                .await
+            };
+            if saved {
+                set_is_new.set(false);
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
             }
-            // Redirect or notify would happen here
         });
     };
 
@@ -151,6 +159,9 @@ pub fn WikiEdit() -> impl IntoView {
                 <textarea prop:value=content on:input=move |ev| set_content.set(event_target_value(&ev)) rows="10"></textarea>
                 <input type="text" placeholder="Commit Message" prop:value=message on:input=move |ev| set_message.set(event_target_value(&ev)) />
                 <button type="submit">"Save Page"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }

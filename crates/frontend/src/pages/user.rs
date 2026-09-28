@@ -1,4 +1,4 @@
-use crate::api::{delete, get, get_or, patch_json, post_json};
+use crate::api::{delete, get, get_or, patch_json, post_json, WRITE_ERROR};
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -10,6 +10,7 @@ use shared::{
 pub fn Login() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -18,8 +19,14 @@ pub fn Login() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = post_json("/api/v1/users/login", &payload).await;
-            leptos::logging::log!("Logged in");
+            // Never clear the credential fields on failure — the user would have
+            // to retype both.
+            if post_json("/api/v1/users/login", &payload).await {
+                set_form_error.set(None);
+                leptos::logging::log!("Logged in");
+            } else {
+                set_form_error.set(Some("Invalid username or password.".to_string()));
+            }
         });
     };
 
@@ -30,6 +37,9 @@ pub fn Login() -> impl IntoView {
                 <input type="text" placeholder="Username" prop:value=username on:input=move |ev| set_username.set(event_target_value(&ev)) />
                 <input type="password" placeholder="Password" prop:value=password on:input=move |ev| set_password.set(event_target_value(&ev)) />
                 <button type="submit">"Login"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -40,6 +50,7 @@ pub fn Register() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (email, set_email) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -49,8 +60,12 @@ pub fn Register() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = post_json("/api/v1/users/register", &payload).await;
-            leptos::logging::log!("Registered");
+            if post_json("/api/v1/users/register", &payload).await {
+                set_form_error.set(None);
+                leptos::logging::log!("Registered");
+            } else {
+                set_form_error.set(Some("Could not create your account.".to_string()));
+            }
         });
     };
 
@@ -62,6 +77,9 @@ pub fn Register() -> impl IntoView {
                 <input type="email" placeholder="Email" prop:value=email on:input=move |ev| set_email.set(event_target_value(&ev)) />
                 <input type="password" placeholder="Password" prop:value=password on:input=move |ev| set_password.set(event_target_value(&ev)) />
                 <button type="submit">"Register"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -210,6 +228,7 @@ pub fn UserSettings() -> impl IntoView {
     let (ssh_key, set_ssh_key) = create_signal("".to_string());
 
     let (gpg_key_content, set_gpg_key_content) = create_signal("".to_string());
+    let (key_error, set_key_error) = create_signal(Option::<String>::None);
 
     let on_add_ssh_key = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -218,17 +237,25 @@ pub fn UserSettings() -> impl IntoView {
             key: ssh_key.get(),
         };
         spawn_local(async move {
-            let _ = post_json("/api/v1/user/keys", &payload).await;
-            set_ssh_title.set("".to_string());
-            set_ssh_key.set("".to_string());
-            set_refresh.update(|n| *n += 1);
+            if post_json("/api/v1/user/keys", &payload).await {
+                set_ssh_title.set("".to_string());
+                set_ssh_key.set("".to_string());
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
     let on_delete_ssh_key = move |id: u64| {
         spawn_local(async move {
-            let _ = delete(&format!("/api/v1/user/keys/{}", id)).await;
-            set_refresh.update(|n| *n += 1);
+            if delete(&format!("/api/v1/user/keys/{}", id)).await {
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -238,16 +265,24 @@ pub fn UserSettings() -> impl IntoView {
             armored_public_key: gpg_key_content.get(),
         };
         spawn_local(async move {
-            let _ = post_json("/api/v1/user/gpg_keys", &payload).await;
-            set_gpg_key_content.set("".to_string());
-            set_refresh.update(|n| *n += 1);
+            if post_json("/api/v1/user/gpg_keys", &payload).await {
+                set_gpg_key_content.set("".to_string());
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
     let on_delete_gpg_key = move |id: u64| {
         spawn_local(async move {
-            let _ = delete(&format!("/api/v1/user/gpg_keys/{}", id)).await;
-            set_refresh.update(|n| *n += 1);
+            if delete(&format!("/api/v1/user/gpg_keys/{}", id)).await {
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -260,7 +295,11 @@ pub fn UserSettings() -> impl IntoView {
             location: None,
         };
         spawn_local(async move {
-            let _ = patch_json("/api/v1/user/settings", &payload).await;
+            if patch_json("/api/v1/user/settings", &payload).await {
+                set_key_error.set(None);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -277,6 +316,9 @@ pub fn UserSettings() -> impl IntoView {
                 <form on:submit=on_update_profile>
                     <input type="text" placeholder="Full Name" prop:value=full_name on:input=move |ev| set_full_name.set(event_target_value(&ev)) />
                     <button type="submit">"Update Profile"</button>
+                    {move || key_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </form>
             </div>
 
@@ -302,6 +344,9 @@ pub fn UserSettings() -> impl IntoView {
                     <input type="text" placeholder="Title" prop:value=ssh_title on:input=move |ev| set_ssh_title.set(event_target_value(&ev))  required />
                     <textarea placeholder="Key starting with ssh-rsa..." prop:value=ssh_key on:input=move |ev| set_ssh_key.set(event_target_value(&ev)) rows="4"  required></textarea>
                     <button type="submit">"Add SSH Key"</button>
+                    {move || key_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </form>
             </div>
 
@@ -326,6 +371,9 @@ pub fn UserSettings() -> impl IntoView {
                     <h4>"Add GPG Key"</h4>
                     <textarea placeholder="Armored GPG Public Key..." prop:value=gpg_key_content on:input=move |ev| set_gpg_key_content.set(event_target_value(&ev)) rows="6"  required></textarea>
                     <button type="submit">"Add GPG Key"</button>
+                    {move || key_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </form>
             </div>
         </div>

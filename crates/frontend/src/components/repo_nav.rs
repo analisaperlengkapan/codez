@@ -1,4 +1,4 @@
-use crate::api::{get_or, post, post_json_resp};
+use crate::api::{get_or, post, post_json_resp, WRITE_ERROR};
 use leptos::*;
 use leptos_router::*;
 use shared::{RepoUserStatus, Repository};
@@ -56,14 +56,21 @@ pub fn RepoNav() -> impl IntoView {
         },
     );
 
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
     let bump = move || refresh.update(|n| *n += 1);
 
+    // Star and watch are toggles: refreshing only after a confirmed 2xx keeps the
+    // button label and count from flipping on a rejected request.
     let on_star = move |_| {
         let o = owner();
         let r = repo();
         spawn_local(async move {
-            let _ = post(&format!("/api/v1/repos/{}/{}/star", o, r)).await;
-            bump();
+            if post(&format!("/api/v1/repos/{}/{}/star", o, r)).await {
+                set_action_error.set(None);
+                bump();
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -71,8 +78,12 @@ pub fn RepoNav() -> impl IntoView {
         let o = owner();
         let r = repo();
         spawn_local(async move {
-            let _ = post(&format!("/api/v1/repos/{}/{}/watch", o, r)).await;
-            bump();
+            if post(&format!("/api/v1/repos/{}/{}/watch", o, r)).await {
+                set_action_error.set(None);
+                bump();
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -81,14 +92,14 @@ pub fn RepoNav() -> impl IntoView {
         let r = repo();
         let navigate = navigate.clone();
         spawn_local(async move {
-            if let Some(new_repo) =
-                post_json_resp::<_, Repository>(&format!("/api/v1/repos/{}/{}/fork", o, r), &())
-                    .await
+            match post_json_resp::<_, Repository>(&format!("/api/v1/repos/{}/{}/fork", o, r), &())
+                .await
             {
-                navigate(
+                Some(new_repo) => navigate(
                     &format!("/repos/{}/{}", new_repo.owner, new_repo.name),
                     Default::default(),
-                );
+                ),
+                None => set_action_error.set(Some(WRITE_ERROR.to_string())),
             }
         });
     };
@@ -150,6 +161,9 @@ pub fn RepoNav() -> impl IntoView {
                     </Transition>
                     <button on:click=on_fork>"Fork"</button>
                 </div>
+                {move || action_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </div>
 
             <nav class="repo-nav">

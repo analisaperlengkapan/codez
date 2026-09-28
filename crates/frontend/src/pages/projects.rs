@@ -16,6 +16,7 @@ pub fn ProjectList() -> impl IntoView {
     let (show_create, set_show_create) = create_signal(false);
     let (new_title, set_new_title) = create_signal("".to_string());
     let (new_desc, set_new_desc) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let projects = create_resource(
         move || (owner(), repo_name(), show_create.get()), // refresh on create toggle/submit
@@ -37,10 +38,14 @@ pub fn ProjectList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/projects", o, r), &payload).await;
-            set_new_title.set("".to_string());
-            set_new_desc.set("".to_string());
-            set_show_create.set(false);
+            if post_json(&format!("/api/v1/repos/{}/{}/projects", o, r), &payload).await {
+                set_new_title.set("".to_string());
+                set_new_desc.set("".to_string());
+                set_show_create.set(false);
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -60,6 +65,9 @@ pub fn ProjectList() -> impl IntoView {
                         <input type="text" placeholder="Project Title" prop:value=new_title on:input=move |ev| set_new_title.set(event_target_value(&ev))  required />
                         <textarea placeholder="Description" prop:value=new_desc on:input=move |ev| set_new_desc.set(event_target_value(&ev))></textarea>
                         <button type="submit">"Create Project"</button>
+                        {move || form_error.get().map(|msg| view! {
+                            <p class="form-error" role="alert">{msg}</p>
+                        })}
                     </form>
                 }.into_view()
             } else {
@@ -108,6 +116,7 @@ pub fn ProjectDetail() -> impl IntoView {
     };
 
     let (refresh, set_refresh) = create_signal(0);
+    let (board_error, set_board_error) = create_signal(Option::<String>::None);
 
     let project = create_resource(
         move || (owner(), repo_name(), id()),
@@ -136,13 +145,18 @@ pub fn ProjectDetail() -> impl IntoView {
         };
         if !payload.title.is_empty() {
             spawn_local(async move {
-                let _ = post_json(
+                if post_json(
                     &format!("/api/v1/repos/{}/{}/projects/{}/columns", o, r, i),
                     &payload,
                 )
-                .await;
-                set_new_col_title.set("".to_string());
-                set_refresh.update(|n| *n += 1);
+                .await
+                {
+                    set_new_col_title.set("".to_string());
+                    set_board_error.set(None);
+                    set_refresh.update(|n| *n += 1);
+                } else {
+                    set_board_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+                }
             });
         }
     };
@@ -153,12 +167,17 @@ pub fn ProjectDetail() -> impl IntoView {
         let i = id();
         let action = if is_closed { "reopen" } else { "close" };
         spawn_local(async move {
-            let _ = post(&format!(
+            if post(&format!(
                 "/api/v1/repos/{}/{}/projects/{}/{}",
                 o, r, i, action
             ))
-            .await;
-            set_refresh.update(|n| *n += 1); // Trigger resource reload
+            .await
+            {
+                set_board_error.set(None);
+                set_refresh.update(|n| *n += 1); // Trigger resource reload
+            } else {
+                set_board_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -197,6 +216,9 @@ pub fn ProjectDetail() -> impl IntoView {
                 <div class="add-column">
                     <input type="text" placeholder="New Column" prop:value=new_col_title on:input=move |ev| set_new_col_title.set(event_target_value(&ev)) />
                     <button on:click=on_add_column>"Add Column"</button>
+                    {move || board_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </div>
             </div>
         </div>
@@ -214,6 +236,7 @@ fn ProjectColumnView(
     let (refresh_cards, set_refresh_cards) = create_signal(0);
     let (new_card_content, set_new_card_content) = create_signal("".to_string());
     let (issue_id_input, set_issue_id_input) = create_signal("".to_string());
+    let (card_error, set_card_error) = create_signal(Option::<String>::None);
 
     let column_id = column.id;
     let o = repo_owner.clone();
@@ -268,14 +291,19 @@ fn ProjectColumnView(
 
         if payload.content.is_some() || payload.issue_id.is_some() {
             spawn_local(async move {
-                let _ = post_json(
+                if post_json(
                     &format!("/api/v1/repos/{}/{}/projects/columns/{}/cards", o, r, c),
                     &payload,
                 )
-                .await;
-                set_new_card_content.set("".to_string());
-                set_issue_id_input.set("".to_string());
-                set_refresh_cards.update(|n| *n += 1);
+                .await
+                {
+                    set_new_card_content.set("".to_string());
+                    set_issue_id_input.set("".to_string());
+                    set_card_error.set(None);
+                    set_refresh_cards.update(|n| *n += 1);
+                } else {
+                    set_card_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+                }
             });
         }
     };
@@ -317,6 +345,9 @@ fn ProjectColumnView(
                 </Suspense>
 
                 <button on:click=on_add_card class="w-100">"Add Card"</button>
+                {move || card_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </div>
         </div>
     }

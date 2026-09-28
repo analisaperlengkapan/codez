@@ -1,4 +1,4 @@
-use crate::api::{get_opt, post};
+use crate::api::{get_opt, post, WRITE_ERROR};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -12,6 +12,7 @@ pub fn SecurityDashboard() -> impl IntoView {
 
     let (scanning, set_scanning) = create_signal(false);
     let (refresh, set_refresh) = create_signal(0);
+    let (scan_error, set_scan_error) = create_signal(Option::<String>::None);
 
     let report = create_resource(
         move || (owner(), repo_name(), refresh.get()),
@@ -25,9 +26,13 @@ pub fn SecurityDashboard() -> impl IntoView {
         let r = repo_name();
         set_scanning.set(true);
         spawn_local(async move {
-            let _ = post(&format!("/api/v1/repos/{}/{}/security/scan", o, r)).await;
+            if post(&format!("/api/v1/repos/{}/{}/security/scan", o, r)).await {
+                set_scan_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_scan_error.set(Some(WRITE_ERROR.to_string()));
+            }
             set_scanning.set(false);
-            set_refresh.update(|n| *n += 1);
         });
     };
 
@@ -43,6 +48,9 @@ pub fn SecurityDashboard() -> impl IntoView {
     >
                         {move || if scanning.get() { "Scanning..." } else { "Run Security Audit" }}
                     </button>
+                    {move || scan_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </div>
 
                 <Suspense fallback=move || view! { <div>"Loading security report..."</div> }>

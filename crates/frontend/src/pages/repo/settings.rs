@@ -1,6 +1,6 @@
 //! Repository settings, branches, webhooks, secrets and deploy keys.
 
-use crate::api::{get, get_then, patch_json, post, post_json, post_json_ok, put_json};
+use crate::api::{get, get_then, patch_json, post, post_json, put_json, WRITE_ERROR};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -29,6 +29,7 @@ pub fn RepoSettings() -> impl IntoView {
 
     let (transfer_to, set_transfer_to) = create_signal("".to_string());
     let (topics, set_topics) = create_signal("".to_string());
+    let (save_error, set_save_error) = create_signal(Option::<String>::None);
 
     // Load initial settings
     let _ = create_resource(
@@ -70,7 +71,11 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = patch_json(&format!("/api/v1/repos/{}/{}/settings", o, r), &payload).await;
+            if patch_json(&format!("/api/v1/repos/{}/{}/settings", o, r), &payload).await {
+                set_save_error.set(None);
+            } else {
+                set_save_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -82,7 +87,14 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/transfer", o, r), &payload).await;
+            // Clear the target owner only after the transfer is accepted, so a
+            // rejected transfer keeps the typed username.
+            if post_json(&format!("/api/v1/repos/{}/{}/transfer", o, r), &payload).await {
+                set_transfer_to.set("".to_string());
+                set_save_error.set(None);
+            } else {
+                set_save_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -97,7 +109,11 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = put_json(&format!("/api/v1/repos/{}/{}/topics", o, r), &payload).await;
+            if put_json(&format!("/api/v1/repos/{}/{}/topics", o, r), &payload).await {
+                set_save_error.set(None);
+            } else {
+                set_save_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -105,7 +121,11 @@ pub fn RepoSettings() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post(&format!("/api/v1/repos/{}/{}/mirror-sync", o, r)).await;
+            if post(&format!("/api/v1/repos/{}/{}/mirror-sync", o, r)).await {
+                set_save_error.set(None);
+            } else {
+                set_save_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -142,6 +162,9 @@ pub fn RepoSettings() -> impl IntoView {
                 <div><label><input type="checkbox" prop:checked=projects on:change=move |ev| set_projects.set(event_target_checked(&ev)) /> " Enable Projects"</label></div>
 
                 <button type="submit" class="mt-3">"Update Settings"</button>
+                {move || save_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
 
             <h4>"Topics"</h4>
@@ -181,6 +204,7 @@ pub fn CreateProtectedBranch(
     let (enable_push, set_enable_push) = create_signal(false);
     let (enable_force_push, set_enable_force_push) = create_signal(false);
     let (status_checks, set_status_checks) = create_signal(String::new());
+    let (branch_error, set_branch_error) = create_signal(Option::<String>::None);
 
     let create_action = create_action(move |_: &()| {
         let name_val = name.get();
@@ -212,22 +236,20 @@ pub fn CreateProtectedBranch(
         let on_success_clone = on_success;
 
         async move {
-            let ok = post_json_ok(
+            if post_json(
                 &format!("/api/v1/repos/{}/{}/branch_protections", o, r),
                 &opt,
             )
-            .await;
-
-            if ok {
+            .await
+            {
                 on_success_clone.dispatch(());
                 set_name.set(String::new());
                 set_enable_push.set(false);
                 set_enable_force_push.set(false);
                 set_status_checks.set(String::new());
+                set_branch_error.set(None);
             } else {
-                window()
-                    .alert_with_message("Failed to create branch protection")
-                    .unwrap();
+                set_branch_error.set(Some(WRITE_ERROR.to_string()));
             }
         }
     });
@@ -260,6 +282,9 @@ pub fn CreateProtectedBranch(
                     <input type="text" placeholder="e.g. ci/test, security-scan" prop:value=status_checks on:input=move |ev| set_status_checks.set(event_target_value(&ev)) />
                 </div>
                 <button type="submit" class="btn-primary">"Create Rule"</button>
+                {move || branch_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -357,6 +382,7 @@ pub fn WebhookList() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
     let (url, set_url) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let hooks = create_resource(
         move || (owner(), repo_name()),
@@ -373,8 +399,12 @@ pub fn WebhookList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/hooks", o, r), &payload).await;
-            set_url.set("".to_string());
+            if post_json(&format!("/api/v1/repos/{}/{}/hooks", o, r), &payload).await {
+                set_url.set("".to_string());
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -429,6 +459,9 @@ pub fn WebhookList() -> impl IntoView {
             <form on:submit=on_create>
                 <input type="text" placeholder="Payload URL" prop:value=url on:input=move |ev| set_url.set(event_target_value(&ev)) />
                 <button type="submit">"Add Webhook"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -442,6 +475,7 @@ pub fn SecretList() -> impl IntoView {
 
     let (name, set_name) = create_signal("".to_string());
     let (data, set_data) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let secrets = create_resource(
         move || (owner(), repo_name()),
@@ -457,9 +491,13 @@ pub fn SecretList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/secrets", o, r), &payload).await;
-            set_name.set("".to_string());
-            set_data.set("".to_string());
+            if post_json(&format!("/api/v1/repos/{}/{}/secrets", o, r), &payload).await {
+                set_name.set("".to_string());
+                set_data.set("".to_string());
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -481,6 +519,9 @@ pub fn SecretList() -> impl IntoView {
                 <input type="text" placeholder="Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
                 <input type="text" placeholder="Value" prop:value=data on:input=move |ev| set_data.set(event_target_value(&ev)) />
                 <button type="submit">"Add Secret"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -494,6 +535,7 @@ pub fn DeployKeyList() -> impl IntoView {
 
     let (title, set_title) = create_signal("".to_string());
     let (key, set_key) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let keys = create_resource(
         move || (owner(), repo_name()),
@@ -509,9 +551,13 @@ pub fn DeployKeyList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/keys", o, r), &payload).await;
-            set_title.set("".to_string());
-            set_key.set("".to_string());
+            if post_json(&format!("/api/v1/repos/{}/{}/keys", o, r), &payload).await {
+                set_title.set("".to_string());
+                set_key.set("".to_string());
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -533,6 +579,9 @@ pub fn DeployKeyList() -> impl IntoView {
                 <input type="text" placeholder="Title" prop:value=title on:input=move |ev| set_title.set(event_target_value(&ev)) />
                 <textarea placeholder="Key" prop:value=key on:input=move |ev| set_key.set(event_target_value(&ev))></textarea>
                 <button type="submit">"Add Key"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }

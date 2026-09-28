@@ -226,7 +226,8 @@ npx playwright test --project=chromium
 
 Suites include feature flows (issues, pulls, milestones, wiki, …), a per-route smoke spec
 (`tests/routes.spec.ts`) that renders every client route and fails on any uncaught error,
-and a detail-endpoint spec covering the single-pull route.
+a detail-endpoint spec covering the single-pull route, and `tests/rejected_writes.spec.ts`,
+which forces a non-2xx response and asserts the user's input survives with a visible error.
 
 ## API
 

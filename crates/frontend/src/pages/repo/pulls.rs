@@ -62,6 +62,7 @@ pub fn PullRequestDetail() -> impl IntoView {
 
     let (merge_action, set_merge_action) = create_signal("merge".to_string());
     let (trigger_refresh, set_trigger_refresh) = create_signal(0);
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
 
     // Fetch PR details to display status, title, body etc.
     let pull_request = create_resource(
@@ -89,12 +90,17 @@ pub fn PullRequestDetail() -> impl IntoView {
                 merge_title_field: None,
                 merge_message_field: None,
             };
-            let _ = post_json(
+            if post_json(
                 &format!("/api/v1/repos/{}/{}/pulls/{}/merge", o, r, i),
                 &payload,
             )
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -113,12 +119,17 @@ pub fn PullRequestDetail() -> impl IntoView {
             state: Some(new_state.to_string()),
         };
         spawn_local(async move {
-            let _ = patch_json(
+            if patch_json(
                 &format!("/api/v1/repos/{}/{}/pulls/{}", o, r, idx),
                 &payload,
             )
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -146,13 +157,18 @@ pub fn PullRequestDetail() -> impl IntoView {
             state: None,
         };
         spawn_local(async move {
-            let _ = patch_json(
+            if patch_json(
                 &format!("/api/v1/repos/{}/{}/pulls/{}", o, r, idx),
                 &payload,
             )
-            .await;
-            set_is_editing.set(false);
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_is_editing.set(false);
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -174,13 +190,18 @@ pub fn PullRequestDetail() -> impl IntoView {
             event,
         };
         spawn_local(async move {
-            let _ = post_json(
+            if post_json(
                 &format!("/api/v1/repos/{}/{}/pulls/{}/reviews", o, r, i),
                 &payload,
             )
-            .await;
-            set_review_body.set("".to_string());
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_review_body.set("".to_string());
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -242,6 +263,9 @@ pub fn PullRequestDetail() -> impl IntoView {
                     <option value="squash">"Squash and Merge"</option>
                 </select>
                 <button on:click=on_merge class="btn-merge">"Merge Pull Request"</button>
+                {move || action_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </div>
             <div class="pr-files">
                 <h4>"Files Changed"</h4>
@@ -297,6 +321,9 @@ pub fn PullRequestDetail() -> impl IntoView {
                         <button on:click=move |_| on_submit_review("APPROVE".to_string()) class="text-success">"Approve"</button>
                         <button on:click=move |_| on_submit_review("REQUEST_CHANGES".to_string()) class="error-msg">"Request Changes"</button>
                     </div>
+                    {move || action_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </div>
             </div>
         </div>

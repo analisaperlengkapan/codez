@@ -1,4 +1,4 @@
-use crate::api::{get, get_or, post_json_ok};
+use crate::api::{get, get_or, post_json, WRITE_ERROR};
 use leptos::*;
 use leptos_router::*;
 use shared::{CreatePackageOption, Package};
@@ -60,6 +60,7 @@ where
     let (name, set_name) = create_signal("".to_string());
     let (version, set_version) = create_signal("".to_string());
     let (pkg_type, set_pkg_type) = create_signal("npm".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -71,8 +72,11 @@ where
         let o = owner.clone();
         let on_success_clone = on_success.clone();
         spawn_local(async move {
-            if post_json_ok(&format!("/api/v1/packages/{}", o), &payload).await {
+            if post_json(&format!("/api/v1/packages/{}", o), &payload).await {
+                set_form_error.set(None);
                 on_success_clone();
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
             }
         });
     };
@@ -95,6 +99,9 @@ where
                 </select>
             </div>
             <button type="submit">"Upload"</button>
+            {move || form_error.get().map(|msg| view! {
+                <p class="form-error" role="alert">{msg}</p>
+            })}
         </form>
     }
 }

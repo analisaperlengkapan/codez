@@ -1,4 +1,4 @@
-use crate::api::{get, get_or, post_json, put_json};
+use crate::api::{get, get_or, post_json, put_json, WRITE_ERROR};
 use leptos::*;
 use leptos_router::*;
 use shared::{
@@ -13,6 +13,7 @@ pub fn OrgProfile() -> impl IntoView {
 
     let (active_tab, set_active_tab) = create_signal("repos".to_string());
     let (refresh, set_refresh) = create_signal(0);
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
 
     let org = create_resource(org_name, |name| async move {
         get_or::<Option<Organization>>(&format!("/api/v1/orgs/{}", name), None).await
@@ -61,9 +62,13 @@ pub fn OrgProfile() -> impl IntoView {
             permission: "read".to_string(),
         };
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/orgs/{}/teams", name), &payload).await;
-            set_new_team_name.set("".to_string());
-            set_refresh.update(|n| *n += 1);
+            if post_json(&format!("/api/v1/orgs/{}/teams", name), &payload).await {
+                set_new_team_name.set("".to_string());
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -119,8 +124,12 @@ pub fn OrgProfile() -> impl IntoView {
                                                             let user_n = username.clone();
                                                             let payload = UpdateMemberRoleOption { role: new_role };
                                                             spawn_local(async move {
-                                                                let _ = put_json(&format!("/api/v1/orgs/{}/members/{}", org_n, user_n), &payload).await;
-                                                                set_refresh.update(|n| *n += 1);
+                                                                if put_json(&format!("/api/v1/orgs/{}/members/{}", org_n, user_n), &payload).await {
+                                                                    set_action_error.set(None);
+                                                                    set_refresh.update(|n| *n += 1);
+                                                                } else {
+                                                                    set_action_error.set(Some(WRITE_ERROR.to_string()));
+                                                                }
                                                             });
                                                         };
                                                         view! {
@@ -158,6 +167,9 @@ pub fn OrgProfile() -> impl IntoView {
                                         <div class="create-team mt-1">
                                             <input type="text" placeholder="New Team Name" prop:value=new_team_name on:input=move |ev| set_new_team_name.set(event_target_value(&ev)) />
                                             <button on:click=on_create_team>"Create Team"</button>
+                                            {move || action_error.get().map(|msg| view! {
+                                                <p class="form-error" role="alert">{msg}</p>
+                                            })}
                                         </div>
                                     </div>
                                 }.into_view(),
@@ -210,6 +222,7 @@ pub fn OrgAuditLogs(org_name: String) -> impl IntoView {
 pub fn CreateOrg() -> impl IntoView {
     let (name, set_name) = create_signal("".to_string());
     let (desc, set_desc) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -226,8 +239,12 @@ pub fn CreateOrg() -> impl IntoView {
             visibility: None,
         };
         spawn_local(async move {
-            let _ = post_json("/api/v1/orgs", &payload).await;
-            // Redirect to org profile?
+            // Leave the form populated on rejection so the name is not lost.
+            if post_json("/api/v1/orgs", &payload).await {
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -238,6 +255,9 @@ pub fn CreateOrg() -> impl IntoView {
                 <input type="text" placeholder="Organization Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
                 <input type="text" placeholder="Description" prop:value=desc on:input=move |ev| set_desc.set(event_target_value(&ev)) />
                 <button type="submit">"Create Organization"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }

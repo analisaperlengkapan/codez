@@ -92,6 +92,10 @@ links return `index.html`; unknown `/api/*` paths return `404`.
 - All frontend HTTP goes through `crates/frontend/src/api.rs`. Pages must not call
   `gloo_net::http::Request` directly — use `api_url()` plus the `get*`/`post*`/`patch*`/
   `put*`/`delete` helpers so error handling stays uniform.
+- Write helpers return `bool`: `true` only when the request was sent *and* the server
+  replied `2xx`. Clear a form, navigate, or refresh only on `true`; on `false` keep the
+  user's input and render `WRITE_ERROR` in a `.form-error` element with `role="alert"`.
+  Never discard the result of a write.
 - Avoid glob-import ambiguity between `leptos_router::*` and shared types in page modules —
   import concrete items.
 - Run `cargo fmt --all` before committing.

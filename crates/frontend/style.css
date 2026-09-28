@@ -510,6 +510,7 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
 
 /* -- Flash / errors -- */
 .error-msg { color: var(--color-danger); }
+.form-error { margin: 8px 0 0; color: var(--color-danger); font-size: 13px; }
 .flash-success { padding: 10px 16px; color: var(--color-success); background: var(--color-success-subtle); border-radius: var(--radius); }
 .flash-error { padding: 10px 16px; color: var(--color-danger); background: var(--color-danger-subtle); border-radius: var(--radius); }
 
@@ -561,11 +562,18 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
 .release-list,
 .discussions .discussion-list,
 .projects .project-list,
-.security-dashboard {
+.security-dashboard,
+.discussion-detail,
+.org-audit-logs,
+.package-detail,
+.release-create,
+.file-edit {
   display: block;
 }
 
 /* Feature cards and list rows */
+.cards { display: flex; flex-direction: column; gap: 8px; }
+.create-team { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .card:hover,
 .add-card:hover { border-color: var(--color-border-default); }
 
@@ -631,6 +639,7 @@ tbody tr:hover { background: var(--color-canvas-subtle); }
 .sidebar-item:hover { background: var(--color-canvas-subtle); text-decoration: none; }
 
 /* -- Project board -- */
+.project-board { display: flex; flex-direction: column; gap: 12px; }
 .board-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .board-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-items: start; }
 .column { padding: 12px; background: var(--color-canvas-subtle); border: 1px solid var(--color-border); border-radius: var(--radius); }

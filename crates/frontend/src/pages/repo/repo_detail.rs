@@ -1,6 +1,6 @@
 //! Repository overview, source browser, commits, branches and tags.
 
-use crate::api::{get, get_or, get_text, post_json_ok, put, put_json};
+use crate::api::{get, get_or, get_text, post_json, put, put_json, WRITE_ERROR};
 use crate::components::{RepoNav, RepoRefresh};
 use leptos::*;
 use leptos_router::*;
@@ -44,6 +44,7 @@ pub fn RepoDetail() -> impl IntoView {
 
     let (is_editing_topics, set_is_editing_topics) = create_signal(false);
     let (topics_input, set_topics_input) = create_signal("".to_string());
+    let (topics_error, set_topics_error) = create_signal(Option::<String>::None);
 
     let start_editing_topics = move |_| {
         let current_topics = topics.get().unwrap_or_default();
@@ -67,9 +68,15 @@ pub fn RepoDetail() -> impl IntoView {
         };
 
         spawn_local(async move {
-            let _ = put_json(&format!("/api/v1/repos/{}/{}/topics", o, r), &payload).await;
-            set_is_editing_topics.set(false);
-            trigger_refresh.update(|n| *n += 1);
+            // Keep the editor open when the save is rejected so the typed topics
+            // are not discarded.
+            if put_json(&format!("/api/v1/repos/{}/{}/topics", o, r), &payload).await {
+                set_is_editing_topics.set(false);
+                set_topics_error.set(None);
+                trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_topics_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -115,6 +122,9 @@ pub fn RepoDetail() -> impl IntoView {
                                 <button class="btn-primary" on:click=save_topics>"Save"</button>
                                 <button on:click=move |_| set_is_editing_topics.set(false)>"Cancel"</button>
                             </div>
+                            {move || topics_error.get().map(|msg| view! {
+                                <p class="form-error" role="alert">{msg}</p>
+                            })}
                         }.into_view()
                     } else {
                         view! {
@@ -366,6 +376,7 @@ pub fn FileEdit() -> impl IntoView {
 
     let (content, set_content) = create_signal("".to_string());
     let (message, set_message) = create_signal("Update file".to_string());
+    let (save_error, set_save_error) = create_signal(Option::<String>::None);
 
     let _ = create_resource(
         move || (owner(), repo_name(), path(), branch_ref()),
@@ -393,11 +404,16 @@ pub fn FileEdit() -> impl IntoView {
         let r = repo_name();
         let p = path();
         spawn_local(async move {
-            let _ = put_json(
+            if put_json(
                 &format!("/api/v1/repos/{}/{}/contents/{}", o, r, p),
                 &payload,
             )
-            .await;
+            .await
+            {
+                set_save_error.set(None);
+            } else {
+                set_save_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -409,6 +425,9 @@ pub fn FileEdit() -> impl IntoView {
                 <textarea prop:value=content on:input=move |ev| set_content.set(event_target_value(&ev)) rows="20" class="w-100"></textarea>
                 <input type="text" prop:value=message on:input=move |ev| set_message.set(event_target_value(&ev)) placeholder="Commit message" class="my-2" />
                 <button type="submit">"Commit Changes"</button>
+                {move || save_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -580,6 +599,7 @@ pub fn CollaboratorList() -> impl IntoView {
     let owner = move || params.with(|params| params.get("owner").cloned().unwrap_or_default());
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
     let (new_collab, set_new_collab) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let collabs = create_resource(
         move || (owner(), repo_name()),
@@ -594,8 +614,12 @@ pub fn CollaboratorList() -> impl IntoView {
         let r = repo_name();
         let c = new_collab.get();
         spawn_local(async move {
-            let _ = put(&format!("/api/v1/repos/{}/{}/collaborators/{}", o, r, c)).await;
-            set_new_collab.set("".to_string());
+            if put(&format!("/api/v1/repos/{}/{}/collaborators/{}", o, r, c)).await {
+                set_new_collab.set("".to_string());
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -615,6 +639,9 @@ pub fn CollaboratorList() -> impl IntoView {
             <form on:submit=on_add>
                 <input type="text" placeholder="Username" prop:value=new_collab on:input=move |ev| set_new_collab.set(event_target_value(&ev)) />
                 <button type="submit">"Add Collaborator"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -724,6 +751,7 @@ pub fn MigrateRepo() -> impl IntoView {
     let (clone_addr, set_clone_addr) = create_signal("".to_string());
     let (repo_name, set_repo_name) = create_signal("".to_string());
     let (service, set_service) = create_signal("git".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
     let navigate = use_navigate();
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -737,11 +765,16 @@ pub fn MigrateRepo() -> impl IntoView {
         let r_name = repo_name.get();
         let navigate = navigate.clone();
         spawn_local(async move {
-            if post_json_ok("/api/v1/repos/migrate", &payload).await {
+            // Only navigate on success; a rejected migration keeps the form so the
+            // clone URL and name can be corrected.
+            if post_json("/api/v1/repos/migrate", &payload).await {
+                set_form_error.set(None);
                 navigate(
                     &format!("/repos/admin/{}", r_name),
                     NavigateOptions::default(),
                 );
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
             }
         });
     };
@@ -768,6 +801,9 @@ pub fn MigrateRepo() -> impl IntoView {
                     <input type="text" placeholder="Repository Name" prop:value=repo_name on:input=move |ev| set_repo_name.set(event_target_value(&ev)) />
                 </div>
                 <button type="submit">"Migrate"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }

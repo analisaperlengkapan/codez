@@ -5,8 +5,10 @@
 //! infallible from the caller's point of view: a transport or decode failure
 //! yields `T::default()` (or `None` / a supplied fallback), which keeps Leptos
 //! resources simple and keeps the UI rendering an empty state rather than
-//! panicking. Write helpers fire-and-forget; callers only follow them with a
-//! refresh, so the response body is deliberately dropped.
+//! panicking. Write helpers return `bool` — `true` only when the request was
+//! sent *and* the server replied `2xx` — so callers can clear a form, navigate
+//! or refresh on success and surface an error on failure instead of discarding
+//! a rejected write.
 //!
 //! Paths passed to these helpers are absolute API paths (`/api/v1/repos/owner/name`),
 //! not API-relative ones; the helpers do not rewrite the URL. Build paths with
@@ -86,53 +88,55 @@ where
     }
 }
 
-/// `POST url` with no body. The response is discarded.
-pub async fn post(url: &str) {
-    let _ = Request::post(url).send().await;
-}
-
-/// `PATCH url` with no body. The response is discarded.
-pub async fn patch(url: &str) {
-    let _ = Request::patch(url).send().await;
-}
-
-/// `PUT url` with no body. The response is discarded.
-pub async fn put(url: &str) {
-    let _ = Request::put(url).send().await;
-}
-
-/// `DELETE url`. The response is discarded.
-pub async fn delete(url: &str) {
-    let _ = Request::delete(url).send().await;
-}
-
-/// `POST url` with a JSON body. The response is discarded.
-pub async fn post_json<B: Serialize + ?Sized>(url: &str, body: &B) {
-    if let Ok(req) = Request::post(url).json(body) {
-        let _ = req.send().await;
-    }
-}
-
-/// `PATCH url` with a JSON body. The response is discarded.
-pub async fn patch_json<B: Serialize + ?Sized>(url: &str, body: &B) {
-    if let Ok(req) = Request::patch(url).json(body) {
-        let _ = req.send().await;
-    }
-}
-
-/// `PUT url` with a JSON body. The response is discarded.
-pub async fn put_json<B: Serialize + ?Sized>(url: &str, body: &B) {
-    if let Ok(req) = Request::put(url).json(body) {
-        let _ = req.send().await;
-    }
-}
-
-/// `POST url` with a JSON body, returning whether the server replied `2xx`.
-pub async fn post_json_ok<B: Serialize + ?Sized>(url: &str, body: &B) -> bool {
-    match Request::post(url).json(body) {
-        Ok(req) => req.send().await.map(|r| r.ok()).unwrap_or(false),
+/// Send a prepared write request and report whether the server accepted it.
+///
+/// Takes the *result* of building the request so a body that fails to serialize
+/// is treated like any other failure. `true` only when the request was actually
+/// sent *and* the response status is `2xx`; a transport error or a non-2xx
+/// status both yield `false`, so callers never mistake a rejected write for a
+/// successful one.
+async fn send_ok(req: Result<Request, gloo_net::Error>) -> bool {
+    match req {
+        Ok(req) => matches!(req.send().await, Ok(resp) if resp.ok()),
         Err(_) => false,
     }
+}
+
+/// `POST url` with no body. Returns whether the server replied `2xx`.
+pub async fn post(url: &str) -> bool {
+    send_ok(Request::post(url).build()).await
+}
+
+/// `PATCH url` with no body. Returns whether the server replied `2xx`.
+pub async fn patch(url: &str) -> bool {
+    send_ok(Request::patch(url).build()).await
+}
+
+/// `PUT url` with no body. Returns whether the server replied `2xx`.
+pub async fn put(url: &str) -> bool {
+    send_ok(Request::put(url).build()).await
+}
+
+/// `DELETE url`. Returns whether the server replied `2xx`.
+pub async fn delete(url: &str) -> bool {
+    send_ok(Request::delete(url).build()).await
+}
+
+/// `POST url` with a JSON body. Returns whether the server replied `2xx`.
+///
+/// A body that cannot be serialized is a failure (`false`), not a silent no-op.
+pub async fn post_json<B: Serialize + ?Sized>(url: &str, body: &B) -> bool {
+    send_ok(Request::post(url).json(body)).await
+}
+
+/// `PATCH url` with a JSON body. Returns whether the server replied `2xx`.
+pub async fn patch_json<B: Serialize + ?Sized>(url: &str, body: &B) -> bool {
+    send_ok(Request::patch(url).json(body)).await
+}
+
+/// `PUT url` with a JSON body. Returns whether the server replied `2xx`.
+pub async fn put_json<B: Serialize + ?Sized>(url: &str, body: &B) -> bool {
+    send_ok(Request::put(url).json(body)).await
 }
 
 /// `POST url` with a JSON body, decoding the response into `T`. `None` when the
@@ -151,3 +155,7 @@ where
     }
     resp.json::<T>().await.ok()
 }
+
+/// The message every failed write shows, so error text stays consistent across
+/// pages instead of each call site inventing its own wording.
+pub const WRITE_ERROR: &str = "Could not save your changes. Please try again.";

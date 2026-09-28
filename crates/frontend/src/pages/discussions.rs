@@ -1,4 +1,4 @@
-use crate::api::{api_url, get, get_or, post_json, post_json_ok};
+use crate::api::{api_url, get, get_or, post_json, WRITE_ERROR};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -17,6 +17,7 @@ pub fn DiscussionList() -> impl IntoView {
     let (new_title, set_new_title) = create_signal("".to_string());
     let (new_body, set_new_body) = create_signal("".to_string());
     let (new_category, set_new_category) = create_signal("General".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let discussions = create_resource(
         move || (owner(), repo_name(), refresh.get()),
@@ -37,11 +38,15 @@ pub fn DiscussionList() -> impl IntoView {
         let r = repo_name();
         spawn_local(async move {
             let url = api_url(&format!("/repos/{}/{}/discussions", o, r));
-            let _ = post_json(&url, &payload).await;
-            set_new_title.set("".to_string());
-            set_new_body.set("".to_string());
-            set_show_create.set(false);
-            set_refresh.update(|n| *n += 1);
+            if post_json(&url, &payload).await {
+                set_new_title.set("".to_string());
+                set_new_body.set("".to_string());
+                set_show_create.set(false);
+                set_form_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -67,6 +72,9 @@ pub fn DiscussionList() -> impl IntoView {
                             <option value="Show and Tell">"Show and Tell"</option>
                         </select>
                         <button type="submit">"Start Discussion"</button>
+                        {move || form_error.get().map(|msg| view! {
+                            <p class="form-error" role="alert">{msg}</p>
+                        })}
                     </form>
                 }.into_view()
             } else {
@@ -118,6 +126,7 @@ pub fn DiscussionDetail() -> impl IntoView {
 
     let (refresh_comments, set_refresh_comments) = create_signal(0);
     let (new_comment_body, set_new_comment_body) = create_signal("".to_string());
+    let (comment_error, set_comment_error) = create_signal(Option::<String>::None);
 
     let discussion = create_resource(
         move || (owner(), repo_name(), id()),
@@ -145,14 +154,17 @@ pub fn DiscussionDetail() -> impl IntoView {
         let i = id();
 
         spawn_local(async move {
-            let ok = post_json_ok(
+            if post_json(
                 &api_url(&format!("/repos/{}/{}/discussions/{}/comments", o, r, i)),
                 &payload,
             )
-            .await;
-            if ok {
+            .await
+            {
                 set_new_comment_body.set("".to_string());
+                set_comment_error.set(None);
                 set_refresh_comments.update(|n| *n += 1);
+            } else {
+                set_comment_error.set(Some(WRITE_ERROR.to_string()));
             }
         });
     };
@@ -205,6 +217,9 @@ pub fn DiscussionDetail() -> impl IntoView {
                                             required
     ></textarea>
                                         <button type="submit">"Post Comment"</button>
+                                        {move || comment_error.get().map(|msg| view! {
+                                            <p class="form-error" role="alert">{msg}</p>
+                                        })}
                                     </form>
                                 </div>
                             }.into_view()

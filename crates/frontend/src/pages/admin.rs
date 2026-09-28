@@ -1,4 +1,4 @@
-use crate::api::{delete, get, get_opt};
+use crate::api::{delete, get, get_opt, WRITE_ERROR};
 use leptos::*;
 use shared::{AdminStats, SystemNotice, User};
 
@@ -33,21 +33,31 @@ pub fn AdminDashboard() -> impl IntoView {
 
 #[component]
 pub fn AdminUsers() -> impl IntoView {
+    let (refresh, set_refresh) = create_signal(0);
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
+
     let users = create_resource(
-        || (),
+        move || refresh.get(),
         |_| async move { get::<Vec<User>>("/api/v1/admin/users").await },
     );
 
     let on_delete = move |username: String| {
         spawn_local(async move {
-            let _ = delete(&format!("/api/v1/admin/users/{}", username)).await;
-            // ideally refetch users here
+            if delete(&format!("/api/v1/admin/users/{}", username)).await {
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
     view! {
         <div class="admin-users">
             <h3>"User Management"</h3>
+            {move || action_error.get().map(|msg| view! {
+                <p class="form-error" role="alert">{msg}</p>
+            })}
             <table>
                 <thead><tr><th>"ID"</th><th>"Username"</th><th>"Email"</th><th>"Actions"</th></tr></thead>
                 <tbody>

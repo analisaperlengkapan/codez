@@ -327,6 +327,7 @@ pub fn Search() -> impl IntoView {
 #[component]
 pub fn NotificationList() -> impl IntoView {
     let (refresh, set_refresh) = create_signal(0);
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
     let notifs = create_resource(
         move || refresh.get(),
         |_| async move { get::<Vec<Notification>>("/api/v1/notifications").await },
@@ -334,8 +335,12 @@ pub fn NotificationList() -> impl IntoView {
 
     let on_mark_read = move |id: u64| {
         spawn_local(async move {
-            let _ = patch(&format!("/api/v1/notifications/threads/{}", id)).await;
-            set_refresh.update(|n| *n += 1);
+            if patch(&format!("/api/v1/notifications/threads/{}", id)).await {
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -344,6 +349,9 @@ pub fn NotificationList() -> impl IntoView {
             <div class="page-header">
                 <h3 class="mb-0">"Notifications"</h3>
             </div>
+            {move || action_error.get().map(|msg| view! {
+                <p class="form-error" role="alert">{msg}</p>
+            })}
             <ul class="item-list">
                 <Suspense fallback=move || view! { <li class="text-muted">"Loading…"</li> }>
                     {move || notifs.get().map(|list| {

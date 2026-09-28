@@ -1,4 +1,4 @@
-use crate::api::{delete, get, get_or, post, post_json_ok};
+use crate::api::{delete, get, get_or, post, post_json, WRITE_ERROR};
 use crate::components::RepoNav;
 use leptos::*;
 use leptos_router::*;
@@ -71,6 +71,7 @@ pub fn ReleaseDetail() -> impl IntoView {
 
     // Trigger to refresh assets after upload
     let (trigger, set_trigger) = create_signal(0);
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
 
     let release = create_resource(
         move || (owner(), repo_name(), id(), trigger.get()),
@@ -85,8 +86,12 @@ pub fn ReleaseDetail() -> impl IntoView {
         let r = repo_name();
         let i = id();
         spawn_local(async move {
-            let _ = post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i)).await;
-            set_trigger.update(|n| *n += 1);
+            if post(&format!("/api/v1/repos/{}/{}/releases/{}/assets", o, r, i)).await {
+                set_action_error.set(None);
+                set_trigger.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -95,12 +100,17 @@ pub fn ReleaseDetail() -> impl IntoView {
         let r = repo_name();
         let i = id();
         spawn_local(async move {
-            let _ = delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i)).await;
-            // Redirect to list would be good here, simplistic mock for now
-            let window = web_sys::window().unwrap();
-            let _ = window
-                .location()
-                .set_href(&format!("/repos/{}/{}/releases", o, r));
+            // Navigate away only once the release is actually gone; a rejected
+            // delete must not strand the user on a dead page.
+            if delete(&format!("/api/v1/repos/{}/{}/releases/{}", o, r, i)).await {
+                set_action_error.set(None);
+                let window = web_sys::window().unwrap();
+                let _ = window
+                    .location()
+                    .set_href(&format!("/repos/{}/{}/releases", o, r));
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -137,6 +147,9 @@ pub fn ReleaseDetail() -> impl IntoView {
                                     }/>
                                 </ul>
                                 <button on:click=on_upload_asset>"Upload New Asset (Mock)"</button>
+                                {move || action_error.get().map(|msg| view! {
+                                    <p class="form-error" role="alert">{msg}</p>
+                                })}
                             </div>
                         </div>
                     }.into_view(),
@@ -158,6 +171,7 @@ pub fn ReleaseCreate() -> impl IntoView {
     let (body, set_body) = create_signal("".to_string());
     let (draft, set_draft) = create_signal(false);
     let (prerelease, set_prerelease) = create_signal(false);
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -172,14 +186,14 @@ pub fn ReleaseCreate() -> impl IntoView {
         let r = repo_name();
 
         spawn_local(async move {
-            let res = post_json_ok(&format!("/api/v1/repos/{}/{}/releases", o, r), &payload).await;
-
-            if res {
-                // Redirect
+            if post_json(&format!("/api/v1/repos/{}/{}/releases", o, r), &payload).await {
+                set_form_error.set(None);
                 let window = web_sys::window().unwrap();
                 let _ = window
                     .location()
                     .set_href(&format!("/repos/{}/{}/releases", o, r));
+            } else {
+                set_form_error.set(Some(WRITE_ERROR.to_string()));
             }
         });
     };
@@ -214,6 +228,9 @@ pub fn ReleaseCreate() -> impl IntoView {
                     </label>
                 </div>
                 <button type="submit" class="btn btn-success-solid">"Publish Release"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }

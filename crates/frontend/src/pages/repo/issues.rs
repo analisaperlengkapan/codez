@@ -30,6 +30,7 @@ pub fn IssueList() -> impl IntoView {
     let (new_issue_body, set_new_issue_body) = create_signal("".to_string());
     let (new_issue_milestone, set_new_issue_milestone) = create_signal("".to_string());
     let (refresh, set_refresh) = create_signal(0);
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let issues = create_resource(
         move || {
@@ -104,11 +105,17 @@ pub fn IssueList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/issues", o, r), &payload).await;
-            set_new_issue_title.set("".to_string());
-            set_new_issue_body.set("".to_string());
-            set_show_new_issue.set(false);
-            set_refresh.update(|n| *n += 1);
+            // Only clear the form once the server accepted the issue; a
+            // rejected write must leave the user's input intact.
+            if post_json(&format!("/api/v1/repos/{}/{}/issues", o, r), &payload).await {
+                set_new_issue_title.set("".to_string());
+                set_new_issue_body.set("".to_string());
+                set_show_new_issue.set(false);
+                set_form_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_form_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -138,6 +145,9 @@ pub fn IssueList() -> impl IntoView {
                             </Suspense>
                         </select>
                         <button type="submit">"Create Issue"</button>
+                        {move || form_error.get().map(|msg| view! {
+                            <p class="form-error" role="alert">{msg}</p>
+                        })}
                     </form>
                 }.into_view()
             } else {
@@ -233,6 +243,7 @@ pub fn IssueDetail() -> impl IntoView {
     let (trigger_refresh, set_trigger_refresh) = create_signal(0);
     let (editing_comment_id, set_editing_comment_id) = create_signal(None::<u64>);
     let (edit_comment_body, set_edit_comment_body) = create_signal("".to_string());
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
 
     let issue = create_resource(
         move || (owner(), repo_name(), index(), trigger_refresh.get()),
@@ -271,8 +282,12 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            put(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i)).await;
-            set_trigger_refresh.update(|n| *n += 1);
+            if put(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i)).await {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -281,8 +296,12 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            let _ = delete(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i)).await;
-            set_trigger_refresh.update(|n| *n += 1);
+            if delete(&format!("/api/v1/repos/{}/{}/issues/{}/lock", o, r, i)).await {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -296,13 +315,19 @@ pub fn IssueDetail() -> impl IntoView {
         let i = index();
 
         spawn_local(async move {
-            let _ = post_json(
+            // Keep the drafted comment if the server rejects it.
+            if post_json(
                 &format!("/api/v1/repos/{}/{}/issues/{}/comments", o, r, i),
                 &payload,
             )
-            .await;
-            set_new_comment.set("".to_string());
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_new_comment.set("".to_string());
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -310,12 +335,17 @@ pub fn IssueDetail() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = delete(&format!(
+            if delete(&format!(
                 "/api/v1/repos/{}/{}/issues/comments/{}",
                 o, r, comment_id
             ))
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -324,15 +354,20 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let payload = shared::CreateReactionOption { content };
         spawn_local(async move {
-            let _ = post_json(
+            if post_json(
                 &format!(
                     "/api/v1/repos/{}/{}/issues/comments/{}/reactions",
                     o, r, comment_id
                 ),
                 &payload,
             )
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -353,14 +388,21 @@ pub fn IssueDetail() -> impl IntoView {
         let payload = shared::UpdateCommentOption { body };
 
         spawn_local(async move {
-            let _ = patch_json(
+            // Close the editor only when the edit was persisted, so a rejected
+            // edit does not throw away the user's text.
+            if patch_json(
                 &format!("/api/v1/repos/{}/{}/issues/comments/{}", o, r, comment_id),
                 &payload,
             )
-            .await;
-            set_editing_comment_id.set(None);
-            set_edit_comment_body.set("".to_string());
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_editing_comment_id.set(None);
+                set_edit_comment_body.set("".to_string());
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -380,12 +422,17 @@ pub fn IssueDetail() -> impl IntoView {
             milestone_id: None,
         };
         spawn_local(async move {
-            let _ = patch_json(
+            if patch_json(
                 &format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx),
                 &payload,
             )
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -403,13 +450,18 @@ pub fn IssueDetail() -> impl IntoView {
                     color: "#cccccc".to_string(),
                     description: None,
                 };
-                let _ = post_json(
+                if post_json(
                     &format!("/api/v1/repos/{}/{}/issues/{}/labels", o, r, i),
                     &payload,
                 )
-                .await;
-                set_new_label_name.set("".to_string());
-                set_trigger_refresh.update(|n| *n += 1);
+                .await
+                {
+                    set_new_label_name.set("".to_string());
+                    set_action_error.set(None);
+                    set_trigger_refresh.update(|n| *n += 1);
+                } else {
+                    set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+                }
             });
         }
     };
@@ -419,12 +471,17 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            let _ = delete(&format!(
+            if delete(&format!(
                 "/api/v1/repos/{}/{}/issues/{}/labels/{}",
                 o, r, i, label_id
             ))
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -440,13 +497,18 @@ pub fn IssueDetail() -> impl IntoView {
             // We'll construct a minimal one for the payload
             let payload = shared::User::new(0, username, None);
             spawn_local(async move {
-                let _ = post_json(
+                if post_json(
                     &format!("/api/v1/repos/{}/{}/issues/{}/assignees", o, r, i),
                     &payload,
                 )
-                .await;
-                set_selected_assignee.set("".to_string());
-                set_trigger_refresh.update(|n| *n += 1);
+                .await
+                {
+                    set_selected_assignee.set("".to_string());
+                    set_action_error.set(None);
+                    set_trigger_refresh.update(|n| *n += 1);
+                } else {
+                    set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+                }
             });
         }
     };
@@ -456,12 +518,17 @@ pub fn IssueDetail() -> impl IntoView {
         let r = repo_name();
         let i = index();
         spawn_local(async move {
-            let _ = delete(&format!(
+            if delete(&format!(
                 "/api/v1/repos/{}/{}/issues/{}/assignees/{}",
                 o, r, i, username
             ))
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -479,12 +546,17 @@ pub fn IssueDetail() -> impl IntoView {
             milestone_id: Some(m_id),
         };
         spawn_local(async move {
-            let _ = patch_json(
+            if patch_json(
                 &format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx),
                 &payload,
             )
-            .await;
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -513,13 +585,18 @@ pub fn IssueDetail() -> impl IntoView {
             milestone_id: None,
         };
         spawn_local(async move {
-            let _ = patch_json(
+            if patch_json(
                 &format!("/api/v1/repos/{}/{}/issues/{}", o, r, idx),
                 &payload,
             )
-            .await;
-            set_is_editing.set(false);
-            set_trigger_refresh.update(|n| *n += 1);
+            .await
+            {
+                set_is_editing.set(false);
+                set_action_error.set(None);
+                set_trigger_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -724,6 +801,9 @@ pub fn IssueDetail() -> impl IntoView {
                                                 placeholder="Leave a comment"
     ></textarea>
                                             <button type="submit">"Comment"</button>
+                                            {move || action_error.get().map(|msg| view! {
+                                                <p class="form-error" role="alert">{msg}</p>
+                                            })}
                                         </form>
                                     }.into_view()
                                 }
@@ -742,6 +822,7 @@ pub fn LabelList() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
     let (name, set_name) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
     let (color, set_color) = create_signal("#000000".to_string());
 
     let labels = create_resource(
@@ -759,8 +840,12 @@ pub fn LabelList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/labels", o, r), &payload).await;
-            set_name.set("".to_string());
+            if post_json(&format!("/api/v1/repos/{}/{}/labels", o, r), &payload).await {
+                set_name.set("".to_string());
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -786,6 +871,9 @@ pub fn LabelList() -> impl IntoView {
                 <input type="text" placeholder="Name" prop:value=name on:input=move |ev| set_name.set(event_target_value(&ev)) />
                 <input type="color" prop:value=color on:input=move |ev| set_color.set(event_target_value(&ev)) />
                 <button type="submit">"Create"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -798,6 +886,7 @@ pub fn MilestoneList() -> impl IntoView {
     let repo_name = move || params.with(|params| params.get("repo").cloned().unwrap_or_default());
 
     let (title, set_title) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let milestones = create_resource(
         move || (owner(), repo_name()),
@@ -816,8 +905,12 @@ pub fn MilestoneList() -> impl IntoView {
         let o = owner();
         let r = repo_name();
         spawn_local(async move {
-            let _ = post_json(&format!("/api/v1/repos/{}/{}/milestones", o, r), &payload).await;
-            set_title.set("".to_string());
+            if post_json(&format!("/api/v1/repos/{}/{}/milestones", o, r), &payload).await {
+                set_title.set("".to_string());
+                set_form_error.set(None);
+            } else {
+                set_form_error.set(Some(crate::api::WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -843,6 +936,9 @@ pub fn MilestoneList() -> impl IntoView {
             <form on:submit=on_create>
                 <input type="text" placeholder="Title" prop:value=title on:input=move |ev| set_title.set(event_target_value(&ev)) />
                 <button type="submit">"Create"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
