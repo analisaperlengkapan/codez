@@ -94,8 +94,18 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      # `trunk serve` below builds the bundle itself, so a separate
-      # `trunk build` step here only duplicated work.
+      # Build both binaries up front so the servers below start immediately.
+      # This job has no warm cargo cache, so a cold `cargo run`/`trunk serve`
+      # would otherwise spend minutes compiling while the readiness poll below
+      # is already counting down. Building here also surfaces a compile error
+      # in its own step instead of as an opaque "servers did not become ready".
+      - name: Build backend
+        run: cargo build -p backend
+
+      - name: Build frontend
+        working-directory: crates/frontend
+        run: trunk build
+
       - name: Start servers
         run: |
           nohup cargo run -p backend > backend.log 2>&1 &
@@ -103,7 +113,9 @@ jobs:
 
       - name: Wait for servers
         run: |
-          for _ in $(seq 1 60); do
+          # Generous window: `trunk serve` may still rebuild after the
+          # pre-build above, and the first run has no cached toolchain.
+          for _ in $(seq 1 150); do
             if curl -sf http://127.0.0.1:8080/ >/dev/null \
                && curl -sf http://127.0.0.1:8080/api/v1/repos >/dev/null; then
               exit 0
