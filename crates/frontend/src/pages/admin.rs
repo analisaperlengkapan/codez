@@ -1,12 +1,13 @@
+use crate::api::{delete, get, get_opt, WRITE_ERROR};
 use leptos::*;
-use gloo_net::http::Request;
-use shared::{AdminStats, User, SystemNotice};
+use shared::{AdminStats, SystemNotice, User};
 
 #[component]
 pub fn AdminDashboard() -> impl IntoView {
-    let stats = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/admin/stats").send().await.unwrap().json::<AdminStats>().await.ok()
-    });
+    let stats = create_resource(
+        || (),
+        |_| async move { get_opt::<AdminStats>("/api/v1/admin/stats").await },
+    );
 
     view! {
         <div class="admin-dashboard">
@@ -32,20 +33,31 @@ pub fn AdminDashboard() -> impl IntoView {
 
 #[component]
 pub fn AdminUsers() -> impl IntoView {
-    let users = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/admin/users").send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
-    });
+    let (refresh, set_refresh) = create_signal(0);
+    let (action_error, set_action_error) = create_signal(Option::<String>::None);
+
+    let users = create_resource(
+        move || refresh.get(),
+        |_| async move { get::<Vec<User>>("/api/v1/admin/users").await },
+    );
 
     let on_delete = move |username: String| {
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/admin/users/{}", username)).send().await;
-            // ideally refetch users here
+            if delete(&format!("/api/v1/admin/users/{}", username)).await {
+                set_action_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_action_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
     view! {
         <div class="admin-users">
             <h3>"User Management"</h3>
+            {move || action_error.get().map(|msg| view! {
+                <p class="form-error" role="alert">{msg}</p>
+            })}
             <table>
                 <thead><tr><th>"ID"</th><th>"Username"</th><th>"Email"</th><th>"Actions"</th></tr></thead>
                 <tbody>
@@ -77,9 +89,10 @@ pub fn AdminUsers() -> impl IntoView {
 
 #[component]
 pub fn AdminNotices() -> impl IntoView {
-    let notices = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/admin/notices").send().await.unwrap().json::<Vec<SystemNotice>>().await.unwrap_or_default()
-    });
+    let notices = create_resource(
+        || (),
+        |_| async move { get::<Vec<SystemNotice>>("/api/v1/admin/notices").await },
+    );
 
     view! {
         <div class="admin-notices">
@@ -88,7 +101,7 @@ pub fn AdminNotices() -> impl IntoView {
                 <Suspense fallback=move || view! { <li>"Loading..."</li> }>
                     {move || notices.get().map(|list| view! {
                         <For each=move || list.clone() key=|n| n.id children=move |n| {
-                            view! { <li>[{n.type_}] {n.description}</li> }
+                            view! { <li>[{n.type_.clone()}] " " {n.description.clone()}</li> }
                         }/>
                     })}
                 </Suspense>

@@ -1,15 +1,16 @@
+use crate::api::{delete, get, get_or, patch_json, post_json, WRITE_ERROR};
 use leptos::*;
-use gloo_net::http::Request;
-use shared::{
-    User, LoginOption, RegisterOption, Contribution, UserSettingsOption, PublicKey, GpgKey,
-    CreateKeyOption, CreateGpgKeyOption
-};
 use leptos_router::*;
+use shared::{
+    Contribution, CreateGpgKeyOption, CreateKeyOption, GpgKey, LoginOption, PublicKey,
+    RegisterOption, User, UserSettingsOption,
+};
 
 #[component]
 pub fn Login() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -18,8 +19,14 @@ pub fn Login() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/users/login").json(&payload).unwrap().send().await;
-            leptos::logging::log!("Logged in");
+            // Never clear the credential fields on failure — the user would have
+            // to retype both.
+            if post_json("/api/v1/users/login", &payload).await {
+                set_form_error.set(None);
+                leptos::logging::log!("Logged in");
+            } else {
+                set_form_error.set(Some("Invalid username or password.".to_string()));
+            }
         });
     };
 
@@ -30,6 +37,9 @@ pub fn Login() -> impl IntoView {
                 <input type="text" placeholder="Username" prop:value=username on:input=move |ev| set_username.set(event_target_value(&ev)) />
                 <input type="password" placeholder="Password" prop:value=password on:input=move |ev| set_password.set(event_target_value(&ev)) />
                 <button type="submit">"Login"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -40,6 +50,7 @@ pub fn Register() -> impl IntoView {
     let (username, set_username) = create_signal("".to_string());
     let (email, set_email) = create_signal("".to_string());
     let (password, set_password) = create_signal("".to_string());
+    let (form_error, set_form_error) = create_signal(Option::<String>::None);
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -49,8 +60,12 @@ pub fn Register() -> impl IntoView {
             password: password.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/users/register").json(&payload).unwrap().send().await;
-            leptos::logging::log!("Registered");
+            if post_json("/api/v1/users/register", &payload).await {
+                set_form_error.set(None);
+                leptos::logging::log!("Registered");
+            } else {
+                set_form_error.set(Some("Could not create your account.".to_string()));
+            }
         });
     };
 
@@ -62,6 +77,9 @@ pub fn Register() -> impl IntoView {
                 <input type="email" placeholder="Email" prop:value=email on:input=move |ev| set_email.set(event_target_value(&ev)) />
                 <input type="password" placeholder="Password" prop:value=password on:input=move |ev| set_password.set(event_target_value(&ev)) />
                 <button type="submit">"Register"</button>
+                {move || form_error.get().map(|msg| view! {
+                    <p class="form-error" role="alert">{msg}</p>
+                })}
             </form>
         </div>
     }
@@ -70,10 +88,11 @@ pub fn Register() -> impl IntoView {
 #[component]
 pub fn UserProfile() -> impl IntoView {
     let params = use_params_map();
-    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username =
+        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
 
     let user = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}", u)).send().await.unwrap().json::<Option<User>>().await.unwrap_or(None)
+        get_or::<Option<User>>(&format!("/api/v1/users/{}", u), None).await
     });
 
     view! {
@@ -100,15 +119,16 @@ pub fn UserProfile() -> impl IntoView {
 #[component]
 pub fn UserHeatmap() -> impl IntoView {
     let params = use_params_map();
-    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username =
+        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let data = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}/heatmap", u)).send().await.unwrap().json::<Vec<Contribution>>().await.unwrap_or_default()
+        get::<Vec<Contribution>>(&format!("/api/v1/users/{}/heatmap", u)).await
     });
 
     view! {
         <div class="user-heatmap">
             <h3>"Contributions"</h3>
-            <div class="calendar-stub" style="display: grid; grid-template-columns: repeat(53, 1fr); gap: 2px;">
+            <div class="calendar-stub">
                 <Suspense fallback=move || view! { <p>"Loading..."</p> }>
                     {move || data.get().map(|list| view! {
                         <For each=move || list.clone() key=|c| c.date.clone() children=move |c| {
@@ -125,9 +145,10 @@ pub fn UserHeatmap() -> impl IntoView {
 #[component]
 pub fn UserFollowers() -> impl IntoView {
     let params = use_params_map();
-    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username =
+        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let users = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}/followers", u)).send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
+        get::<Vec<User>>(&format!("/api/v1/users/{}/followers", u)).await
     });
 
     view! {
@@ -149,9 +170,10 @@ pub fn UserFollowers() -> impl IntoView {
 #[component]
 pub fn UserFollowing() -> impl IntoView {
     let params = use_params_map();
-    let username = move || params.with(|params| params.get("username").cloned().unwrap_or_default());
+    let username =
+        move || params.with(|params| params.get("username").cloned().unwrap_or_default());
     let users = create_resource(username, |u| async move {
-        Request::get(&format!("/api/v1/users/{}/following", u)).send().await.unwrap().json::<Vec<User>>().await.unwrap_or_default()
+        get::<Vec<User>>(&format!("/api/v1/users/{}/following", u)).await
     });
 
     view! {
@@ -172,21 +194,33 @@ pub fn UserFollowing() -> impl IntoView {
 
 #[component]
 pub fn UserSettings() -> impl IntoView {
-    let settings = create_resource(|| (), |_| async move {
-        Request::get("/api/v1/user/settings").send().await.unwrap().json::<UserSettingsOption>().await.unwrap_or(UserSettingsOption {
-            full_name: None, website: None, description: None, location: None
-        })
-    });
+    let settings = create_resource(
+        || (),
+        |_| async move {
+            get_or::<UserSettingsOption>(
+                "/api/v1/user/settings",
+                UserSettingsOption {
+                    full_name: None,
+                    website: None,
+                    description: None,
+                    location: None,
+                },
+            )
+            .await
+        },
+    );
 
     let (refresh, set_refresh) = create_signal(0);
 
-    let keys = create_resource(move || refresh.get(), |_| async move {
-        Request::get("/api/v1/user/keys").send().await.unwrap().json::<Vec<PublicKey>>().await.unwrap_or_default()
-    });
+    let keys = create_resource(
+        move || refresh.get(),
+        |_| async move { get::<Vec<PublicKey>>("/api/v1/user/keys").await },
+    );
 
-    let gpg_keys = create_resource(move || refresh.get(), |_| async move {
-        Request::get("/api/v1/user/gpg_keys").send().await.unwrap().json::<Vec<GpgKey>>().await.unwrap_or_default()
-    });
+    let gpg_keys = create_resource(
+        move || refresh.get(),
+        |_| async move { get::<Vec<GpgKey>>("/api/v1/user/gpg_keys").await },
+    );
 
     let (full_name, set_full_name) = create_signal("".to_string());
 
@@ -194,6 +228,7 @@ pub fn UserSettings() -> impl IntoView {
     let (ssh_key, set_ssh_key) = create_signal("".to_string());
 
     let (gpg_key_content, set_gpg_key_content) = create_signal("".to_string());
+    let (key_error, set_key_error) = create_signal(Option::<String>::None);
 
     let on_add_ssh_key = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -202,17 +237,25 @@ pub fn UserSettings() -> impl IntoView {
             key: ssh_key.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/user/keys").json(&payload).unwrap().send().await;
-            set_ssh_title.set("".to_string());
-            set_ssh_key.set("".to_string());
-            set_refresh.update(|n| *n += 1);
+            if post_json("/api/v1/user/keys", &payload).await {
+                set_ssh_title.set("".to_string());
+                set_ssh_key.set("".to_string());
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
     let on_delete_ssh_key = move |id: u64| {
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/user/keys/{}", id)).send().await;
-            set_refresh.update(|n| *n += 1);
+            if delete(&format!("/api/v1/user/keys/{}", id)).await {
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -222,16 +265,24 @@ pub fn UserSettings() -> impl IntoView {
             armored_public_key: gpg_key_content.get(),
         };
         spawn_local(async move {
-            let _ = Request::post("/api/v1/user/gpg_keys").json(&payload).unwrap().send().await;
-            set_gpg_key_content.set("".to_string());
-            set_refresh.update(|n| *n += 1);
+            if post_json("/api/v1/user/gpg_keys", &payload).await {
+                set_gpg_key_content.set("".to_string());
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
     let on_delete_gpg_key = move |id: u64| {
         spawn_local(async move {
-            let _ = Request::delete(&format!("/api/v1/user/gpg_keys/{}", id)).send().await;
-            set_refresh.update(|n| *n += 1);
+            if delete(&format!("/api/v1/user/gpg_keys/{}", id)).await {
+                set_key_error.set(None);
+                set_refresh.update(|n| *n += 1);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -244,7 +295,11 @@ pub fn UserSettings() -> impl IntoView {
             location: None,
         };
         spawn_local(async move {
-            let _ = Request::patch("/api/v1/user/settings").json(&payload).unwrap().send().await;
+            if patch_json("/api/v1/user/settings", &payload).await {
+                set_key_error.set(None);
+            } else {
+                set_key_error.set(Some(WRITE_ERROR.to_string()));
+            }
         });
     };
 
@@ -261,10 +316,13 @@ pub fn UserSettings() -> impl IntoView {
                 <form on:submit=on_update_profile>
                     <input type="text" placeholder="Full Name" prop:value=full_name on:input=move |ev| set_full_name.set(event_target_value(&ev)) />
                     <button type="submit">"Update Profile"</button>
+                    {move || key_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </form>
             </div>
 
-            <div class="ssh-keys" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+            <div class="ssh-keys">
                 <h3>"SSH Keys"</h3>
                 <ul>
                     <Suspense fallback=move || view! { <li>"Loading..."</li> }>
@@ -274,22 +332,25 @@ pub fn UserSettings() -> impl IntoView {
                                 view! {
                                     <li>
                                         {k.title} " - " {k.fingerprint}
-                                        <button on:click=move |_| on_delete_ssh_key(key_id) style="margin-left: 10px; color: red;">"Delete"</button>
+                                        <button on:click=move |_| on_delete_ssh_key(key_id) class="ml-2 text-danger">"Delete"</button>
                                     </li>
                                 }
                             }/>
                         })}
                     </Suspense>
                 </ul>
-                <form on:submit=on_add_ssh_key style="margin-top: 10px; padding: 10px; background: #f9f9f9;">
+                <form on:submit=on_add_ssh_key class="panel-plain">
                     <h4>"Add SSH Key"</h4>
-                    <input type="text" placeholder="Title" prop:value=ssh_title on:input=move |ev| set_ssh_title.set(event_target_value(&ev)) style="display: block; margin-bottom: 5px;" required />
-                    <textarea placeholder="Key starting with ssh-rsa..." prop:value=ssh_key on:input=move |ev| set_ssh_key.set(event_target_value(&ev)) rows="4" style="display: block; width: 100%; margin-bottom: 5px;" required></textarea>
+                    <input type="text" placeholder="Title" prop:value=ssh_title on:input=move |ev| set_ssh_title.set(event_target_value(&ev))  required />
+                    <textarea placeholder="Key starting with ssh-rsa..." prop:value=ssh_key on:input=move |ev| set_ssh_key.set(event_target_value(&ev)) rows="4"  required></textarea>
                     <button type="submit">"Add SSH Key"</button>
+                    {move || key_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </form>
             </div>
 
-            <div class="gpg-keys" style="margin-top: 20px; border-top: 1px solid #ccc; padding-top: 10px;">
+            <div class="gpg-keys">
                 <h3>"GPG Keys"</h3>
                 <ul>
                     <Suspense fallback=move || view! { <li>"Loading..."</li> }>
@@ -299,17 +360,20 @@ pub fn UserSettings() -> impl IntoView {
                                 view! {
                                     <li>
                                         {k.key_id} " - " {k.primary_key_id}
-                                        <button on:click=move |_| on_delete_gpg_key(key_id) style="margin-left: 10px; color: red;">"Delete"</button>
+                                        <button on:click=move |_| on_delete_gpg_key(key_id) class="ml-2 text-danger">"Delete"</button>
                                     </li>
                                 }
                             }/>
                         })}
                     </Suspense>
                 </ul>
-                <form on:submit=on_add_gpg_key style="margin-top: 10px; padding: 10px; background: #f9f9f9;">
+                <form on:submit=on_add_gpg_key class="panel-plain">
                     <h4>"Add GPG Key"</h4>
-                    <textarea placeholder="Armored GPG Public Key..." prop:value=gpg_key_content on:input=move |ev| set_gpg_key_content.set(event_target_value(&ev)) rows="6" style="display: block; width: 100%; margin-bottom: 5px;" required></textarea>
+                    <textarea placeholder="Armored GPG Public Key..." prop:value=gpg_key_content on:input=move |ev| set_gpg_key_content.set(event_target_value(&ev)) rows="6"  required></textarea>
                     <button type="submit">"Add GPG Key"</button>
+                    {move || key_error.get().map(|msg| view! {
+                        <p class="form-error" role="alert">{msg}</p>
+                    })}
                 </form>
             </div>
         </div>

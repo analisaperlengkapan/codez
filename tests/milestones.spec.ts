@@ -2,16 +2,18 @@ import { test, expect } from '@playwright/test';
 
 test.describe('Milestones Feature', () => {
   test('should list and create milestones', async ({ page }) => {
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/milestones');
+    await page.goto('/repos/admin/codeza/milestones');
 
     await expect(page.getByRole('heading', { name: 'Milestones' })).toBeVisible();
 
-    await page.getByPlaceholder('Title').fill('v2.0 Beta');
+    // A unique title, so a milestone left over from an earlier run on a reused
+    // server cannot satisfy the assertion on its own.
+    const title = 'Milestone ' + Date.now();
+    await page.getByPlaceholder('Title').fill(title);
     await page.getByRole('button', { name: 'Create' }).click();
 
-    // The component doesn't automatically refresh on create, so we can verify the API or reload
-    await page.reload();
-
-    await expect(page.getByRole('link', { name: 'v2.0 Beta' }).first()).toBeVisible();
+    // The list refetches on success, so the new milestone shows without a reload.
+    await expect(page.getByRole('link', { name: title })).toBeVisible();
+    await expect(page.getByPlaceholder('Title')).toHaveValue('');
   });
 });

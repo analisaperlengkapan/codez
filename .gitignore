@@ -1,6 +1,11 @@
+# Rust
 target/
 *.log
 crates/frontend/dist/
+
+# Python tooling
+__pycache__/
+*.py[cod]
 
 # Playwright
 node_modules/

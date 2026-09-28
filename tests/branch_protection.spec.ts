@@ -4,7 +4,7 @@ test.describe('Branch Protection Feature', () => {
   test('should create a branch protection rule and display it in the list', async ({ page }) => {
     // Navigate to the repository branch settings page
     // Using admin/codeza since it should be created by mock data or earlier tests
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/settings/branches');
+    await page.goto('/repos/admin/codeza/settings/branches');
 
     // Wait for leptos router to settle
     await page.waitForTimeout(2000);

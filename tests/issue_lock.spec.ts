@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Issue Lock Conversation Feature', () => {
   test('should lock an issue and prevent commenting, then unlock and allow commenting', async ({ page }) => {
     // Navigate to issues page
-    await page.goto('http://127.0.0.1:8080/repos/admin/codeza/issues');
+    await page.goto('/repos/admin/codeza/issues');
 
     await page.waitForTimeout(1000);
 

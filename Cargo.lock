@@ -539,6 +539,7 @@ dependencies = [
  "serde_json",
  "shared",
  "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

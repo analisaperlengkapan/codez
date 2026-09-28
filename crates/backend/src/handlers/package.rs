@@ -1,24 +1,43 @@
+use crate::state::AppState;
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
 };
-use shared::{Package, CreatePackageOption, Activity};
-use crate::router::AppState;
+use shared::{Activity, CreatePackageOption, Package};
 
-pub async fn list_packages(State(state): State<AppState>, Path(owner): Path<String>) -> Json<Vec<Package>> {
-    let packages = state.packages.read().unwrap();
-    let filtered_packages: Vec<Package> = packages.iter().filter(|p| p.owner == owner).cloned().collect();
+pub async fn list_packages(
+    State(state): State<AppState>,
+    Path(owner): Path<String>,
+) -> Json<Vec<Package>> {
+    let packages = state.packages.read().unwrap_or_else(|e| e.into_inner());
+    let filtered_packages: Vec<Package> = packages
+        .iter()
+        .filter(|p| p.owner == owner)
+        .cloned()
+        .collect();
     Json(filtered_packages)
 }
 
 pub async fn upload_package(
     State(state): State<AppState>,
     Path(owner): Path<String>,
-    Json(payload): Json<CreatePackageOption>
+    Json(payload): Json<CreatePackageOption>,
 ) -> (StatusCode, Json<Package>) {
-    let mut packages = state.packages.write().unwrap();
-    if packages.iter().any(|p| p.owner == owner && p.name == payload.name && p.version == payload.version) {
-        return (StatusCode::CONFLICT, Json(Package { id: 0, owner: "".to_string(), name: "".to_string(), version: "".to_string(), package_type: "".to_string() }));
+    let mut packages = state.packages.write().unwrap_or_else(|e| e.into_inner());
+    if packages
+        .iter()
+        .any(|p| p.owner == owner && p.name == payload.name && p.version == payload.version)
+    {
+        return (
+            StatusCode::CONFLICT,
+            Json(Package {
+                id: 0,
+                owner: "".to_string(),
+                name: "".to_string(),
+                version: "".to_string(),
+                package_type: "".to_string(),
+            }),
+        );
     }
 
     let id = (packages.len() as u64) + 1;
@@ -31,7 +50,7 @@ pub async fn upload_package(
     };
     packages.push(package.clone());
 
-    let mut activities = state.activities.write().unwrap();
+    let mut activities = state.activities.write().unwrap_or_else(|e| e.into_inner());
     let activity_id = (activities.len() as u64) + 1;
     activities.push(Activity {
         id: activity_id,
@@ -39,7 +58,10 @@ pub async fn upload_package(
         user_id: 1, // mock admin
         user_name: "admin".to_string(),
         op_type: "upload_package".to_string(),
-        content: format!("uploaded package {} ({}) to {}", package.name, package.version, owner),
+        content: format!(
+            "uploaded package {} ({}) to {}",
+            package.name, package.version, owner
+        ),
         created: "now".to_string(),
     });
 
@@ -48,19 +70,25 @@ pub async fn upload_package(
 
 pub async fn get_package_detail(
     State(state): State<AppState>,
-    Path((owner, _type, name, version)): Path<(String, String, String, String)>
+    Path((owner, _type, name, version)): Path<(String, String, String, String)>,
 ) -> Json<Option<Package>> {
-    let packages = state.packages.read().unwrap();
-    let pkg = packages.iter().find(|p| p.owner == owner && p.name == name && p.version == version).cloned();
+    let packages = state.packages.read().unwrap_or_else(|e| e.into_inner());
+    let pkg = packages
+        .iter()
+        .find(|p| p.owner == owner && p.name == name && p.version == version)
+        .cloned();
     Json(pkg)
 }
 
 pub async fn delete_package(
     State(state): State<AppState>,
-    Path((owner, _type, name, version)): Path<(String, String, String, String)>
+    Path((owner, _type, name, version)): Path<(String, String, String, String)>,
 ) -> StatusCode {
-    let mut packages = state.packages.write().unwrap();
-    if let Some(pos) = packages.iter().position(|p| p.owner == owner && p.name == name && p.version == version) {
+    let mut packages = state.packages.write().unwrap_or_else(|e| e.into_inner());
+    if let Some(pos) = packages
+        .iter()
+        .position(|p| p.owner == owner && p.name == name && p.version == version)
+    {
         packages.remove(pos);
         StatusCode::NO_CONTENT
     } else {

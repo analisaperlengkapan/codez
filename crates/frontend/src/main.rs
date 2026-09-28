@@ -1,22 +1,23 @@
-use leptos::*;
-use leptos_router::*;
 use crate::components::*;
 use crate::pages::*;
+use leptos::*;
+use leptos_router::*;
 
+mod api;
 mod components;
 mod pages;
-mod api;
 
 fn main() {
     mount_to_body(|| view! { <App/> })
 }
 
+/// Root component: mounts the top navigation and the router outlet.
 #[component]
 fn App() -> impl IntoView {
     view! {
         <Router>
             <Nav/>
-            <main>
+            <main class="page">
                 <Routes>
                     <Route path="/" view=UserDashboard/>
                     <Route path="/explore" view=Explore/>
@@ -75,14 +76,9 @@ fn App() -> impl IntoView {
                     <Route path="/repos/:owner/:repo/settings/lfs" view=LfsLockList/>
                 </Routes>
             </main>
+            <footer class="site-footer">
+                "Codeza — a lightweight, Gitea-inspired code hosting platform built with Rust."
+            </footer>
         </Router>
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_frontend_routes() {
-        assert_eq!(1, 1);
     }
 }
