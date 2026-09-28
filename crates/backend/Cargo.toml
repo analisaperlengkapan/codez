@@ -16,6 +16,6 @@ shared = { path = "../shared" }
 chrono = { version = "0.4.43", features = ["serde"] }
 uuid = { version = "1.20.0", features = ["v4"] }
 reqwest = { version = "0.13", features = ["json"] }
-ipnetwork = "0.20"
+ipnetwork = "0.21"
 url = "2.5"
 tokio-postgres = "0.7"
